@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\"; $env:TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}'; npx ts-node prisma/seed.ts 2>&1)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/shitjet)",
+      "Bash(Start-Process *)",
+      "PowerShell(Start-Process \"http://localhost:3000/shitjet\")"
+    ]
+  }
+}

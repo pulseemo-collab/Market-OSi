@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  emri      String
+  telefoni  String?
+  email     String?
+  adresa    String?
+  shenime   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id            Int         @id @default(autoincrement())
+  emri          String
+  barcode       String?     @unique
+  kategoria     String
+  sasia         Float       @default(0)
+  stokuMinimal  Float       @default(5)
+  cmimiBlerjes  Float
+  cmimiShitjes  Float
+  njesia        String      @default("cope")
+  furnitorId    Int?
+  furnitor      Supplier?   @relation(fields: [furnitorId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  saleItems     SaleItem[]
+}
+
+model Sale {
+  id          Int        @id @default(autoincrement())
+  totali      Float
+  fitimi      Float
+  shenime     String?
+  createdAt   DateTime   @default(now())
+  items       SaleItem[]
+}
+
+model SaleItem {
+  id              Int     @id @default(autoincrement())
+  saleId          Int
+  productId       Int
+  emriProduktit   String
+  sasia           Float
+  cmimiBlerjes    Float
+  cmimiShitjes    Float
+  fitimi          Float
+  sale            Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product         Product @relation(fields: [productId], references: [id])
+}
