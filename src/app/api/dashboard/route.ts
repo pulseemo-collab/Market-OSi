@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    // Build today's boundary in local timezone (matches how Historiku filters "sot")
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0)
 
-    const [shitjetSot, allProducts, shitjetRecente, topSaleItems] = await Promise.all([
+    const [shitjetSot, allProducts, shitjetRecente] = await Promise.all([
       prisma.sale.findMany({
-        where: { createdAt: { gte: today, lt: tomorrow } },
+        where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
         include: { items: true },
         orderBy: { createdAt: 'desc' },
       }),
@@ -20,13 +22,20 @@ export async function GET() {
         take: 5,
         include: { items: true },
       }),
-      prisma.saleItem.groupBy({
+    ])
+
+    // Run groupBy separately so a failure here doesn't zero out all stats
+    let topSaleItems: Array<{ productId: number; emriProduktit: string; _sum: { sasia: number | null } }> = []
+    try {
+      topSaleItems = await prisma.saleItem.groupBy({
         by: ['productId', 'emriProduktit'],
         _sum: { sasia: true },
         orderBy: { _sum: { sasia: 'desc' } },
         take: 5,
-      }),
-    ])
+      })
+    } catch (e) {
+      console.error('Dashboard groupBy error:', e)
+    }
 
     const lowStockProducts = allProducts
       .filter((p) => p.sasia <= p.stokuMinimal)
@@ -39,6 +48,8 @@ export async function GET() {
       (sum, s) => sum + s.items.reduce((is, i) => is + i.sasia, 0),
       0
     )
+
+    console.log(`Dashboard: todayStart=${todayStart.toISOString()}, tomorrowStart=${tomorrowStart.toISOString()}, shitjetSot=${shitjetSot.length}`)
 
     return NextResponse.json({
       shitjetSotTotali,

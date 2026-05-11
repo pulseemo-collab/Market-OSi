@@ -46,7 +46,7 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchDashboard = () => {
     fetch('/api/dashboard')
       .then((r) => r.json())
       .then((d) => {
@@ -54,6 +54,23 @@ export default function Dashboard() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchDashboard()
+
+    // Refetch when user returns to this tab (e.g. after completing a sale in /shitjet)
+    const onFocus = () => fetchDashboard()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchDashboard()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [])
 
   const sot = new Date().toLocaleDateString('sq-AL', {
