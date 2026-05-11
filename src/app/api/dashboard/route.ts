@@ -25,17 +25,17 @@ export async function GET() {
     ])
 
     // Run groupBy separately so a failure here doesn't zero out all stats
-    let topSaleItems: Array<{ productId: number; emriProduktit: string; _sum: { sasia: number | null } }> = []
-    try {
-      topSaleItems = await prisma.saleItem.groupBy({
+    const topSaleItems = await prisma.saleItem
+      .groupBy({
         by: ['productId', 'emriProduktit'],
         _sum: { sasia: true },
         orderBy: { _sum: { sasia: 'desc' } },
         take: 5,
       })
-    } catch (e) {
-      console.error('Dashboard groupBy error:', e)
-    }
+      .catch((e: unknown) => {
+        console.error('Dashboard groupBy error:', e)
+        return []
+      })
 
     const lowStockProducts = allProducts
       .filter((p) => p.sasia <= p.stokuMinimal)
