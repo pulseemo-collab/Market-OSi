@@ -6,15 +6,29 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
-import { RiReceiptLine, RiArrowDownLine, RiDeleteBin6Line } from 'react-icons/ri'
+import {
+  RiReceiptLine,
+  RiArrowDownLine,
+  RiDeleteBin6Line,
+  RiEditLine,
+  RiAddLine,
+  RiSubtractLine,
+  RiCloseLine,
+} from 'react-icons/ri'
 
 interface SaleItem {
   id: number
+  productId: number
   emriProduktit: string
   sasia: number
   cmimiBlerjes: number
   cmimiShitjes: number
   fitimi: number
+  product: {
+    id: number
+    sasia: number
+    njesia: string
+  } | null
 }
 
 interface Sale {
@@ -24,6 +38,31 @@ interface Sale {
   shenime: string | null
   createdAt: string
   items: SaleItem[]
+}
+
+interface Product {
+  id: number
+  emri: string
+  kategoria: string
+  sasia: number
+  cmimiBlerjes: number
+  cmimiShitjes: number
+  njesia: string
+  barcodes: { barcode: string }[]
+}
+
+interface EditItem {
+  productId: number
+  emriProduktit: string
+  sasia: number
+  cmimiBlerjes: number
+  cmimiShitjes: number
+  njesia: string
+  availableStock: number
+}
+
+function isWeighted(njesia: string) {
+  return njesia === 'kg' || njesia === 'gram' || njesia === 'litër'
 }
 
 const PERIUDHAT = [
@@ -40,6 +79,14 @@ export default function HistorikuPage() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Edit state
+  const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null)
+  const [editItems, setEditItems] = useState<EditItem[]>([])
+  const [editSaving, setEditSaving] = useState(false)
+  const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [addProductSearch, setAddProductSearch] = useState('')
+  const [showAddProduct, setShowAddProduct] = useState(false)
 
   const fetchSales = useCallback(async () => {
     setLoading(true)
@@ -68,6 +115,130 @@ export default function HistorikuPage() {
       setDeleting(false)
     }
   }
+
+  const openEditModal = async (sale: Sale) => {
+    setSaleToEdit(sale)
+    setEditItems(
+      sale.items.map((item) => ({
+        productId: item.productId,
+        emriProduktit: item.emriProduktit,
+        sasia: item.sasia,
+        cmimiBlerjes: item.cmimiBlerjes,
+        cmimiShitjes: item.cmimiShitjes,
+        njesia: item.product?.njesia || 'copë',
+        availableStock: (item.product?.sasia ?? 0) + item.sasia,
+      }))
+    )
+    setAddProductSearch('')
+    setShowAddProduct(false)
+
+    if (allProducts.length === 0) {
+      try {
+        const res = await fetch('/api/products')
+        const data = await res.json()
+        setAllProducts(data)
+      } catch {
+        // silent
+      }
+    }
+  }
+
+  const updateEditItemQty = (idx: number, value: number) => {
+    setEditItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item
+        const min = isWeighted(item.njesia) ? 0.001 : 1
+        const clamped = Math.max(min, Math.min(value, item.availableStock))
+        return { ...item, sasia: clamped }
+      })
+    )
+  }
+
+  const removeEditItem = (idx: number) => {
+    setEditItems((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const addProductToEdit = (product: Product) => {
+    if (product.sasia <= 0) {
+      toast.error(`${product.emri} — Stoku i mbaruar`)
+      return
+    }
+    setEditItems((prev) => {
+      if (prev.some((i) => i.productId === product.id)) {
+        toast.error(`${product.emri} është tashmë në listë`)
+        return prev
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          emriProduktit: product.emri,
+          sasia: isWeighted(product.njesia) ? 0.1 : 1,
+          cmimiBlerjes: product.cmimiBlerjes,
+          cmimiShitjes: product.cmimiShitjes,
+          njesia: product.njesia,
+          availableStock: product.sasia,
+        },
+      ]
+    })
+    setAddProductSearch('')
+    setShowAddProduct(false)
+  }
+
+  const handleEditSave = async () => {
+    if (!saleToEdit) return
+    if (editItems.length === 0) {
+      toast.error('Nuk ka produkte në shitje')
+      return
+    }
+    for (const item of editItems) {
+      if (item.sasia <= 0) {
+        toast.error(`Sasia duhet të jetë pozitive për: ${item.emriProduktit}`)
+        return
+      }
+    }
+
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/sales/${saleToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: editItems.map((item) => ({
+            productId: item.productId,
+            emriProduktit: item.emriProduktit,
+            sasia: item.sasia,
+          })),
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        toast.error(data.error || 'Gabim gjatë ruajtjes')
+        return
+      }
+
+      toast.success('Fatura u përditësua me sukses')
+      setSaleToEdit(null)
+      fetchSales()
+    } catch {
+      toast.error('Gabim gjatë ruajtjes')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const editTotali = editItems.reduce((sum, item) => sum + item.cmimiShitjes * item.sasia, 0)
+  const editFitimi = editItems.reduce((sum, item) => sum + (item.cmimiShitjes - item.cmimiBlerjes) * item.sasia, 0)
+
+  const filteredAddProducts = allProducts
+    .filter(
+      (p) =>
+        p.emri.toLowerCase().includes(addProductSearch.toLowerCase()) ||
+        p.kategoria.toLowerCase().includes(addProductSearch.toLowerCase())
+    )
+    .filter((p) => !editItems.some((i) => i.productId === p.id))
+    .slice(0, 8)
 
   const totaliPeriudhes = sales.reduce((sum, s) => sum + s.totali, 0)
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
@@ -135,6 +306,7 @@ export default function HistorikuPage() {
                   <th className="table-th text-right">Totali</th>
                   <th className="table-th text-right">Fitimi</th>
                   <th className="table-th text-center">Detaje</th>
+                  <th className="table-th text-center">Edito</th>
                   <th className="table-th text-center">Fshi</th>
                 </tr>
               </thead>
@@ -177,6 +349,15 @@ export default function HistorikuPage() {
                         title="Shiko detajet"
                       >
                         <RiArrowDownLine className="text-lg" />
+                      </button>
+                    </td>
+                    <td className="table-td text-center">
+                      <button
+                        onClick={() => openEditModal(sale)}
+                        className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        title="Edito faturën"
+                      >
+                        <RiEditLine className="text-lg" />
                       </button>
                     </td>
                     <td className="table-td text-center">
@@ -303,6 +484,198 @@ export default function HistorikuPage() {
             >
               Mbyll
             </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Edit Sale Modal */}
+      <Modal
+        isOpen={!!saleToEdit}
+        onClose={() => !editSaving && setSaleToEdit(null)}
+        title={`Edito Faturën #${saleToEdit?.id}`}
+        size="xl"
+      >
+        {saleToEdit && (
+          <div>
+            {/* Items list */}
+            <div className="mb-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Produktet në Faturë
+              </p>
+
+              {editItems.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-xl">
+                  Nuk ka produkte. Shto produkte më poshtë.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {editItems.map((item, idx) => (
+                    <div
+                      key={`${item.productId}-${idx}`}
+                      className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">
+                          {item.emriProduktit}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {formatCurrency(item.cmimiShitjes)} / {item.njesia} &middot; Stok disponibël: {item.availableStock}
+                        </p>
+                      </div>
+
+                      {/* Quantity controls */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() =>
+                            updateEditItemQty(
+                              idx,
+                              item.sasia - (isWeighted(item.njesia) ? 0.1 : 1)
+                            )
+                          }
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                        >
+                          <RiSubtractLine className="text-xs" />
+                        </button>
+
+                        <input
+                          type="number"
+                          value={item.sasia}
+                          min={isWeighted(item.njesia) ? 0.001 : 1}
+                          max={item.availableStock}
+                          step={isWeighted(item.njesia) ? 0.1 : 1}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value)
+                            if (!isNaN(val)) updateEditItemQty(idx, val)
+                          }}
+                          className="w-16 text-center text-sm font-medium border border-slate-200 rounded-lg py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+
+                        <button
+                          onClick={() =>
+                            updateEditItemQty(
+                              idx,
+                              item.sasia + (isWeighted(item.njesia) ? 0.1 : 1)
+                            )
+                          }
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                        >
+                          <RiAddLine className="text-xs" />
+                        </button>
+
+                        <span className="text-xs text-slate-400 w-8 text-left">{item.njesia}</span>
+                      </div>
+
+                      {/* Item total */}
+                      <div className="w-20 text-right">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {formatCurrency(item.cmimiShitjes * item.sasia)}
+                        </p>
+                      </div>
+
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removeEditItem(idx)}
+                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Largo produktin"
+                      >
+                        <RiCloseLine className="text-base" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add product section */}
+            <div className="border-t border-slate-100 pt-4 mb-5">
+              {!showAddProduct ? (
+                <button
+                  onClick={() => setShowAddProduct(true)}
+                  className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <RiAddLine className="text-base" />
+                  Shto Produkt
+                </button>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Kërko produkt për të shtuar..."
+                      value={addProductSearch}
+                      onChange={(e) => setAddProductSearch(e.target.value)}
+                      autoFocus
+                      className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => {
+                        setShowAddProduct(false)
+                        setAddProductSearch('')
+                      }}
+                      className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      <RiCloseLine className="text-lg" />
+                    </button>
+                  </div>
+
+                  {addProductSearch && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                      {filteredAddProducts.length === 0 ? (
+                        <p className="text-sm text-slate-400 p-3 text-center">Nuk u gjet produkt</p>
+                      ) : (
+                        filteredAddProducts.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => addProductToEdit(p)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">{p.emri}</p>
+                              <p className="text-xs text-slate-400">
+                                {p.kategoria} &middot; Stok: {p.sasia} {p.njesia}
+                              </p>
+                            </div>
+                            <span className="text-sm font-semibold text-blue-600 ml-4">
+                              {formatCurrency(p.cmimiShitjes)}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Real-time summary */}
+            <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Totali i Ri</span>
+                <span className="font-semibold text-slate-900">{formatCurrency(editTotali)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Fitimi i Ri</span>
+                <span className="font-semibold text-green-700">{formatCurrency(editFitimi)}</span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSaleToEdit(null)}
+                disabled={editSaving}
+                className="btn-secondary flex-1"
+              >
+                Anulo
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={editSaving || editItems.length === 0}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                {editSaving ? 'Duke ruajtur...' : 'Ruaj Ndryshimet'}
+              </button>
+            </div>
           </div>
         )}
       </Modal>

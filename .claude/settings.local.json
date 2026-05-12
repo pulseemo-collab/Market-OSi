@@ -9,7 +9,8 @@
       "PowerShell(Start-Process \"http://localhost:3000/shitjet\")",
       "Bash(npx prisma *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Include \"*.prisma\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Name)"
     ]
   }
 }
