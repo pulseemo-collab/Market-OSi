@@ -41,6 +41,7 @@ interface Product {
 }
 
 const KATEGORITE = [
+  'Të Ndryshme',
   'Të Ëmbla',
   'Të Kripura',
   'Ushqimore',
@@ -48,8 +49,7 @@ const KATEGORITE = [
   'Pastrimi',
   'Lëngje',
   'Të Ngrira',
-  'Të Ndryshme',
-]
+  ]
 
 const NJESITE = ['copë', 'kg', 'litër', 'shishe', 'paketë', 'kuti', 'qese', 'tufë']
 
