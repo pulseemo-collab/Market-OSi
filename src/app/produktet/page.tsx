@@ -49,7 +49,9 @@ const KATEGORITE = [
   'Pastrimi',
   'Lëngje',
   'Të Ngrira',
-  ]
+  'Fresh',
+  'Fruta/Perime'
+]
 
 const NJESITE = ['copë', 'kg', 'litër', 'shishe', 'paketë', 'kuti', 'qese', 'tufë']
 
