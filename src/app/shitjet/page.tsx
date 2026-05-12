@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -13,6 +13,7 @@ import {
   RiShoppingCartLine,
   RiPrinterLine,
   RiCheckLine,
+  RiBarcodeLine,
 } from 'react-icons/ri'
 
 interface Product {
@@ -58,7 +59,11 @@ export default function ShitjetPage() {
   const [loading, setLoading] = useState(false)
   const [receiptModal, setReceiptModal] = useState<CompletedSale | null>(null)
   const [rawValues, setRawValues] = useState<Record<number, string>>({})
+  const [barkodi, setBarkodi] = useState('')
+  const [scanFlash, setScanFlash] = useState<'success' | 'error' | null>(null)
+  const [scanMessage, setScanMessage] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const barcodeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/products')
@@ -92,6 +97,85 @@ export default function ShitjetPage() {
       )
     }
   }, [kerkimi, products])
+
+  // O(1) barcode lookup — rebuilt only when product list changes
+  const barcodeMap = useMemo(() => {
+    const map = new Map<string, Product>()
+    for (const p of products) {
+      for (const b of p.barcodes) {
+        if (b.barcode) map.set(b.barcode.trim(), p)
+      }
+    }
+    return map
+  }, [products])
+
+  function triggerFlash(type: 'success' | 'error', message: string, duration = 1000) {
+    setScanFlash(type)
+    setScanMessage(message)
+    setTimeout(() => {
+      setScanFlash(null)
+      setScanMessage('')
+    }, duration)
+  }
+
+  function handleBarcodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+
+    const code = barkodi.trim()
+    setBarkodi('')
+
+    if (!code) return
+
+    const product = barcodeMap.get(code)
+
+    if (!product) {
+      triggerFlash('error', 'Produkti nuk u gjet', 1500)
+      barcodeRef.current?.focus()
+      return
+    }
+
+    if (product.sasia <= 0) {
+      toast.error(`${product.emri} — Stoku i mbaruar`)
+      triggerFlash('error', 'Stoku i mbaruar', 1500)
+      barcodeRef.current?.focus()
+      return
+    }
+
+    // For scans: weighted products add 1 kg, others add 1 unit
+    const step = isWeighted(product.njesia) ? 1.0 : 1
+    const currentInCart = cart.find((i) => i.product.id === product.id)
+    const newSasia = currentInCart
+      ? parseFloat((currentInCart.sasia + step).toFixed(3))
+      : isWeighted(product.njesia)
+        ? parseFloat(Math.min(1.0, product.sasia).toFixed(3))
+        : 1
+
+    if (newSasia > product.sasia) {
+      toast.error(`Stoku i pamjaftueshëm: ${product.sasia} ${product.njesia}`)
+      triggerFlash('error', `Stoku maks: ${product.sasia} ${product.njesia}`, 1500)
+      barcodeRef.current?.focus()
+      return
+    }
+
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id)
+      if (existing) {
+        return prev.map((i) =>
+          i.product.id === product.id ? { ...i, sasia: newSasia } : i
+        )
+      }
+      return [...prev, { product, sasia: newSasia }]
+    })
+    setRawValues((prev) => {
+      const next = { ...prev }
+      delete next[product.id]
+      return next
+    })
+
+    triggerFlash('success', `${product.emri} u shtua`, 900)
+    barcodeRef.current?.focus()
+  }
 
   function addToCart(product: Product) {
     if (product.sasia <= 0) {
@@ -260,18 +344,90 @@ export default function ShitjetPage() {
     <div className="grid h-full overflow-hidden grid-cols-[minmax(0,1fr)_550px]">
       {/* Left: Product Search */}
       <div className="flex flex-col border-r border-slate-200 overflow-hidden">
-        <div className="p-5 border-b border-slate-100">
-          <h1 className="text-xl font-bold text-slate-900 mb-4">Shitjet — POS</h1>
+        <div className="p-5 border-b border-slate-100 space-y-3">
+          <h1 className="text-xl font-bold text-slate-900">Shitjet — POS</h1>
+
+          {/* Barcode Scanner Input */}
+          <div>
+            <div className="relative">
+              <RiBarcodeLine
+                className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xl transition-colors duration-200 ${
+                  scanFlash === 'success'
+                    ? 'text-green-500'
+                    : scanFlash === 'error'
+                    ? 'text-red-400'
+                    : 'text-slate-400'
+                }`}
+              />
+              <input
+                ref={barcodeRef}
+                type="text"
+                placeholder="Skano ose shkruaj barkodin..."
+                value={barkodi}
+                onChange={(e) => setBarkodi(e.target.value)}
+                onKeyDown={handleBarcodeKeyDown}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                className={`w-full pl-10 pr-10 py-2.5 text-sm font-medium rounded-xl border-2 transition-all duration-200 outline-none ${
+                  scanFlash === 'success'
+                    ? 'border-green-400 bg-green-50 text-green-800 placeholder-green-300'
+                    : scanFlash === 'error'
+                    ? 'border-red-400 bg-red-50 text-red-800 placeholder-red-300'
+                    : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:border-blue-400'
+                }`}
+              />
+              <AnimatePresence mode="wait">
+                {scanFlash === 'success' && (
+                  <motion.span
+                    key="ok"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-green-500"
+                  >
+                    <RiCheckLine className="text-xl" />
+                  </motion.span>
+                )}
+                {scanFlash === 'error' && (
+                  <motion.span
+                    key="err"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-red-400 text-lg font-bold leading-none"
+                  >
+                    ✗
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
+            <AnimatePresence>
+              {scanMessage && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className={`text-xs mt-1.5 font-medium pl-1 ${
+                    scanFlash === 'success' ? 'text-green-600' : 'text-red-500'
+                  }`}
+                >
+                  {scanMessage}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Product Name / Category Search */}
           <div className="relative">
             <RiSearchLine className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg" />
             <input
               ref={searchRef}
               type="text"
-              placeholder="Kërko produkt ose barkod..."
+              placeholder="Kërko produkt sipas emrit ose kategorisë..."
               value={kerkimi}
               onChange={(e) => setKerkimi(e.target.value)}
-              className="input pl-10 text-base"
-              autoFocus
+              className="input pl-10 text-sm"
             />
           </div>
         </div>
@@ -343,7 +499,7 @@ export default function ShitjetPage() {
               <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
                 <RiShoppingCartLine className="text-5xl mb-3 text-slate-200" />
                 <p className="text-sm">Shporta është bosh</p>
-                <p className="text-xs mt-1">Klikoni mbi produkt për ta shtuar</p>
+                <p className="text-xs mt-1">Skanoni barkod ose klikoni mbi produkt</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">

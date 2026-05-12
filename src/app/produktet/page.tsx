@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -13,6 +13,7 @@ import {
   RiDeleteBin6Line,
   RiFilterLine,
   RiCloseLine,
+  RiBarcodeLine,
 } from 'react-icons/ri'
 
 interface Supplier {
@@ -57,7 +58,7 @@ const NJESITE = ['copë', 'kg', 'gram', 'litër', 'shishe', 'paketë', 'kuti', '
 
 const emptyForm = {
   emri: '',
-  barcodes: [''] as string[],
+  barcodes: [] as string[],
   kategoria: KATEGORITE[0],
   sasia: '0',
   stokuMinimal: '5',
@@ -78,6 +79,9 @@ export default function ProduktetPage() {
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<typeof emptyForm>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [barcodeError, setBarcodeError] = useState('')
+  const barcodeInputRef = useRef<HTMLInputElement>(null)
 
   const fetchProducts = useCallback(async () => {
     const params = new URLSearchParams()
@@ -101,10 +105,9 @@ export default function ProduktetPage() {
 
   function openAdd() {
     setEditProduct(null)
-    setForm({
-      ...emptyForm,
-      kategoria: kategoriaFilter || KATEGORITE[0],
-    })
+    setForm({ ...emptyForm, kategoria: kategoriaFilter || KATEGORITE[0] })
+    setBarcodeInput('')
+    setBarcodeError('')
     setModalOpen(true)
   }
 
@@ -112,9 +115,7 @@ export default function ProduktetPage() {
     setEditProduct(product)
     setForm({
       emri: product.emri,
-      barcodes: product.barcodes.length > 0
-        ? product.barcodes.map((b) => b.barcode)
-        : [''],
+      barcodes: product.barcodes.map((b) => b.barcode),
       kategoria: product.kategoria,
       sasia: String(product.sasia),
       stokuMinimal: String(product.stokuMinimal),
@@ -123,22 +124,56 @@ export default function ProduktetPage() {
       njesia: product.njesia,
       furnitorId: product.furnitorId ? String(product.furnitorId) : '',
     })
+    setBarcodeInput('')
+    setBarcodeError('')
     setModalOpen(true)
   }
 
-  function addBarcode() {
-    setForm((f) => ({ ...f, barcodes: [...f.barcodes, ''] }))
+  function closeModal() {
+    setModalOpen(false)
+    setBarcodeInput('')
+    setBarcodeError('')
+  }
+
+  function handleBarcodeAdd() {
+    const code = barcodeInput.trim()
+    if (!code) return
+
+    if (form.barcodes.includes(code)) {
+      setBarcodeError('Ky barkod është shtuar tashmë')
+      return
+    }
+
+    if (form.barcodes.length >= 10) {
+      setBarcodeError('Maksimumi 10 barkode për produkt')
+      return
+    }
+
+    const isDuplicate = products.some(
+      (p) =>
+        (!editProduct || p.id !== editProduct.id) &&
+        p.barcodes.some((b) => b.barcode === code)
+    )
+    if (isDuplicate) {
+      setBarcodeError('Ky barkod ekziston te një produkt tjetër')
+      return
+    }
+
+    setForm((f) => ({ ...f, barcodes: [...f.barcodes, code] }))
+    setBarcodeInput('')
+    setBarcodeError('')
+    barcodeInputRef.current?.focus()
+  }
+
+  function handleBarcodeInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleBarcodeAdd()
+    }
   }
 
   function removeBarcode(idx: number) {
     setForm((f) => ({ ...f, barcodes: f.barcodes.filter((_, i) => i !== idx) }))
-  }
-
-  function updateBarcode(idx: number, value: string) {
-    setForm((f) => ({
-      ...f,
-      barcodes: f.barcodes.map((b, i) => (i === idx ? value : b)),
-    }))
   }
 
   async function handleSave() {
@@ -147,17 +182,7 @@ export default function ProduktetPage() {
       return
     }
 
-    const validBarcodes = form.barcodes.map((b) => b.trim()).filter(Boolean)
-
-    if (validBarcodes.length > 10) {
-      toast.error('Maksimumi 10 barkode për produkt')
-      return
-    }
-
-    if (new Set(validBarcodes).size !== validBarcodes.length) {
-      toast.error('Ka barkode të njëjta brenda produktit')
-      return
-    }
+    const validBarcodes = form.barcodes
 
     setSaving(true)
     try {
@@ -184,7 +209,7 @@ export default function ProduktetPage() {
         return
       }
       toast.success(editProduct ? 'Produkti u përditësua' : 'Produkti u shtua')
-      setModalOpen(false)
+      closeModal()
       fetchProducts()
     } finally {
       setSaving(false)
@@ -350,7 +375,7 @@ export default function ProduktetPage() {
       {/* Add/Edit Modal */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
         title={editProduct ? 'Ndrysho Produkt' : 'Shto Produkt të Ri'}
         size="lg"
       >
@@ -366,42 +391,70 @@ export default function ProduktetPage() {
             />
           </div>
 
-          {/* Multiple barcodes */}
+          {/* Barcode scanner section */}
           <div className="sm:col-span-2">
-            <label className="label">Barkodi</label>
-            <div className="space-y-2">
-              {form.barcodes.map((bc, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={bc}
-                    onChange={(e) => updateBarcode(idx, e.target.value)}
-                    className="input font-mono flex-1"
-                    placeholder="8001234567890"
-                  />
-                  {form.barcodes.length > 1 && (
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="label mb-0">Barkodi</label>
+              <span className="text-xs text-slate-400">{form.barcodes.length}/10</span>
+            </div>
+
+            {/* Scan input */}
+            <div className="relative mb-2">
+              <RiBarcodeLine className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg" />
+              <input
+                ref={barcodeInputRef}
+                type="text"
+                value={barcodeInput}
+                onChange={(e) => {
+                  setBarcodeInput(e.target.value)
+                  if (barcodeError) setBarcodeError('')
+                }}
+                onKeyDown={handleBarcodeInputKeyDown}
+                placeholder="Skano ose shkruaj barkodin..."
+                className={`input pl-9 font-mono ${barcodeError ? 'border-red-400 focus:border-red-400' : ''}`}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={form.barcodes.length >= 10}
+              />
+            </div>
+
+            {barcodeError && (
+              <p className="text-xs text-red-500 mb-2 pl-0.5">{barcodeError}</p>
+            )}
+
+            {/* Barcode chips */}
+            {form.barcodes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {form.barcodes.map((bc, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs font-mono px-2.5 py-1 rounded-lg"
+                  >
+                    {bc}
                     <button
                       type="button"
                       onClick={() => removeBarcode(idx)}
-                      className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
+                      className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
                       title="Hiq barkod"
                     >
-                      <RiCloseLine className="text-lg" />
+                      <RiCloseLine />
                     </button>
-                  )}
-                </div>
-              ))}
-              {form.barcodes.length < 10 && (
-                <button
-                  type="button"
-                  onClick={addBarcode}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-0.5"
-                >
-                  <RiAddLine />
-                  Shto barkod
-                </button>
-              )}
-            </div>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Manual add button */}
+            {form.barcodes.length < 10 && (
+              <button
+                type="button"
+                onClick={handleBarcodeAdd}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-0.5"
+              >
+                <RiAddLine />
+                Shto barkod të ri
+              </button>
+            )}
           </div>
 
           <div>
@@ -506,7 +559,7 @@ export default function ProduktetPage() {
           >
             {saving ? 'Duke ruajtur...' : editProduct ? 'Ruaj Ndryshimet' : 'Shto Produkt'}
           </button>
-          <button onClick={() => setModalOpen(false)} className="btn-secondary">
+          <button onClick={closeModal} className="btn-secondary">
             Anulo
           </button>
         </div>
