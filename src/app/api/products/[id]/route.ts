@@ -8,7 +8,7 @@ export async function GET(
   try {
     const product = await prisma.product.findUnique({
       where: { id: Number(params.id) },
-      include: { furnitor: true },
+      include: { furnitor: true, barcodes: true },
     })
     if (!product) {
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
@@ -27,7 +27,7 @@ export async function PUT(
     const body = await req.json()
     const {
       emri,
-      barcode,
+      barcodes,
       kategoria,
       sasia,
       stokuMinimal,
@@ -37,11 +37,21 @@ export async function PUT(
       furnitorId,
     } = body
 
+    const validBarcodes: string[] = Array.isArray(barcodes)
+      ? (barcodes as string[]).map((b) => b.trim()).filter(Boolean)
+      : []
+
+    if (validBarcodes.length > 10) {
+      return NextResponse.json(
+        { error: 'Maksimumi 10 barkode për produkt' },
+        { status: 400 }
+      )
+    }
+
     const product = await prisma.product.update({
       where: { id: Number(params.id) },
       data: {
         emri,
-        barcode: barcode || null,
         kategoria,
         sasia: Number(sasia),
         stokuMinimal: Number(stokuMinimal),
@@ -49,8 +59,12 @@ export async function PUT(
         cmimiShitjes: Number(cmimiShitjes),
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
+        barcodes: {
+          deleteMany: {},
+          create: validBarcodes.map((barcode) => ({ barcode })),
+        },
       },
-      include: { furnitor: true },
+      include: { furnitor: true, barcodes: true },
     })
 
     return NextResponse.json(product)

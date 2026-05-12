@@ -12,6 +12,7 @@ import {
   RiEditLine,
   RiDeleteBin6Line,
   RiFilterLine,
+  RiCloseLine,
 } from 'react-icons/ri'
 
 interface Supplier {
@@ -19,10 +20,15 @@ interface Supplier {
   emri: string
 }
 
+interface ProductBarcode {
+  id: number
+  barcode: string
+}
+
 interface Product {
   id: number
   emri: string
-  barcode: string | null
+  barcodes: ProductBarcode[]
   kategoria: string
   sasia: number
   stokuMinimal: number
@@ -35,23 +41,21 @@ interface Product {
 }
 
 const KATEGORITE = [
-  'Bukëpjekje',
-  'Bulmetore',
-  'Mish & Peshk',
-  'Fruta & Perime',
-  'Drithëra & Pasta',
-  'Vajra & Salca',
-  'Pije & Kafe',
-  'Ëmbëlsira',
-  'Higjienë',
-  'Të ndryshme',
+  'Të Ëmbla',
+  'Të Kripura',
+  'Ushqimore',
+  'Higjena',
+  'Pastrimi',
+  'Lëngje',
+  'Të Ngrira',
+  'Të Ndryshme',
 ]
 
 const NJESITE = ['copë', 'kg', 'litër', 'shishe', 'paketë', 'kuti', 'qese', 'tufë']
 
 const emptyForm = {
   emri: '',
-  barcode: '',
+  barcodes: [''] as string[],
   kategoria: KATEGORITE[0],
   sasia: '0',
   stokuMinimal: '5',
@@ -70,7 +74,7 @@ export default function ProduktetPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState<Product | null>(null)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState<typeof emptyForm>(emptyForm)
   const [saving, setSaving] = useState(false)
 
   const fetchProducts = useCallback(async () => {
@@ -95,7 +99,10 @@ export default function ProduktetPage() {
 
   function openAdd() {
     setEditProduct(null)
-    setForm(emptyForm)
+    setForm({
+      ...emptyForm,
+      kategoria: kategoriaFilter || KATEGORITE[0],
+    })
     setModalOpen(true)
   }
 
@@ -103,7 +110,9 @@ export default function ProduktetPage() {
     setEditProduct(product)
     setForm({
       emri: product.emri,
-      barcode: product.barcode ?? '',
+      barcodes: product.barcodes.length > 0
+        ? product.barcodes.map((b) => b.barcode)
+        : [''],
       kategoria: product.kategoria,
       sasia: String(product.sasia),
       stokuMinimal: String(product.stokuMinimal),
@@ -115,11 +124,39 @@ export default function ProduktetPage() {
     setModalOpen(true)
   }
 
+  function addBarcode() {
+    setForm((f) => ({ ...f, barcodes: [...f.barcodes, ''] }))
+  }
+
+  function removeBarcode(idx: number) {
+    setForm((f) => ({ ...f, barcodes: f.barcodes.filter((_, i) => i !== idx) }))
+  }
+
+  function updateBarcode(idx: number, value: string) {
+    setForm((f) => ({
+      ...f,
+      barcodes: f.barcodes.map((b, i) => (i === idx ? value : b)),
+    }))
+  }
+
   async function handleSave() {
     if (!form.emri || !form.kategoria || !form.cmimiBlerjes || !form.cmimiShitjes) {
       toast.error('Ju lutem plotësoni të gjitha fushat e detyrueshme')
       return
     }
+
+    const validBarcodes = form.barcodes.map((b) => b.trim()).filter(Boolean)
+
+    if (validBarcodes.length > 10) {
+      toast.error('Maksimumi 10 barkode për produkt')
+      return
+    }
+
+    if (new Set(validBarcodes).size !== validBarcodes.length) {
+      toast.error('Ka barkode të njëjta brenda produktit')
+      return
+    }
+
     setSaving(true)
     try {
       const url = editProduct ? `/api/products/${editProduct.id}` : '/api/products'
@@ -128,11 +165,14 @@ export default function ProduktetPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
+          emri: form.emri,
+          barcodes: validBarcodes,
+          kategoria: form.kategoria,
           sasia: Number(form.sasia),
           stokuMinimal: Number(form.stokuMinimal),
           cmimiBlerjes: Number(form.cmimiBlerjes),
           cmimiShitjes: Number(form.cmimiShitjes),
+          njesia: form.njesia,
           furnitorId: form.furnitorId ? Number(form.furnitorId) : null,
         }),
       })
@@ -243,9 +283,20 @@ export default function ProduktetPage() {
                         <span className="font-medium text-slate-900">{product.emri}</span>
                       </td>
                       <td className="table-td">
-                        <span className="text-slate-400 font-mono text-xs">
-                          {product.barcode || '—'}
-                        </span>
+                        {product.barcodes.length === 0 ? (
+                          <span className="text-slate-300">—</span>
+                        ) : (
+                          <div>
+                            <span className="font-mono text-xs text-slate-500">
+                              {product.barcodes[0].barcode}
+                            </span>
+                            {product.barcodes.length > 1 && (
+                              <span className="ml-1.5 text-xs text-blue-500">
+                                +{product.barcodes.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="table-td">
                         <span className="badge-gray">{product.kategoria}</span>
@@ -312,16 +363,45 @@ export default function ProduktetPage() {
               placeholder="p.sh. Bukë e Bardhë"
             />
           </div>
-          <div>
+
+          {/* Multiple barcodes */}
+          <div className="sm:col-span-2">
             <label className="label">Barkodi</label>
-            <input
-              type="text"
-              value={form.barcode}
-              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-              className="input font-mono"
-              placeholder="8001234567890"
-            />
+            <div className="space-y-2">
+              {form.barcodes.map((bc, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={bc}
+                    onChange={(e) => updateBarcode(idx, e.target.value)}
+                    className="input font-mono flex-1"
+                    placeholder="8001234567890"
+                  />
+                  {form.barcodes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeBarcode(idx)}
+                      className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
+                      title="Hiq barkod"
+                    >
+                      <RiCloseLine className="text-lg" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {form.barcodes.length < 10 && (
+                <button
+                  type="button"
+                  onClick={addBarcode}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-0.5"
+                >
+                  <RiAddLine />
+                  Shto barkod
+                </button>
+              )}
+            </div>
           </div>
+
           <div>
             <label className="label">Kategoria *</label>
             <select
@@ -331,6 +411,18 @@ export default function ProduktetPage() {
             >
               {KATEGORITE.map((k) => (
                 <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Njësia</label>
+            <select
+              value={form.njesia}
+              onChange={(e) => setForm({ ...form, njesia: e.target.value })}
+              className="input"
+            >
+              {NJESITE.map((n) => (
+                <option key={n} value={n}>{n}</option>
               ))}
             </select>
           </div>
@@ -376,19 +468,7 @@ export default function ProduktetPage() {
               min="0"
             />
           </div>
-          <div>
-            <label className="label">Njësia</label>
-            <select
-              value={form.njesia}
-              onChange={(e) => setForm({ ...form, njesia: e.target.value })}
-              className="input"
-            >
-              {NJESITE.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <label className="label">Furnitori</label>
             <select
               value={form.furnitorId}

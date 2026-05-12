@@ -8,7 +8,7 @@ import { RiAlertLine, RiRefreshLine, RiArrowUpLine } from 'react-icons/ri'
 interface Product {
   id: number
   emri: string
-  barcode: string | null
+  barcodes: { barcode: string }[]
   kategoria: string
   sasia: number
   stokuMinimal: number
@@ -130,8 +130,8 @@ export default function StokUletPage() {
                     >
                       <td className="table-td">
                         <p className="font-medium text-slate-900">{product.emri}</p>
-                        {product.barcode && (
-                          <p className="text-xs text-slate-400 font-mono">{product.barcode}</p>
+                        {product.barcodes[0] && (
+                          <p className="text-xs text-slate-400 font-mono">{product.barcodes[0].barcode}</p>
                         )}
                       </td>
                       <td className="table-td">

@@ -18,7 +18,7 @@ import {
 interface Product {
   id: number
   emri: string
-  barcode: string | null
+  barcodes: { barcode: string }[]
   kategoria: string
   sasia: number
   stokuMinimal: number
@@ -80,7 +80,7 @@ export default function ShitjetPage() {
         products.filter(
           (p) =>
             p.emri.toLowerCase().includes(q) ||
-            (p.barcode && p.barcode.includes(q)) ||
+            p.barcodes.some((b) => b.barcode.includes(q)) ||
             p.kategoria.toLowerCase().includes(q)
         )
       )

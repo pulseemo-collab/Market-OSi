@@ -6,7 +6,8 @@
       "Bash(npm run *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/shitjet)",
       "Bash(Start-Process *)",
-      "PowerShell(Start-Process \"http://localhost:3000/shitjet\")"
+      "PowerShell(Start-Process \"http://localhost:3000/shitjet\")",
+      "Bash(npx prisma *)"
     ]
   }
 }

@@ -21,20 +21,28 @@ model Supplier {
 }
 
 model Product {
-  id            Int         @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   emri          String
-  barcode       String?     @unique
   kategoria     String
-  sasia         Float       @default(0)
-  stokuMinimal  Float       @default(5)
+  sasia         Float            @default(0)
+  stokuMinimal  Float            @default(5)
   cmimiBlerjes  Float
   cmimiShitjes  Float
-  njesia        String      @default("cope")
+  njesia        String           @default("cope")
   furnitorId    Int?
-  furnitor      Supplier?   @relation(fields: [furnitorId], references: [id])
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  furnitor      Supplier?        @relation(fields: [furnitorId], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
   saleItems     SaleItem[]
+  barcodes      ProductBarcode[]
+}
+
+model ProductBarcode {
+  id        Int      @id @default(autoincrement())
+  barcode   String   @unique
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Sale {

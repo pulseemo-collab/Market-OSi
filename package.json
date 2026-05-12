@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "db:migrate": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/migrate-barcodes.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",

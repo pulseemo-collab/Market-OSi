@@ -3,7 +3,6 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  // Seed suppliers
   const furnitor1 = await prisma.supplier.upsert({
     where: { id: 1 },
     update: {},
@@ -28,12 +27,12 @@ async function main() {
     },
   })
 
-  // Seed products
   const products = [
     {
+      id: 1,
       emri: 'Bukë e Bardhë',
       barcode: '8001234567890',
-      kategoria: 'Bukëpjekje',
+      kategoria: 'Ushqimore',
       sasia: 45,
       stokuMinimal: 10,
       cmimiBlerjes: 50,
@@ -42,9 +41,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
+      id: 2,
       emri: 'Qumësht 1L',
       barcode: '8002345678901',
-      kategoria: 'Bulmetore',
+      kategoria: 'Ushqimore',
       sasia: 3,
       stokuMinimal: 15,
       cmimiBlerjes: 90,
@@ -53,9 +53,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
+      id: 3,
       emri: 'Vezë (kuti 10)',
       barcode: '8003456789012',
-      kategoria: 'Bulmetore',
+      kategoria: 'Ushqimore',
       sasia: 20,
       stokuMinimal: 8,
       cmimiBlerjes: 180,
@@ -64,9 +65,10 @@ async function main() {
       furnitorId: furnitor2.id,
     },
     {
+      id: 4,
       emri: 'Vaj Ulliri 500ml',
       barcode: '8004567890123',
-      kategoria: 'Vajra & Salca',
+      kategoria: 'Ushqimore',
       sasia: 2,
       stokuMinimal: 5,
       cmimiBlerjes: 350,
@@ -75,9 +77,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
+      id: 5,
       emri: 'Makarona 500g',
       barcode: '8005678901234',
-      kategoria: 'Drithëra & Pasta',
+      kategoria: 'Ushqimore',
       sasia: 60,
       stokuMinimal: 20,
       cmimiBlerjes: 70,
@@ -86,9 +89,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
+      id: 6,
       emri: 'Djathë i Bardhë 400g',
       barcode: '8006789012345',
-      kategoria: 'Bulmetore',
+      kategoria: 'Ushqimore',
       sasia: 12,
       stokuMinimal: 10,
       cmimiBlerjes: 280,
@@ -97,9 +101,10 @@ async function main() {
       furnitorId: furnitor2.id,
     },
     {
+      id: 7,
       emri: 'Sheqer 1kg',
       barcode: '8007890123456',
-      kategoria: 'Drithëra & Pasta',
+      kategoria: 'Ushqimore',
       sasia: 35,
       stokuMinimal: 10,
       cmimiBlerjes: 100,
@@ -108,9 +113,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
-      emri: 'Kafe Lavazza 250g',
+      id: 8,
+      emri: 'Kafe 250g',
       barcode: '8008901234567',
-      kategoria: 'Pije & Kafe',
+      kategoria: 'Lëngje',
       sasia: 4,
       stokuMinimal: 6,
       cmimiBlerjes: 450,
@@ -119,9 +125,10 @@ async function main() {
       furnitorId: furnitor1.id,
     },
     {
+      id: 9,
       emri: 'Ujë Mineral 1.5L',
       barcode: '8009012345678',
-      kategoria: 'Pije & Kafe',
+      kategoria: 'Lëngje',
       sasia: 80,
       stokuMinimal: 24,
       cmimiBlerjes: 35,
@@ -130,9 +137,10 @@ async function main() {
       furnitorId: furnitor2.id,
     },
     {
-      emri: 'Ketchup Heinz 300g',
+      id: 10,
+      emri: 'Ketchup 300g',
       barcode: '8000123456789',
-      kategoria: 'Vajra & Salca',
+      kategoria: 'Ushqimore',
       sasia: 18,
       stokuMinimal: 8,
       cmimiBlerjes: 220,
@@ -142,11 +150,17 @@ async function main() {
     },
   ]
 
-  for (const product of products) {
+  for (const p of products) {
+    const { barcode, ...productData } = p
     await prisma.product.upsert({
-      where: { barcode: product.barcode },
+      where: { id: p.id },
       update: {},
-      create: product,
+      create: {
+        ...productData,
+        barcodes: {
+          create: [{ barcode }],
+        },
+      },
     })
   }
 

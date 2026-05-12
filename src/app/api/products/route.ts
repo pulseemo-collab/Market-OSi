@@ -14,16 +14,16 @@ export async function GET(req: NextRequest) {
           kerkimi
             ? {
                 OR: [
-                  { emri: { contains: kerkimi } },
-                  { barcode: { contains: kerkimi } },
-                  { kategoria: { contains: kerkimi } },
+                  { emri: { contains: kerkimi, mode: 'insensitive' } },
+                  { kategoria: { contains: kerkimi, mode: 'insensitive' } },
+                  { barcodes: { some: { barcode: { contains: kerkimi } } } },
                 ],
               }
             : {},
           kategoria ? { kategoria } : {},
         ],
       },
-      include: { furnitor: true },
+      include: { furnitor: true, barcodes: true },
       orderBy: { emri: 'asc' },
     })
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       emri,
-      barcode,
+      barcodes,
       kategoria,
       sasia,
       stokuMinimal,
@@ -60,10 +60,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const validBarcodes: string[] = Array.isArray(barcodes)
+      ? (barcodes as string[]).map((b) => b.trim()).filter(Boolean)
+      : []
+
+    if (validBarcodes.length > 10) {
+      return NextResponse.json(
+        { error: 'Maksimumi 10 barkode për produkt' },
+        { status: 400 }
+      )
+    }
+
     const product = await prisma.product.create({
       data: {
         emri,
-        barcode: barcode || null,
         kategoria,
         sasia: Number(sasia) || 0,
         stokuMinimal: Number(stokuMinimal) || 5,
@@ -71,8 +81,11 @@ export async function POST(req: NextRequest) {
         cmimiShitjes: Number(cmimiShitjes),
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
+        barcodes: {
+          create: validBarcodes.map((barcode) => ({ barcode })),
+        },
       },
-      include: { furnitor: true },
+      include: { furnitor: true, barcodes: true },
     })
 
     return NextResponse.json(product, { status: 201 })
