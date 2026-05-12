@@ -53,7 +53,7 @@ const KATEGORITE = [
   'Fruta/Perime'
 ]
 
-const NJESITE = ['copë', 'kg', 'litër', 'shishe', 'paketë', 'kuti', 'qese', 'tufë']
+const NJESITE = ['copë', 'kg', 'gram', 'litër', 'shishe', 'paketë', 'kuti', 'qese', 'tufë']
 
 const emptyForm = {
   emri: '',
@@ -458,6 +458,7 @@ export default function ProduktetPage() {
               onChange={(e) => setForm({ ...form, sasia: e.target.value })}
               className="input"
               min="0"
+              step={form.njesia === 'kg' || form.njesia === 'gram' ? '0.001' : '1'}
             />
           </div>
           <div>
@@ -468,6 +469,7 @@ export default function ProduktetPage() {
               onChange={(e) => setForm({ ...form, stokuMinimal: e.target.value })}
               className="input"
               min="0"
+              step={form.njesia === 'kg' || form.njesia === 'gram' ? '0.001' : '1'}
             />
           </div>
           <div className="sm:col-span-2">

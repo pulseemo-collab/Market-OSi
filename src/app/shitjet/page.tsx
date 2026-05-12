@@ -42,7 +42,12 @@ interface CompletedSale {
     sasia: number
     cmimiShitjes: number
     fitimi: number
+    product: { njesia: string } | null
   }>
+}
+
+function isWeighted(njesia: string) {
+  return njesia === 'kg' || njesia === 'gram' || njesia === 'litër'
 }
 
 export default function ShitjetPage() {
@@ -52,6 +57,7 @@ export default function ShitjetPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(false)
   const [receiptModal, setReceiptModal] = useState<CompletedSale | null>(null)
+  const [rawValues, setRawValues] = useState<Record<number, string>>({})
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -92,32 +98,47 @@ export default function ShitjetPage() {
       toast.error(`${product.emri} - Stoku i mbaruar`)
       return
     }
+    const step = isWeighted(product.njesia) ? 0.250 : 1
     setCart((prev) => {
       const existing = prev.find((i) => i.product.id === product.id)
       if (existing) {
-        if (existing.sasia >= product.sasia) {
+        const newSasia = parseFloat((existing.sasia + step).toFixed(3))
+        if (newSasia > product.sasia) {
           toast.error(`Stoku i pamjaftueshëm: ${product.sasia} ${product.njesia}`)
           return prev
         }
         return prev.map((i) =>
-          i.product.id === product.id ? { ...i, sasia: i.sasia + 1 } : i
+          i.product.id === product.id ? { ...i, sasia: newSasia } : i
         )
       }
-      return [...prev, { product, sasia: 1 }]
+      const initialSasia = isWeighted(product.njesia)
+        ? parseFloat(Math.min(1.0, product.sasia).toFixed(3))
+        : 1
+      return [...prev, { product, sasia: initialSasia }]
+    })
+    setRawValues((prev) => {
+      const next = { ...prev }
+      delete next[product.id]
+      return next
     })
     setKerkimi('')
     searchRef.current?.focus()
   }
 
   function updateSasia(productId: number, delta: number) {
+    setRawValues((prev) => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
     setCart((prev) =>
       prev
         .map((item) => {
           if (item.product.id !== productId) return item
-          const newSasia = item.sasia + delta
+          const newSasia = parseFloat((item.sasia + delta).toFixed(3))
           if (newSasia <= 0) return null
           if (newSasia > item.product.sasia) {
-            toast.error(`Stoku maksimal: ${item.product.sasia}`)
+            toast.error(`Stoku maksimal: ${item.product.sasia} ${item.product.njesia}`)
             return item
           }
           return { ...item, sasia: newSasia }
@@ -127,20 +148,65 @@ export default function ShitjetPage() {
   }
 
   function removeFromCart(productId: number) {
+    setRawValues((prev) => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
     setCart((prev) => prev.filter((i) => i.product.id !== productId))
   }
 
-  function setQuantityDirectly(productId: number, value: number) {
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.product.id !== productId) return item
-        const clamped = Math.max(1, Math.min(Math.floor(value), item.product.sasia))
-        if (value > item.product.sasia) {
-          toast.error(`Stoku maksimal: ${item.product.sasia}`)
-        }
-        return { ...item, sasia: clamped }
+  function handleQuantityInput(item: CartItem, inputStr: string) {
+    if (isWeighted(item.product.njesia)) {
+      if (!/^(\d*\.?\d{0,3})?$/.test(inputStr)) return
+    } else {
+      if (!/^\d*$/.test(inputStr)) return
+    }
+    setRawValues((prev) => ({ ...prev, [item.product.id]: inputStr }))
+    const parsed = parseFloat(inputStr)
+    if (isNaN(parsed) || parsed <= 0) return
+    if (isWeighted(item.product.njesia)) {
+      if (parsed > item.product.sasia) {
+        toast.error(`Stoku maksimal: ${item.product.sasia} ${item.product.njesia}`)
+      }
+      const val = parseFloat(Math.min(parsed, item.product.sasia).toFixed(3))
+      setCart((prev) => prev.map((i) => i.product.id === item.product.id ? { ...i, sasia: val } : i))
+    } else {
+      const val = Math.max(1, Math.min(Math.floor(parsed), item.product.sasia))
+      if (Math.floor(parsed) > item.product.sasia) {
+        toast.error(`Stoku maksimal: ${item.product.sasia}`)
+      }
+      setCart((prev) => prev.map((i) => i.product.id === item.product.id ? { ...i, sasia: val } : i))
+    }
+  }
+
+  function handleQuantityBlur(item: CartItem) {
+    const raw = rawValues[item.product.id]
+    if (raw === undefined) return
+    const parsed = parseFloat(raw)
+    if (isWeighted(item.product.njesia)) {
+      const val = (isNaN(parsed) || parsed <= 0)
+        ? 0.001
+        : parseFloat(Math.min(parsed, item.product.sasia).toFixed(3))
+      setCart((prev) => prev.map((i) => i.product.id === item.product.id ? { ...i, sasia: val } : i))
+      setRawValues((prev) => ({ ...prev, [item.product.id]: val.toFixed(3) }))
+    } else {
+      const val = (isNaN(parsed) || parsed < 1)
+        ? 1
+        : Math.max(1, Math.min(Math.floor(parsed), item.product.sasia))
+      setCart((prev) => prev.map((i) => i.product.id === item.product.id ? { ...i, sasia: val } : i))
+      setRawValues((prev) => {
+        const next = { ...prev }
+        delete next[item.product.id]
+        return next
       })
-    )
+    }
+  }
+
+  function getDisplayValue(item: CartItem): string {
+    const raw = rawValues[item.product.id]
+    if (raw !== undefined) return raw
+    return isWeighted(item.product.njesia) ? item.sasia.toFixed(3) : item.sasia.toString()
   }
 
   const totali = cart.reduce((sum, i) => sum + i.product.cmimiShitjes * i.sasia, 0)
@@ -233,7 +299,9 @@ export default function ShitjetPage() {
                   <div className="flex items-start justify-between mb-2">
                     <p className="font-medium text-slate-900 text-sm leading-tight">{product.emri}</p>
                     {inCart && (
-                      <span className="badge-blue ml-1 flex-shrink-0">{inCart.sasia}</span>
+                      <span className="badge-blue ml-1 flex-shrink-0">
+                        {isWeighted(product.njesia) ? inCart.sasia.toFixed(3) : inCart.sasia}
+                      </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-400 mb-2">{product.kategoria}</p>
@@ -242,7 +310,7 @@ export default function ShitjetPage() {
                       {formatCurrency(product.cmimiShitjes)}
                     </span>
                     <span className={`text-xs font-medium ${product.sasia <= product.stokuMinimal ? 'text-red-500' : 'text-slate-400'}`}>
-                      Stoku: {product.sasia}
+                      Stoku: {isWeighted(product.njesia) ? product.sasia.toFixed(3) : product.sasia} {product.njesia}
                     </span>
                   </div>
                 </motion.button>
@@ -302,27 +370,31 @@ export default function ShitjetPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => updateSasia(item.product.id, -1)}
+                          onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? -0.250 : -1)}
                           className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
                         >
                           <RiSubtractLine className="text-sm" />
                         </button>
                         <input
-                          type="number"
-                          min={1}
-                          max={item.product.sasia}
-                          value={item.sasia}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10)
-                            if (!isNaN(val) && val >= 1) {
-                              setQuantityDirectly(item.product.id, val)
-                            }
+                          type="text"
+                          inputMode={isWeighted(item.product.njesia) ? 'decimal' : 'numeric'}
+                          value={getDisplayValue(item)}
+                          onChange={(e) => handleQuantityInput(item, e.target.value)}
+                          onFocus={(e) => {
+                            setRawValues((prev) => ({
+                              ...prev,
+                              [item.product.id]: isWeighted(item.product.njesia)
+                                ? item.sasia.toFixed(3)
+                                : item.sasia.toString(),
+                            }))
+                            e.target.select()
                           }}
-                          onClick={(e) => (e.target as HTMLInputElement).select()}
-                          className="w-12 h-7 text-center text-sm font-semibold border border-slate-200 rounded-md focus:outline-none focus:border-blue-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          onBlur={() => handleQuantityBlur(item)}
+                          className="w-20 h-7 text-center text-sm font-semibold border border-slate-200 rounded-md focus:outline-none focus:border-blue-400"
                         />
+                        <span className="text-xs text-slate-400 min-w-[2rem]">{item.product.njesia}</span>
                         <button
-                          onClick={() => updateSasia(item.product.id, 1)}
+                          onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? 0.250 : 1)}
                           className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
                         >
                           <RiAddLine className="text-sm" />
@@ -399,7 +471,12 @@ export default function ShitjetPage() {
                   <div key={idx} className="flex justify-between text-sm">
                     <div className="flex-1">
                       <span className="font-medium">{item.emriProduktit}</span>
-                      <span className="text-slate-400 text-xs ml-2">x{item.sasia}</span>
+                      <span className="text-slate-400 text-xs ml-2">
+                        {isWeighted(item.product?.njesia || '')
+                          ? item.sasia.toFixed(3)
+                          : item.sasia}{' '}
+                        {item.product?.njesia || ''}
+                      </span>
                     </div>
                     <span className="font-medium">{formatCurrency(item.cmimiShitjes * item.sasia)}</span>
                   </div>
