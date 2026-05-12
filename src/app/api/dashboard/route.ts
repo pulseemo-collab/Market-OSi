@@ -10,7 +10,7 @@ export async function GET() {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
     const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0)
 
-    const [shitjetSot, allProducts, shitjetRecente] = await Promise.all([
+    const [shitjetSot, allProducts, shitjetRecente, furnizimetRecente] = await Promise.all([
       prisma.sale.findMany({
         where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
         include: { items: true },
@@ -21,6 +21,14 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { items: true },
+      }),
+      prisma.supply.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          furnitor: { select: { id: true, emri: true } },
+          items: true,
+        },
       }),
     ])
 
@@ -61,6 +69,7 @@ export async function GET() {
       lowStockProducts,
       shitjetRecente,
       topProducts: topSaleItems,
+      furnizimetRecente,
     })
   } catch (error) {
     console.error('Dashboard error:', error)

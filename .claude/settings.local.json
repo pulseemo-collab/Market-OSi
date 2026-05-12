@@ -10,7 +10,11 @@
       "Bash(npx prisma *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Include \"*.prisma\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Name)"
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\" -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Out-String -Width 300)"
     ]
   }
 }

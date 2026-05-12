@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import StatsCard from '@/components/ui/StatsCard'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import {
   RiMoneyDollarCircleLine,
   RiLineChartLine,
@@ -13,6 +13,7 @@ import {
   RiArrowRightLine,
   RiBox3Line,
 } from 'react-icons/ri'
+
 
 interface DashboardData {
   shitjetSotTotali: number
@@ -39,6 +40,13 @@ interface DashboardData {
     productId: number
     emriProduktit: string
     _sum: { sasia: number | null }
+  }>
+  furnizimetRecente: Array<{
+    id: number
+    totali: number
+    data: string
+    furnitor: { id: number; emri: string } | null
+    items: Array<{ id: number }>
   }>
 }
 
@@ -253,6 +261,55 @@ export default function Dashboard() {
                     <td className="table-td font-semibold text-slate-400">{idx + 1}</td>
                     <td className="table-td font-medium">{item.emriProduktit}</td>
                     <td className="table-td text-right font-semibold">{item._sum.sasia ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Recent Supplies */}
+      {data?.furnizimetRecente && data.furnizimetRecente.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="card mt-6"
+        >
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">Furnizimet e Fundit</h2>
+            <Link href="/furnizime" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+              Shiko të gjitha <RiArrowRightLine />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="table-th">#</th>
+                  <th className="table-th">Furnitori</th>
+                  <th className="table-th">Data</th>
+                  <th className="table-th text-center">Artikuj</th>
+                  <th className="table-th text-right">Totali</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.furnizimetRecente.map((supply) => (
+                  <tr key={supply.id} className="table-row">
+                    <td className="table-td font-mono font-semibold text-blue-600">
+                      #{supply.id}
+                    </td>
+                    <td className="table-td font-medium">
+                      {supply.furnitor?.emri ?? <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="table-td text-slate-500">{formatDate(supply.data)}</td>
+                    <td className="table-td text-center">
+                      <span className="badge-gray">{supply.items.length}</span>
+                    </td>
+                    <td className="table-td text-right font-semibold">
+                      {formatCurrency(supply.totali)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
