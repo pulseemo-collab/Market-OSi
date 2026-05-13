@@ -14,6 +14,7 @@ import {
   RiStore2Line,
   RiBox3Line,
   RiLogoutBoxRLine,
+  RiFileListLine,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine },
   { href: '/historiku', label: 'Historiku', icon: RiHistoryLine },
   { href: '/stok-i-ulet', label: 'Stok i Ulët', icon: RiAlertLine },
+  { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine },
   { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line },
   { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine },
 ]

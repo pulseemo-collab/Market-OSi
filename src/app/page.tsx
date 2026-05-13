@@ -20,6 +20,7 @@ import {
   RiRefreshLine,
   RiArrowUpLine,
   RiArrowDownLine,
+  RiFileListLine,
 } from 'react-icons/ri'
 
 const DailySalesChart = dynamic(
@@ -308,6 +309,34 @@ export default function Dashboard() {
           color="amber"
         />
       </div>
+
+      {/* Reorder suggestions card */}
+      {(data?.lowStockCount ?? 0) > 0 && (
+        <motion.div variants={fadeUp} custom={6} initial="hidden" animate="show">
+          <Link
+            href="/porositje-te-sugjeruara"
+            className="card flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors group border-l-4 border-l-amber-400"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <RiFileListLine className="text-amber-600 text-xl" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Produkte për Porosi</p>
+                <p className="text-sm text-slate-400">
+                  {data!.lowStockCount} produkte kanë nevojë për porosi — shiko sugjerimet sipas furnitorit
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+              <span className="inline-flex items-center justify-center min-w-[2rem] h-8 px-2.5 bg-amber-100 text-amber-700 text-sm font-bold rounded-full">
+                {data!.lowStockCount}
+              </span>
+              <RiArrowRightLine className="text-slate-400 group-hover:text-blue-600 transition-colors text-lg" />
+            </div>
+          </Link>
+        </motion.div>
+      )}
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
