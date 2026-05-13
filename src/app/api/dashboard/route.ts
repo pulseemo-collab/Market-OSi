@@ -3,73 +3,235 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+const MONTH_NAMES = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
+
+export async function GET(request: Request) {
   try {
-    // Build today's boundary in local timezone (matches how Historiku filters "sot")
+    const { searchParams } = new URL(request.url)
+    const periudha = searchParams.get('periudha') || 'sot'
+    const ngaParam = searchParams.get('nga')
+    const deriParam = searchParams.get('deri')
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
     const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+    const last30Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0)
+    const last12Start = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0)
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0)
 
-    const [shitjetSot, allProducts, shitjetRecente, furnizimetRecente] = await Promise.all([
+    // Period filter
+    let periodStart: Date
+    let periodEnd: Date = tomorrowStart
+    switch (periudha) {
+      case 'jave':
+        periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0)
+        break
+      case 'muaj':
+        periodStart = monthStart
+        break
+      case 'custom':
+        periodStart = ngaParam ? new Date(ngaParam) : monthStart
+        if (deriParam) {
+          const d = new Date(deriParam)
+          d.setHours(23, 59, 59, 999)
+          periodEnd = d
+        }
+        break
+      default:
+        periodStart = todayStart
+    }
+
+    const [
+      periodSales,
+      monthSales,
+      todaySalesRaw,
+      allProducts,
+      suppliersCount,
+      chartDailyRaw,
+      chartMonthlyRaw,
+      prevMonthSales,
+      yesterdaySales,
+      topPeriodProducts,
+      recentSales,
+    ] = await Promise.all([
+      prisma.sale.findMany({
+        where: { createdAt: { gte: periodStart, lt: periodEnd } },
+        select: { totali: true, fitimi: true, items: { select: { sasia: true } } },
+      }),
+      prisma.sale.findMany({
+        where: { createdAt: { gte: monthStart, lt: tomorrowStart } },
+        select: { totali: true, fitimi: true },
+      }),
       prisma.sale.findMany({
         where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+        select: { totali: true, fitimi: true },
       }),
-      prisma.product.findMany({ orderBy: { emri: 'asc' } }),
+      prisma.product.findMany({
+        select: { id: true, emri: true, sasia: true, stokuMinimal: true, kategoria: true },
+        orderBy: { emri: 'asc' },
+      }),
+      prisma.supplier.count(),
+      prisma.sale.findMany({
+        where: { createdAt: { gte: last30Start, lt: tomorrowStart } },
+        select: { totali: true, fitimi: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.sale.findMany({
+        where: { createdAt: { gte: last12Start, lt: tomorrowStart } },
+        select: { totali: true, fitimi: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.sale.findMany({
+        where: { createdAt: { gte: prevMonthStart, lt: monthStart } },
+        select: { totali: true },
+      }),
+      prisma.sale.findMany({
+        where: { createdAt: { gte: yesterdayStart, lt: todayStart } },
+        select: { totali: true },
+      }),
+      prisma.saleItem
+        .groupBy({
+          by: ['productId', 'emriProduktit'],
+          where: { sale: { createdAt: { gte: periodStart, lt: periodEnd } } },
+          _sum: { sasia: true, fitimi: true },
+          orderBy: { _sum: { sasia: 'desc' } },
+          take: 8,
+        })
+        .catch(() => []),
       prisma.sale.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { items: true },
-      }),
-      prisma.supply.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: {
-          furnitor: { select: { id: true, emri: true } },
-          items: true,
-        },
       }),
     ])
 
-    // Run groupBy separately so a failure here doesn't zero out all stats
-    const topSaleItems = await prisma.saleItem
-      .groupBy({
-        by: ['productId', 'emriProduktit'],
-        _sum: { sasia: true },
-        orderBy: { _sum: { sasia: 'desc' } },
-        take: 5,
-      })
-      .catch((e: unknown) => {
-        console.error('Dashboard groupBy error:', e)
-        return []
-      })
+    // Period KPI
+    const periudhaTotali = periodSales.reduce((s, x) => s + x.totali, 0)
+    const periudhaFitimi = periodSales.reduce((s, x) => s + x.fitimi, 0)
+    const periudhaNumri = periodSales.length
+    const periudhaProdukte = periodSales.reduce(
+      (s, x) => s + x.items.reduce((is, i) => is + i.sasia, 0),
+      0
+    )
 
+    // Fixed KPIs
+    const shitjetSotTotali = todaySalesRaw.reduce((s, x) => s + x.totali, 0)
+    const shitjetMuajitTotali = monthSales.reduce((s, x) => s + x.totali, 0)
+    const shitjetMuajitFitimi = monthSales.reduce((s, x) => s + x.fitimi, 0)
+
+    // Low stock
     const lowStockProducts = allProducts
       .filter((p) => p.sasia <= p.stokuMinimal)
       .sort((a, b) => a.sasia / a.stokuMinimal - b.sasia / b.stokuMinimal)
       .slice(0, 8)
 
-    const shitjetSotTotali = shitjetSot.reduce((sum, s) => sum + s.totali, 0)
-    const fititmiSot = shitjetSot.reduce((sum, s) => sum + s.fitimi, 0)
-    const produkteShitura = shitjetSot.reduce(
-      (sum, s) => sum + s.items.reduce((is, i) => is + i.sasia, 0),
-      0
-    )
+    // Daily chart — last 30 days
+    const dailyMap = new Map<string, { shitjet: number; fitimi: number }>()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+      const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+      dailyMap.set(key, { shitjet: 0, fitimi: 0 })
+    }
+    for (const sale of chartDailyRaw) {
+      const d = new Date(sale.createdAt)
+      const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+      const entry = dailyMap.get(key)
+      if (entry) {
+        entry.shitjet += sale.totali
+        entry.fitimi += sale.fitimi
+      }
+    }
+    const chartDitor = Array.from(dailyMap.entries()).map(([data, v]) => ({
+      data,
+      shitjet: Math.round(v.shitjet),
+      fitimi: Math.round(v.fitimi),
+    }))
 
-    console.log(`Dashboard: todayStart=${todayStart.toISOString()}, tomorrowStart=${tomorrowStart.toISOString()}, shitjetSot=${shitjetSot.length}`)
+    // Monthly chart — last 12 months
+    const monthlyMap = new Map<string, { muaj: string; shitjet: number; fitimi: number }>()
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      monthlyMap.set(key, { muaj: MONTH_NAMES[d.getMonth()], shitjet: 0, fitimi: 0 })
+    }
+    for (const sale of chartMonthlyRaw) {
+      const d = new Date(sale.createdAt)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      const entry = monthlyMap.get(key)
+      if (entry) {
+        entry.shitjet += sale.totali
+        entry.fitimi += sale.fitimi
+      }
+    }
+    const chartMujor = Array.from(monthlyMap.values()).map((v) => ({
+      muaj: v.muaj,
+      shitjet: Math.round(v.shitjet),
+      fitimi: Math.round(v.fitimi),
+    }))
+
+    // Top products formatted
+    const topProducts = topPeriodProducts.map((p) => ({
+      emri: p.emriProduktit,
+      njesi: p._sum.sasia ?? 0,
+      fitimi: Math.round(p._sum.fitimi ?? 0),
+    }))
+
+    // Business insights
+    const insights: Array<{ type: 'success' | 'warning' | 'info'; text: string }> = []
+
+    if (topProducts.length > 0) {
+      insights.push({
+        type: 'info',
+        text: `Produkti më i shitur: "${topProducts[0].emri}" (${topProducts[0].njesi} njësi)`,
+      })
+    }
+
+    for (const p of lowStockProducts.slice(0, 2)) {
+      insights.push({ type: 'warning', text: `Stoku po mbaron për ${p.emri} (${p.sasia} njësi të mbetura)` })
+    }
+
+    const prevMonthTotal = prevMonthSales.reduce((s, x) => s + x.totali, 0)
+    if (prevMonthTotal > 0 && shitjetMuajitTotali > 0) {
+      const diff = ((shitjetMuajitTotali - prevMonthTotal) / prevMonthTotal) * 100
+      if (Math.abs(diff) >= 5) {
+        const dir = diff > 0 ? 'rritur' : 'ulur'
+        insights.push({
+          type: diff > 0 ? 'success' : 'warning',
+          text: `Shitjet janë ${dir} ${Math.abs(diff).toFixed(0)}% krahasuar me muajin e kaluar`,
+        })
+      }
+    }
+
+    const yesterdayTotal = yesterdaySales.reduce((s, x) => s + x.totali, 0)
+    if (yesterdayTotal > 0 && shitjetSotTotali > 0) {
+      const diff = ((shitjetSotTotali - yesterdayTotal) / yesterdayTotal) * 100
+      if (Math.abs(diff) >= 10) {
+        insights.push({
+          type: diff > 0 ? 'success' : 'info',
+          text: `Sot ${Math.abs(diff).toFixed(0)}% ${diff > 0 ? 'më shumë' : 'më pak'} shitje se dje`,
+        })
+      }
+    }
 
     return NextResponse.json({
+      periudhaTotali,
+      periudhaFitimi,
+      periudhaNumri,
+      periudhaProdukte,
       shitjetSotTotali,
-      fititmiSot,
-      produkteShitura,
-      numriShitjeve: shitjetSot.length,
+      shitjetMuajitTotali,
+      shitjetMuajitFitimi,
       produktetTotal: allProducts.length,
       lowStockCount: lowStockProducts.length,
       lowStockProducts,
-      shitjetRecente,
-      topProducts: topSaleItems,
-      furnizimetRecente,
+      furnitoretTotal: suppliersCount,
+      chartDitor,
+      chartMujor,
+      topProducts,
+      shitjetRecente: recentSales,
+      insights,
     })
   } catch (error) {
     console.error('Dashboard error:', error)
