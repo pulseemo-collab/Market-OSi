@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDateTime, toArray } from '@/lib/utils'
 import {
   RiReceiptLine,
   RiArrowDownLine,
@@ -92,7 +92,7 @@ export default function HistorikuPage() {
     setLoading(true)
     const res = await fetch(`/api/sales?periudha=${periudha}`)
     const data = await res.json()
-    setSales(data)
+    setSales(toArray<Sale>(data, 'sales'))
     setLoading(false)
   }, [periudha])
 
@@ -136,7 +136,7 @@ export default function HistorikuPage() {
       try {
         const res = await fetch('/api/products')
         const data = await res.json()
-        setAllProducts(data)
+        setAllProducts(toArray<Product>(data, 'products'))
       } catch {
         // silent
       }

@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, toArray } from '@/lib/utils'
 import {
   RiBox3Line,
   RiAddLine,
@@ -28,6 +28,7 @@ interface Product {
   cmimiBlerjes: number
   cmimiShitjes: number
   njesia: string
+  barcodes: { id: number; barcode: string }[]
 }
 
 interface SupplyItemForm {
@@ -93,6 +94,7 @@ export default function FurnizimePage() {
   const [saving, setSaving] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [showProductSearch, setShowProductSearch] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Detail / delete modals
   const [selectedSupply, setSelectedSupply] = useState<Supply | null>(null)
@@ -104,7 +106,7 @@ export default function FurnizimePage() {
     try {
       const res = await fetch('/api/supplies')
       const data = await res.json()
-      setSupplies(Array.isArray(data) ? data : [])
+      setSupplies(toArray<Supply>(data, 'supplies'))
     } catch {
       toast.error('Gabim gjatë ngarkimit')
     } finally {
@@ -119,8 +121,8 @@ export default function FurnizimePage() {
         fetch('/api/products'),
       ])
       const [sData, pData] = await Promise.all([sRes.json(), pRes.json()])
-      setSuppliers(Array.isArray(sData) ? sData : [])
-      setProducts(Array.isArray(pData) ? pData : [])
+      setSuppliers(toArray<Supplier>(sData, 'suppliers'))
+      setProducts(toArray<Product>(pData, 'products'))
     } catch {
       // silent
     }
@@ -141,24 +143,51 @@ export default function FurnizimePage() {
     setShowCreate(true)
   }
 
-  const addProductToForm = (product: Product) => {
-    if (formItems.some((i) => i.productId === product.id)) {
-      toast.error(`${product.emri} është tashmë në listë`)
-      return
-    }
-    setFormItems((prev) => [
-      ...prev,
-      {
-        productId: product.id,
-        emriProduktit: product.emri,
-        sasia: isWeighted(product.njesia) ? 1.0 : 1,
-        njesia: product.njesia,
-        cmimiBlerjes: product.cmimiBlerjes,
-        updatePrice: false,
-      },
-    ])
+  const addProductToForm = (product: Product, keepOpen = false) => {
+    setFormItems((prev) => {
+      const existingIdx = prev.findIndex((i) => i.productId === product.id)
+      if (existingIdx !== -1) {
+        return prev.map((item, i) => {
+          if (i !== existingIdx) return item
+          const step = isWeighted(item.njesia) ? 0.1 : 1
+          const min = isWeighted(item.njesia) ? 0.001 : 1
+          return { ...item, sasia: Math.max(min, item.sasia + step) }
+        })
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          emriProduktit: product.emri,
+          sasia: isWeighted(product.njesia) ? 1.0 : 1,
+          njesia: product.njesia,
+          cmimiBlerjes: product.cmimiBlerjes,
+          updatePrice: false,
+        },
+      ]
+    })
     setProductSearch('')
-    setShowProductSearch(false)
+    if (!keepOpen) {
+      setShowProductSearch(false)
+    }
+  }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const query = productSearch.trim()
+    if (!query) return
+    const matched = products.find((p) =>
+      p.barcodes.some((b) => b.barcode === query)
+    )
+    if (matched) {
+      addProductToForm(matched, true)
+      setTimeout(() => searchInputRef.current?.focus(), 0)
+    } else {
+      toast.error('Produkti nuk u gjet')
+      setProductSearch('')
+      setTimeout(() => searchInputRef.current?.focus(), 0)
+    }
   }
 
   const updateFormItemQty = (idx: number, value: number) => {
@@ -289,7 +318,8 @@ export default function FurnizimePage() {
     .filter(
       (p) =>
         p.emri.toLowerCase().includes(productSearch.toLowerCase()) ||
-        p.kategoria.toLowerCase().includes(productSearch.toLowerCase())
+        p.kategoria.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.barcodes.some((b) => b.barcode.toLowerCase().includes(productSearch.toLowerCase()))
     )
     .filter((p) => !formItems.some((i) => i.productId === p.id))
     .slice(0, 8)
@@ -602,10 +632,12 @@ export default function FurnizimePage() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <input
+                    ref={searchInputRef}
                     type="text"
-                    placeholder="Kërko produkt për të shtuar..."
+                    placeholder="Kërko emrin ose skano barkod..."
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     autoFocus
                     className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />

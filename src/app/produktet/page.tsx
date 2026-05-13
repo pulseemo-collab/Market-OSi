@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
-import { formatCurrency, isLowStock } from '@/lib/utils'
+import { formatCurrency, isLowStock, toArray } from '@/lib/utils'
 import {
   RiAddLine,
   RiSearchLine,
@@ -83,13 +83,16 @@ export default function ProduktetPage() {
   const [barcodeError, setBarcodeError] = useState('')
   const barcodeInputRef = useRef<HTMLInputElement>(null)
 
+  const safeProducts = Array.isArray(products) ? products : []
+  const safeSuppliers = Array.isArray(suppliers) ? suppliers : []
+
   const fetchProducts = useCallback(async () => {
     const params = new URLSearchParams()
     if (kerkimi) params.set('kerkimi', kerkimi)
     if (kategoriaFilter) params.set('kategoria', kategoriaFilter)
     const res = await fetch(`/api/products?${params}`)
     const data = await res.json()
-    setProducts(data)
+    setProducts(toArray<Product>(data, 'products'))
     setLoading(false)
   }, [kerkimi, kategoriaFilter])
 
@@ -100,7 +103,8 @@ export default function ProduktetPage() {
   useEffect(() => {
     fetch('/api/suppliers')
       .then((r) => r.json())
-      .then(setSuppliers)
+      .then((data) => setSuppliers(toArray<Supplier>(data, 'suppliers')))
+      .catch(() => setSuppliers([]))
   }, [])
 
   function openAdd() {
@@ -149,7 +153,7 @@ export default function ProduktetPage() {
       return
     }
 
-    const isDuplicate = products.some(
+    const isDuplicate = safeProducts.some(
       (p) =>
         (!editProduct || p.id !== editProduct.id) &&
         p.barcodes.some((b) => b.barcode === code)
@@ -227,13 +231,13 @@ export default function ProduktetPage() {
     }
   }
 
-  const lowStockCount = products.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
+  const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
   return (
     <div className="p-8">
       <PageHeader
         title="Produktet"
-        subtitle={`${products.length} produkte gjithsej${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
+        subtitle={`${safeProducts.length} produkte gjithsej${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
         action={
           <button onClick={openAdd} className="btn-primary flex items-center gap-2">
             <RiAddLine className="text-lg" />
@@ -275,7 +279,7 @@ export default function ProduktetPage() {
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-slate-400">Duke ngarkuar...</div>
-        ) : products.length === 0 ? (
+        ) : safeProducts.length === 0 ? (
           <div className="p-12 text-center">
             <p className="text-slate-400 mb-3">Nuk u gjet asnjë produkt</p>
             <button onClick={openAdd} className="btn-primary">Shto Produkt</button>
@@ -296,7 +300,7 @@ export default function ProduktetPage() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((product, idx) => {
+                {safeProducts.map((product, idx) => {
                   const lowStock = isLowStock(product.sasia, product.stokuMinimal)
                   return (
                     <motion.tr
@@ -533,7 +537,7 @@ export default function ProduktetPage() {
               className="input"
             >
               <option value="">Pa furnitor</option>
-              {suppliers.map((s) => (
+              {safeSuppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.emri}</option>
               ))}
             </select>

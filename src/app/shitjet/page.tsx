@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDateTime, toArray } from '@/lib/utils'
 import {
   RiSearchLine,
   RiAddLine,
@@ -69,8 +69,13 @@ export default function ShitjetPage() {
     fetch('/api/products')
       .then((r) => r.json())
       .then((data) => {
-        setProducts(data)
-        setFilteredProducts(data)
+        const arr = toArray<Product>(data, 'products')
+        setProducts(arr)
+        setFilteredProducts(arr)
+      })
+      .catch(() => {
+        setProducts([])
+        setFilteredProducts([])
       })
   }, [])
 
@@ -78,8 +83,9 @@ export default function ShitjetPage() {
     fetch('/api/products')
       .then((r) => r.json())
       .then((data) => {
-        setProducts(data)
+        setProducts(toArray<Product>(data, 'products'))
       })
+      .catch(() => setProducts([]))
   }, [])
 
   useEffect(() => {

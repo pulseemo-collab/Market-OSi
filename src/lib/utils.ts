@@ -37,3 +37,11 @@ export function isLowStock(sasia: number, stokuMinimal: number): boolean {
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ')
 }
+
+export function toArray<T>(data: unknown, key?: string): T[] {
+  if (Array.isArray(data)) return data as T[]
+  if (key && data && typeof data === 'object' && Array.isArray((data as Record<string, unknown>)[key])) {
+    return (data as Record<string, unknown>)[key] as T[]
+  }
+  return []
+}

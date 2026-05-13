@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
+import { toArray } from '@/lib/utils'
 import {
   RiAddLine,
   RiEditLine,
@@ -51,7 +52,7 @@ export default function FurnitoretPage() {
   const fetchSuppliers = useCallback(async () => {
     const res = await fetch('/api/suppliers')
     const data = await res.json()
-    setSuppliers(data)
+    setSuppliers(toArray<Supplier>(data, 'suppliers'))
     setLoading(false)
   }, [])
 

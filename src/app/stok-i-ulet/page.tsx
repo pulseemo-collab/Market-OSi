@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import PageHeader from '@/components/ui/PageHeader'
+import { toArray } from '@/lib/utils'
 import { RiAlertLine, RiRefreshLine, RiArrowUpLine } from 'react-icons/ri'
 
 interface Product {
@@ -24,14 +25,12 @@ export default function StokUletPage() {
     fetch('/api/products?stokUlet=true')
       .then((r) => r.json())
       .then((data) => {
-        const sorted = data.sort((a: Product, b: Product) => {
-          const defA = a.sasia - a.stokuMinimal
-          const defB = b.sasia - b.stokuMinimal
-          return defA - defB
-        })
+        const arr = toArray<Product>(data, 'products')
+        const sorted = arr.sort((a, b) => (a.sasia - a.stokuMinimal) - (b.sasia - b.stokuMinimal))
         setProducts(sorted)
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
   function getReorderQty(product: Product): number {
