@@ -65,6 +65,35 @@ export default function ShitjetPage() {
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const searchRef = useRef<HTMLInputElement>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const receiptModalRef = useRef<CompletedSale | null>(null)
+
+  // Keep receiptModalRef in sync for the document click handler (avoids stale closure)
+  useEffect(() => { receiptModalRef.current = receiptModal }, [receiptModal])
+
+  // Refocus barcode when receipt modal is dismissed
+  useEffect(() => {
+    if (!receiptModal) {
+      setTimeout(() => barcodeRef.current?.focus(), 100)
+    }
+  }, [receiptModal])
+
+  // Return focus to barcode after any click that doesn't land on a real input
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (receiptModalRef.current) return
+      const t = e.target as HTMLElement
+      if (t.closest('input, textarea, select')) return
+      setTimeout(() => {
+        const active = document.activeElement
+        if (!active || !['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) {
+          barcodeRef.current?.focus()
+        }
+      }, 50)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
 
   useEffect(() => {
     fetch('/api/products')
@@ -116,9 +145,49 @@ export default function ShitjetPage() {
     return map
   }, [products])
 
+  function playBeep(type: 'success' | 'error') {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      }
+      const ctx = audioCtxRef.current
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      if (type === 'success') {
+        osc.type = 'sine'
+        osc.frequency.value = 1480
+        gain.gain.setValueAtTime(0.07, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.12)
+      } else {
+        osc.type = 'sawtooth'
+        osc.frequency.value = 320
+        gain.gain.setValueAtTime(0.07, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.28)
+      }
+    } catch {
+      // Audio API blocked or unavailable — silent fallback
+    }
+  }
+
+  function vibrateDevice(pattern: number | number[]) {
+    try {
+      navigator.vibrate?.(pattern)
+    } catch {
+      // Vibration API not supported — ignore
+    }
+  }
+
   function triggerFlash(type: 'success' | 'error', message: string, duration = 1000) {
     setScanFlash(type)
     setScanMessage(message)
+    playBeep(type)
+    vibrateDevice(type === 'success' ? 50 : [80, 50, 80])
     setTimeout(() => {
       setScanFlash(null)
       setScanMessage('')
@@ -212,7 +281,7 @@ export default function ShitjetPage() {
       return next
     })
     setKerkimi('')
-    searchRef.current?.focus()
+    barcodeRef.current?.focus()
   }
 
   function updateSasia(productId: number, delta: number) {
