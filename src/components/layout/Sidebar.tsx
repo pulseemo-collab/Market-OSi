@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import {
   RiDashboardLine,
   RiShoppingBasketLine,
@@ -12,6 +13,7 @@ import {
   RiAlertLine,
   RiStore2Line,
   RiBox3Line,
+  RiLogoutBoxRLine,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -26,6 +28,16 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  if (pathname === '/login') return null
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
@@ -71,8 +83,15 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-slate-100">
-        <p className="text-xs text-slate-400">Market OS v1.0</p>
+      <div className="px-3 py-4 border-t border-slate-100 space-y-1">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all duration-150 group"
+        >
+          <RiLogoutBoxRLine className="text-lg flex-shrink-0 text-slate-400 group-hover:text-red-500" />
+          Dil
+        </button>
+        <p className="text-xs text-slate-400 px-3">Market OS v1.0</p>
       </div>
     </aside>
   )
