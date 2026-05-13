@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
+import ExportButtons from '@/components/ui/ExportButtons'
 import { formatCurrency, formatDateTime, toArray } from '@/lib/utils'
 import {
   RiReceiptLine,
@@ -250,21 +251,24 @@ export default function HistorikuPage() {
         subtitle={`${sales.length} shitje gjatë periudhës`}
       />
 
-      {/* Period Filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {PERIUDHAT.map((p) => (
-          <button
-            key={p.value}
-            onClick={() => setPeriudha(p.value)}
-            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              periudha === p.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+      {/* Period Filter + Export */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap gap-2">
+          {PERIUDHAT.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriudha(p.value)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                periudha === p.value
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <ExportButtons periudha={periudha} />
       </div>
 
       {/* Summary Cards */}

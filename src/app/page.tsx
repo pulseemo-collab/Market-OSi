@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
+import ExportButtons from '@/components/ui/ExportButtons'
 import {
   RiMoneyDollarCircleLine,
   RiLineChartLine,
@@ -193,13 +194,16 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-slate-900">Paneli Kryesor</h1>
           <p className="text-sm text-slate-400 mt-0.5 capitalize">{sot}</p>
         </div>
-        <button
-          onClick={() => fetchDashboard(periudha, true)}
-          className="btn-secondary flex items-center gap-2 self-start"
-        >
-          <RiRefreshLine className={refreshing ? 'animate-spin' : ''} />
-          Rifresko
-        </button>
+        <div className="flex flex-wrap gap-2 self-start">
+          <ExportButtons periudha={periudha} nga={nga} deri={deri} />
+          <button
+            onClick={() => fetchDashboard(periudha, true)}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <RiRefreshLine className={refreshing ? 'animate-spin' : ''} />
+            Rifresko
+          </button>
+        </div>
       </div>
 
       {/* Period filter */}
