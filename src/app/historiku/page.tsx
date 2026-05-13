@@ -244,19 +244,19 @@ export default function HistorikuPage() {
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Historiku i Shitjeve"
         subtitle={`${sales.length} shitje gjatë periudhës`}
       />
 
       {/* Period Filter */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         {PERIUDHAT.map((p) => (
           <button
             key={p.value}
             onClick={() => setPeriudha(p.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
               periudha === p.value
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -269,18 +269,18 @@ export default function HistorikuPage() {
 
       {/* Summary Cards */}
       {sales.length > 0 && (
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="card p-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Shitjet Totale</p>
-            <p className="text-xl font-bold text-slate-900">{formatCurrency(totaliPeriudhes)}</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900">{formatCurrency(totaliPeriudhes)}</p>
           </div>
-          <div className="card p-4">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Fitimi Total</p>
-            <p className="text-xl font-bold text-green-700">{formatCurrency(fiitimiPeriudhes)}</p>
+            <p className="text-base sm:text-xl font-bold text-green-700">{formatCurrency(fiitimiPeriudhes)}</p>
           </div>
-          <div className="card p-4">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Numri i Shitjeve</p>
-            <p className="text-xl font-bold text-slate-900">{sales.length}</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900">{sales.length}</p>
           </div>
         </div>
       )}

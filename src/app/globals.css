@@ -8,6 +8,10 @@
   box-sizing: border-box;
 }
 
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
 html {
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -58,23 +62,23 @@ body {
   }
 
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm;
+    @apply bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm min-h-[2.75rem];
   }
 
   .btn-secondary {
-    @apply bg-white hover:bg-slate-50 text-slate-700 font-medium px-4 py-2.5 rounded-lg border border-slate-200 transition-colors duration-150 text-sm;
+    @apply bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 font-medium px-4 py-2.5 rounded-lg border border-slate-200 transition-colors duration-150 text-sm min-h-[2.75rem];
   }
 
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm;
+    @apply bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm min-h-[2.75rem];
   }
 
   .btn-success {
-    @apply bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm;
+    @apply bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-medium px-4 py-2.5 rounded-lg transition-colors duration-150 text-sm min-h-[2.75rem];
   }
 
   .input {
-    @apply w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150;
+    @apply w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 min-h-[2.75rem];
   }
 
   .label {

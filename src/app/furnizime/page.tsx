@@ -328,7 +328,7 @@ export default function FurnizimePage() {
   const totalItems = filteredSupplies.reduce((sum, s) => sum + s.items.length, 0)
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Furnizime"
         subtitle={`${filteredSupplies.length} furnizime · Historia e Stokut`}
@@ -341,12 +341,12 @@ export default function FurnizimePage() {
       />
 
       {/* Period Filter */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         {PERIUDHAT.map((p) => (
           <button
             key={p.value}
             onClick={() => setPeriudha(p.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
               periudha === p.value
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -359,18 +359,18 @@ export default function FurnizimePage() {
 
       {/* Summary Cards */}
       {filteredSupplies.length > 0 && (
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="card p-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Furnizime</p>
-            <p className="text-xl font-bold text-slate-900">{filteredSupplies.length}</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900">{filteredSupplies.length}</p>
           </div>
-          <div className="card p-4">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Kostoja Totale</p>
-            <p className="text-xl font-bold text-slate-900">{formatCurrency(totalCost)}</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900">{formatCurrency(totalCost)}</p>
           </div>
-          <div className="card p-4">
+          <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Produkte të Furnizuara</p>
-            <p className="text-xl font-bold text-slate-900">{totalItems}</p>
+            <p className="text-base sm:text-xl font-bold text-slate-900">{totalItems}</p>
           </div>
         </div>
       )}
@@ -471,7 +471,7 @@ export default function FurnizimePage() {
       >
         <div>
           {/* Header fields */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="label">Furnitori</label>
               <select
@@ -523,57 +523,62 @@ export default function FurnizimePage() {
               {formItems.map((item, idx) => (
                 <div
                   key={`${item.productId}-${idx}`}
-                  className="flex items-start gap-2 p-3 bg-slate-50 rounded-xl"
+                  className="p-3 bg-slate-50 rounded-xl space-y-2"
                 >
-                  {/* Product name */}
-                  <div className="flex-1 min-w-0 pt-1">
-                    <p className="text-sm font-medium text-slate-900 truncate">
+                  {/* Top row: name + remove */}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-900 truncate flex-1">
                       {item.emriProduktit}
                     </p>
+                    <button
+                      onClick={() => removeFormItem(idx)}
+                      className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    >
+                      <RiCloseLine className="text-base" />
+                    </button>
                   </div>
 
-                  {/* Quantity */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() =>
-                        updateFormItemQty(
-                          idx,
-                          item.sasia - (isWeighted(item.njesia) ? 0.1 : 1)
-                        )
-                      }
-                      className="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
-                    >
-                      <RiSubtractLine className="text-xs" />
-                    </button>
-                    <input
-                      type="number"
-                      value={item.sasia}
-                      min={isWeighted(item.njesia) ? 0.001 : 1}
-                      step={isWeighted(item.njesia) ? 0.1 : 1}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value)
-                        if (!isNaN(val)) updateFormItemQty(idx, val)
-                      }}
-                      className="w-16 text-center text-sm border border-slate-200 rounded py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={() =>
-                        updateFormItemQty(
-                          idx,
-                          item.sasia + (isWeighted(item.njesia) ? 0.1 : 1)
-                        )
-                      }
-                      className="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
-                    >
-                      <RiAddLine className="text-xs" />
-                    </button>
-                    <span className="text-xs text-slate-400 w-8 flex-shrink-0">
-                      {item.njesia}
-                    </span>
-                  </div>
+                  {/* Bottom row: qty + price + total */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Quantity */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() =>
+                          updateFormItemQty(
+                            idx,
+                            item.sasia - (isWeighted(item.njesia) ? 0.1 : 1)
+                          )
+                        }
+                        className="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                      >
+                        <RiSubtractLine className="text-xs" />
+                      </button>
+                      <input
+                        type="number"
+                        value={item.sasia}
+                        min={isWeighted(item.njesia) ? 0.001 : 1}
+                        step={isWeighted(item.njesia) ? 0.1 : 1}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value)
+                          if (!isNaN(val)) updateFormItemQty(idx, val)
+                        }}
+                        className="w-16 text-center text-sm border border-slate-200 rounded py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() =>
+                          updateFormItemQty(
+                            idx,
+                            item.sasia + (isWeighted(item.njesia) ? 0.1 : 1)
+                          )
+                        }
+                        className="w-8 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                      >
+                        <RiAddLine className="text-xs" />
+                      </button>
+                      <span className="text-xs text-slate-400 w-8">{item.njesia}</span>
+                    </div>
 
-                  {/* Purchase price */}
-                  <div className="flex-shrink-0 w-36">
+                    {/* Price */}
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
@@ -584,35 +589,27 @@ export default function FurnizimePage() {
                           const val = parseFloat(e.target.value)
                           if (!isNaN(val)) updateFormItemPrice(idx, val)
                         }}
-                        className="w-24 text-right text-sm border border-slate-200 rounded py-1 px-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-20 text-right text-sm border border-slate-200 rounded py-1 px-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                       <span className="text-xs text-slate-400">L</span>
                     </div>
-                    <label className="flex items-center gap-1 mt-1 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={item.updatePrice}
-                        onChange={() => toggleUpdatePrice(idx)}
-                        className="w-3 h-3 rounded accent-blue-600"
-                      />
-                      <span className="text-xs text-slate-400">Përdit. çmim</span>
-                    </label>
-                  </div>
 
-                  {/* Row total */}
-                  <div className="flex-shrink-0 w-20 text-right pt-1">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {formatCurrency(item.sasia * item.cmimiBlerjes)}
-                    </p>
+                    {/* Total + checkbox */}
+                    <div className="flex items-center gap-3 ml-auto">
+                      <p className="text-sm font-semibold text-slate-900 whitespace-nowrap">
+                        {formatCurrency(item.sasia * item.cmimiBlerjes)}
+                      </p>
+                      <label className="flex items-center gap-1 cursor-pointer select-none whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={item.updatePrice}
+                          onChange={() => toggleUpdatePrice(idx)}
+                          className="w-3.5 h-3.5 rounded accent-blue-600"
+                        />
+                        <span className="text-xs text-slate-400">Përdit. çmim</span>
+                      </label>
+                    </div>
                   </div>
-
-                  {/* Remove */}
-                  <button
-                    onClick={() => removeFormItem(idx)}
-                    className="flex-shrink-0 w-6 h-6 mt-0.5 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                  >
-                    <RiCloseLine className="text-base" />
-                  </button>
                 </div>
               ))}
             </div>
@@ -727,7 +724,7 @@ export default function FurnizimePage() {
       >
         {selectedSupply && (
           <div>
-            <div className="grid grid-cols-2 gap-4 mb-5 p-4 bg-slate-50 rounded-xl text-sm">
+            <div className="grid grid-cols-2 gap-3 mb-5 p-4 bg-slate-50 rounded-xl text-sm">
               <div>
                 <p className="text-xs text-slate-400 mb-0.5">Furnitori</p>
                 <p className="font-medium text-slate-900">

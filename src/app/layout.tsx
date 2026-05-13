@@ -1,12 +1,18 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import Sidebar from '@/components/layout/Sidebar'
+import ClientLayout from '@/components/layout/ClientLayout'
 import { Toaster } from 'react-hot-toast'
 import MetaMaskErrorFilter from '@/components/MetaMaskErrorFilter'
 
 export const metadata: Metadata = {
   title: 'Market OS',
   description: 'Sistem i menaxhimit të marketit',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({
@@ -17,12 +23,9 @@ export default function RootLayout({
   return (
     <html lang="sq">
       <body>
-        <div className="flex h-screen overflow-hidden bg-slate-50">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
         <MetaMaskErrorFilter />
         <Toaster
           position="top-right"

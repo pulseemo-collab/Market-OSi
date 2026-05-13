@@ -62,6 +62,7 @@ export default function ShitjetPage() {
   const [barkodi, setBarkodi] = useState('')
   const [scanFlash, setScanFlash] = useState<'success' | 'error' | null>(null)
   const [scanMessage, setScanMessage] = useState('')
+  const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const searchRef = useRef<HTMLInputElement>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
 
@@ -148,7 +149,6 @@ export default function ShitjetPage() {
       return
     }
 
-    // For scans: weighted products add 1 kg, others add 1 unit
     const step = isWeighted(product.njesia) ? 1.0 : 1
     const currentInCart = cart.find((i) => i.product.id === product.id)
     const newSasia = currentInCart
@@ -347,268 +347,310 @@ export default function ShitjetPage() {
   }
 
   return (
-    <div className="grid h-full overflow-hidden grid-cols-[minmax(0,1fr)_550px]">
-      {/* Left: Product Search */}
-      <div className="flex flex-col border-r border-slate-200 overflow-hidden">
-        <div className="p-5 border-b border-slate-100 space-y-3">
-          <h1 className="text-xl font-bold text-slate-900">Shitjet — POS</h1>
+    <div className="flex flex-col h-full">
+      {/* ── Mobile tab bar ── */}
+      <div className="lg:hidden flex items-center border-b border-slate-200 bg-white flex-shrink-0">
+        <button
+          onClick={() => setMobileTab('products')}
+          className={`flex-1 py-3.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            mobileTab === 'products'
+              ? 'text-blue-600 border-blue-600'
+              : 'text-slate-500 border-transparent'
+          }`}
+        >
+          Produktet
+        </button>
+        <button
+          onClick={() => setMobileTab('cart')}
+          className={`flex-1 py-3.5 text-sm font-semibold transition-colors border-b-2 -mb-px flex items-center justify-center gap-2 ${
+            mobileTab === 'cart'
+              ? 'text-blue-600 border-blue-600'
+              : 'text-slate-500 border-transparent'
+          }`}
+        >
+          Shporta
+          {cart.length > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+              {cart.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-          {/* Barcode Scanner Input */}
-          <div>
-            <div className="relative">
-              <RiBarcodeLine
-                className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xl transition-colors duration-200 ${
-                  scanFlash === 'success'
-                    ? 'text-green-500'
-                    : scanFlash === 'error'
-                    ? 'text-red-400'
-                    : 'text-slate-400'
-                }`}
-              />
-              <input
-                ref={barcodeRef}
-                type="text"
-                placeholder="Skano ose shkruaj barkodin..."
-                value={barkodi}
-                onChange={(e) => setBarkodi(e.target.value)}
-                onKeyDown={handleBarcodeKeyDown}
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                className={`w-full pl-10 pr-10 py-2.5 text-sm font-medium rounded-xl border-2 transition-all duration-200 outline-none ${
-                  scanFlash === 'success'
-                    ? 'border-green-400 bg-green-50 text-green-800 placeholder-green-300'
-                    : scanFlash === 'error'
-                    ? 'border-red-400 bg-red-50 text-red-800 placeholder-red-300'
-                    : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:border-blue-400'
-                }`}
-              />
-              <AnimatePresence mode="wait">
-                {scanFlash === 'success' && (
-                  <motion.span
-                    key="ok"
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
+      {/* ── Content area ── */}
+      <div className="flex-1 min-h-0 overflow-hidden flex lg:grid lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_500px]">
+
+        {/* ── Left: Product Search ── */}
+        <div
+          className={`flex-col overflow-hidden border-r border-slate-200 w-full lg:w-auto ${
+            mobileTab === 'cart' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
+          <div className="p-4 sm:p-5 border-b border-slate-100 space-y-3">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900">Shitjet — POS</h1>
+
+            {/* Barcode Scanner Input */}
+            <div>
+              <div className="relative">
+                <RiBarcodeLine
+                  className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xl transition-colors duration-200 ${
+                    scanFlash === 'success'
+                      ? 'text-green-500'
+                      : scanFlash === 'error'
+                      ? 'text-red-400'
+                      : 'text-slate-400'
+                  }`}
+                />
+                <input
+                  ref={barcodeRef}
+                  type="text"
+                  placeholder="Skano ose shkruaj barkodin..."
+                  value={barkodi}
+                  onChange={(e) => setBarkodi(e.target.value)}
+                  onKeyDown={handleBarcodeKeyDown}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={`w-full pl-10 pr-10 py-2.5 text-sm font-medium rounded-xl border-2 transition-all duration-200 outline-none ${
+                    scanFlash === 'success'
+                      ? 'border-green-400 bg-green-50 text-green-800 placeholder-green-300'
+                      : scanFlash === 'error'
+                      ? 'border-red-400 bg-red-50 text-red-800 placeholder-red-300'
+                      : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:border-blue-400'
+                  }`}
+                />
+                <AnimatePresence mode="wait">
+                  {scanFlash === 'success' && (
+                    <motion.span
+                      key="ok"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-green-500"
+                    >
+                      <RiCheckLine className="text-xl" />
+                    </motion.span>
+                  )}
+                  {scanFlash === 'error' && (
+                    <motion.span
+                      key="err"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-red-400 text-lg font-bold leading-none"
+                    >
+                      ✗
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+              <AnimatePresence>
+                {scanMessage && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-green-500"
+                    className={`text-xs mt-1.5 font-medium pl-1 ${
+                      scanFlash === 'success' ? 'text-green-600' : 'text-red-500'
+                    }`}
                   >
-                    <RiCheckLine className="text-xl" />
-                  </motion.span>
-                )}
-                {scanFlash === 'error' && (
-                  <motion.span
-                    key="err"
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-red-400 text-lg font-bold leading-none"
-                  >
-                    ✗
-                  </motion.span>
+                    {scanMessage}
+                  </motion.p>
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Product Name / Category Search */}
+            <div className="relative">
+              <RiSearchLine className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Kërko produkt sipas emrit ose kategorisë..."
+                value={kerkimi}
+                onChange={(e) => setKerkimi(e.target.value)}
+                className="input pl-10 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
+              {filteredProducts.map((product) => {
+                const inCart = cart.find((i) => i.product.id === product.id)
+                const outOfStock = product.sasia <= 0
+                return (
+                  <motion.button
+                    key={product.id}
+                    whileHover={!outOfStock ? { scale: 1.01 } : {}}
+                    whileTap={!outOfStock ? { scale: 0.98 } : {}}
+                    onClick={() => !outOfStock && addToCart(product)}
+                    disabled={outOfStock}
+                    className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all min-h-[5rem] ${
+                      outOfStock
+                        ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                        : inCart
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm active:scale-95'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1.5 sm:mb-2">
+                      <p className="font-medium text-slate-900 text-xs sm:text-sm leading-tight">{product.emri}</p>
+                      {inCart && (
+                        <span className="badge-blue ml-1 flex-shrink-0 text-xs">
+                          {isWeighted(product.njesia) ? inCart.sasia.toFixed(3) : inCart.sasia}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mb-1.5 sm:mb-2 truncate">{product.kategoria}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm sm:text-base font-bold text-slate-900">
+                        {formatCurrency(product.cmimiShitjes)}
+                      </span>
+                      <span className={`text-xs font-medium hidden sm:block ${product.sasia <= product.stokuMinimal ? 'text-red-500' : 'text-slate-400'}`}>
+                        {isWeighted(product.njesia) ? product.sasia.toFixed(3) : product.sasia} {product.njesia}
+                      </span>
+                    </div>
+                  </motion.button>
+                )
+              })}
+            </div>
+            {filteredProducts.length === 0 && (
+              <div className="text-center py-12 text-slate-400">
+                Nuk u gjet asnjë produkt
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Right: Cart ── */}
+        <div
+          className={`flex-col bg-white overflow-hidden w-full lg:w-auto ${
+            mobileTab === 'products' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
+          <div className="px-4 sm:px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <RiShoppingCartLine className="text-xl text-slate-600" />
+              <h2 className="font-semibold text-slate-900">Shporta</h2>
+              {cart.length > 0 && (
+                <span className="badge-blue ml-auto">{cart.length} produkte</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto min-h-0">
             <AnimatePresence>
-              {scanMessage && (
-                <motion.p
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={`text-xs mt-1.5 font-medium pl-1 ${
-                    scanFlash === 'success' ? 'text-green-600' : 'text-red-500'
-                  }`}
-                >
-                  {scanMessage}
-                </motion.p>
+              {cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 py-16">
+                  <RiShoppingCartLine className="text-5xl mb-3 text-slate-200" />
+                  <p className="text-sm">Shporta është bosh</p>
+                  <p className="text-xs mt-1">Skanoni barkod ose klikoni mbi produkt</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {cart.map((item) => (
+                    <motion.div
+                      key={item.product.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.15 }}
+                      className="px-4 py-3 sm:px-4"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-sm font-medium text-slate-800 leading-tight flex-1 pr-2">
+                          {item.product.emri}
+                        </p>
+                        <button
+                          onClick={() => removeFromCart(item.product.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors p-1 -m-1"
+                        >
+                          <RiDeleteBin6Line className="text-lg" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? -0.250 : -1)}
+                            className="w-9 h-9 lg:w-8 lg:h-8 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-300 flex items-center justify-center transition-colors flex-shrink-0"
+                          >
+                            <RiSubtractLine className="text-sm" />
+                          </button>
+                          <input
+                            type="text"
+                            inputMode={isWeighted(item.product.njesia) ? 'decimal' : 'numeric'}
+                            value={getDisplayValue(item)}
+                            onChange={(e) => handleQuantityInput(item, e.target.value)}
+                            onFocus={(e) => {
+                              setRawValues((prev) => ({
+                                ...prev,
+                                [item.product.id]: isWeighted(item.product.njesia)
+                                  ? item.sasia.toFixed(3)
+                                  : item.sasia.toString(),
+                              }))
+                              e.target.select()
+                            }}
+                            onBlur={() => handleQuantityBlur(item)}
+                            className="w-20 h-9 lg:h-7 text-center text-sm font-semibold border border-slate-200 rounded-md focus:outline-none focus:border-blue-400"
+                          />
+                          <span className="text-xs text-slate-400 min-w-[2rem]">{item.product.njesia}</span>
+                          <button
+                            onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? 0.250 : 1)}
+                            className="w-9 h-9 lg:w-8 lg:h-8 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-300 flex items-center justify-center transition-colors flex-shrink-0"
+                          >
+                            <RiAddLine className="text-sm" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-bold text-slate-900">
+                          {formatCurrency(item.product.cmimiShitjes * item.sasia)}
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Product Name / Category Search */}
-          <div className="relative">
-            <RiSearchLine className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Kërko produkt sipas emrit ose kategorisë..."
-              value={kerkimi}
-              onChange={(e) => setKerkimi(e.target.value)}
-              className="input pl-10 text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredProducts.map((product) => {
-              const inCart = cart.find((i) => i.product.id === product.id)
-              const outOfStock = product.sasia <= 0
-              return (
-                <motion.button
-                  key={product.id}
-                  whileHover={!outOfStock ? { scale: 1.01 } : {}}
-                  whileTap={!outOfStock ? { scale: 0.99 } : {}}
-                  onClick={() => !outOfStock && addToCart(product)}
-                  disabled={outOfStock}
-                  className={`text-left p-4 rounded-xl border-2 transition-all ${
-                    outOfStock
-                      ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                      : inCart
-                      ? 'border-blue-400 bg-blue-50'
-                      : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="font-medium text-slate-900 text-sm leading-tight">{product.emri}</p>
-                    {inCart && (
-                      <span className="badge-blue ml-1 flex-shrink-0">
-                        {isWeighted(product.njesia) ? inCart.sasia.toFixed(3) : inCart.sasia}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 mb-2">{product.kategoria}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-bold text-slate-900">
-                      {formatCurrency(product.cmimiShitjes)}
-                    </span>
-                    <span className={`text-xs font-medium ${product.sasia <= product.stokuMinimal ? 'text-red-500' : 'text-slate-400'}`}>
-                      Stoku: {isWeighted(product.njesia) ? product.sasia.toFixed(3) : product.sasia} {product.njesia}
-                    </span>
-                  </div>
-                </motion.button>
-              )
-            })}
-          </div>
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-12 text-slate-400">
-              Nuk u gjet asnjë produkt
+          {/* Cart Summary */}
+          <div className="border-t border-slate-200 p-4 sm:p-5 space-y-3 bg-white">
+            <div className="flex justify-between text-sm text-slate-500">
+              <span>Nën-totali</span>
+              <span>{formatCurrency(totali)}</span>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right: Cart */}
-      <div className="flex flex-col bg-white overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <RiShoppingCartLine className="text-xl text-slate-600" />
-            <h2 className="font-semibold text-slate-900">Shporta</h2>
-            {cart.length > 0 && (
-              <span className="badge-blue ml-auto">{cart.length} produkte</span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <AnimatePresence>
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
-                <RiShoppingCartLine className="text-5xl mb-3 text-slate-200" />
-                <p className="text-sm">Shporta është bosh</p>
-                <p className="text-xs mt-1">Skanoni barkod ose klikoni mbi produkt</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {cart.map((item) => (
-                  <motion.div
-                    key={item.product.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.15 }}
-                    className="px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <p className="text-sm font-medium text-slate-800 leading-tight flex-1 pr-2">
-                        {item.product.emri}
-                      </p>
-                      <button
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="text-slate-300 hover:text-red-500 transition-colors p-0.5"
-                      >
-                        <RiDeleteBin6Line />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? -0.250 : -1)}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
-                        >
-                          <RiSubtractLine className="text-sm" />
-                        </button>
-                        <input
-                          type="text"
-                          inputMode={isWeighted(item.product.njesia) ? 'decimal' : 'numeric'}
-                          value={getDisplayValue(item)}
-                          onChange={(e) => handleQuantityInput(item, e.target.value)}
-                          onFocus={(e) => {
-                            setRawValues((prev) => ({
-                              ...prev,
-                              [item.product.id]: isWeighted(item.product.njesia)
-                                ? item.sasia.toFixed(3)
-                                : item.sasia.toString(),
-                            }))
-                            e.target.select()
-                          }}
-                          onBlur={() => handleQuantityBlur(item)}
-                          className="w-20 h-7 text-center text-sm font-semibold border border-slate-200 rounded-md focus:outline-none focus:border-blue-400"
-                        />
-                        <span className="text-xs text-slate-400 min-w-[2rem]">{item.product.njesia}</span>
-                        <button
-                          onClick={() => updateSasia(item.product.id, isWeighted(item.product.njesia) ? 0.250 : 1)}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
-                        >
-                          <RiAddLine className="text-sm" />
-                        </button>
-                      </div>
-                      <span className="text-sm font-bold text-slate-900">
-                        {formatCurrency(item.product.cmimiShitjes * item.sasia)}
-                      </span>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Cart Summary */}
-        <div className="border-t border-slate-200 p-4 space-y-3">
-          <div className="flex justify-between text-sm text-slate-500">
-            <span>Nën-totali</span>
-            <span>{formatCurrency(totali)}</span>
-          </div>
-          <div className="flex justify-between text-sm text-green-600 font-medium">
-            <span>Fitimi</span>
-            <span>{formatCurrency(fitimi)}</span>
-          </div>
-          <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t border-slate-100">
-            <span>TOTALI</span>
-            <span>{formatCurrency(totali)}</span>
-          </div>
-          <button
-            onClick={completeSale}
-            disabled={loading || cart.length === 0}
-            className={`w-full py-3.5 rounded-xl font-semibold text-base flex items-center justify-center gap-2 transition-all ${
-              cart.length === 0
-                ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-            }`}
-          >
-            <RiCheckLine className="text-xl" />
-            {loading ? 'Duke procesuar...' : 'Përfundo Shitjen'}
-          </button>
-          {cart.length > 0 && (
+            <div className="flex justify-between text-sm text-green-600 font-medium">
+              <span>Fitimi</span>
+              <span>{formatCurrency(fitimi)}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t border-slate-100">
+              <span>TOTALI</span>
+              <span>{formatCurrency(totali)}</span>
+            </div>
             <button
-              onClick={() => setCart([])}
-              className="w-full text-xs text-slate-400 hover:text-red-500 transition-colors py-1"
+              onClick={completeSale}
+              disabled={loading || cart.length === 0}
+              className={`w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2 transition-all ${
+                cart.length === 0
+                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm'
+              }`}
             >
-              Pastro shportën
+              <RiCheckLine className="text-xl" />
+              {loading ? 'Duke procesuar...' : 'Përfundo Shitjen'}
             </button>
-          )}
+            {cart.length > 0 && (
+              <button
+                onClick={() => setCart([])}
+                className="w-full text-xs text-slate-400 hover:text-red-500 transition-colors py-1"
+              >
+                Pastro shportën
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+
+      </div>{/* ── end content area ── */}
 
       {/* Receipt Modal */}
       <Modal

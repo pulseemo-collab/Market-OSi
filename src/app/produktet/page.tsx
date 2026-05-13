@@ -234,7 +234,7 @@ export default function ProduktetPage() {
   const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Produktet"
         subtitle={`${safeProducts.length} produkte gjithsej${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
