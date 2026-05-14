@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import PageHeader from '@/components/ui/PageHeader'
 import { toArray } from '@/lib/utils'
+import TableSkeleton from '@/components/ui/TableSkeleton'
+import ErrorState from '@/components/ui/ErrorState'
 import { RiAlertLine, RiRefreshLine, RiArrowUpLine } from 'react-icons/ri'
 
 interface Product {
@@ -23,18 +25,29 @@ export default function StokUletPage() {
   const { role } = useRole()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  const fetchLowStock = useCallback(async () => {
+    setLoading(true)
+    setError(false)
+    try {
+      const res = await fetch('/api/products?stokUlet=true')
+      if (res.status === 401) { window.location.href = '/login'; return }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      const arr = toArray<Product>(data, 'products')
+      const sorted = arr.sort((a, b) => (a.sasia - a.stokuMinimal) - (b.sasia - b.stokuMinimal))
+      setProducts(sorted)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    fetch('/api/products?stokUlet=true')
-      .then((r) => r.json())
-      .then((data) => {
-        const arr = toArray<Product>(data, 'products')
-        const sorted = arr.sort((a, b) => (a.sasia - a.stokuMinimal) - (b.sasia - b.stokuMinimal))
-        setProducts(sorted)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+    fetchLowStock()
+  }, [fetchLowStock])
 
   function getReorderQty(product: Product): number {
     const targetStock = product.stokuMinimal * 3
@@ -60,7 +73,7 @@ export default function StokUletPage() {
         subtitle={`${products.length} produkte nën nivelin minimal`}
         action={
           <button
-            onClick={() => window.location.reload()}
+            onClick={fetchLowStock}
             className="btn-secondary flex items-center gap-2"
           >
             <RiRefreshLine />
@@ -70,7 +83,7 @@ export default function StokUletPage() {
       />
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 min-w-0">
         <div className="card p-3 sm:p-4 border-l-4 border-red-500">
           <p className="text-xs font-medium text-slate-500 mb-1">Kritike</p>
           <p className="text-xl sm:text-2xl font-bold text-red-600">
@@ -92,7 +105,13 @@ export default function StokUletPage() {
       </div>
 
       {loading ? (
-        <div className="card p-8 text-center text-slate-400">Duke ngarkuar...</div>
+        <div className="card overflow-hidden">
+          <TableSkeleton rows={5} cols={8} />
+        </div>
+      ) : error ? (
+        <div className="card">
+          <ErrorState message="Gabim gjatë ngarkimit të stokut" onRetry={fetchLowStock} />
+        </div>
       ) : products.length === 0 ? (
         <div className="card p-12 text-center">
           <RiArrowUpLine className="text-4xl text-green-400 mx-auto mb-3" />

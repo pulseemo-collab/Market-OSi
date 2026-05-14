@@ -60,6 +60,8 @@ export default function ShitjetPage() {
   const [kerkimi, setKerkimi] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [productsError, setProductsError] = useState(false)
   const [receiptModal, setReceiptModal] = useState<CompletedSale | null>(null)
   const [rawValues, setRawValues] = useState<Record<number, string>>({})
   const [barkodi, setBarkodi] = useState('')
@@ -99,7 +101,12 @@ export default function ShitjetPage() {
   }, [])
 
   useEffect(() => {
+    setProductsError(false)
     fetch('/api/products')
+      .then((r) => {
+        if (r.status === 401) { window.location.href = '/login'; return r }
+        return r
+      })
       .then((r) => r.json())
       .then((data) => {
         const arr = toArray<Product>(data, 'products')
@@ -109,7 +116,9 @@ export default function ShitjetPage() {
       .catch(() => {
         setProducts([])
         setFilteredProducts([])
+        setProductsError(true)
       })
+      .finally(() => setProductsLoading(false))
   }, [])
 
   const refreshProducts = useCallback(() => {
@@ -549,49 +558,67 @@ export default function ShitjetPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
-              {filteredProducts.map((product) => {
-                const inCart = cart.find((i) => i.product.id === product.id)
-                const outOfStock = product.sasia <= 0
-                return (
-                  <motion.button
-                    key={product.id}
-                    whileHover={!outOfStock ? { scale: 1.01 } : {}}
-                    whileTap={!outOfStock ? { scale: 0.98 } : {}}
-                    onClick={() => !outOfStock && addToCart(product)}
-                    disabled={outOfStock}
-                    className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all min-h-[5rem] ${
-                      outOfStock
-                        ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                        : inCart
-                        ? 'border-blue-400 bg-blue-50'
-                        : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm active:scale-95'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-1.5 sm:mb-2">
-                      <p className="font-medium text-slate-900 text-xs sm:text-sm leading-tight">{product.emri}</p>
-                      {inCart && (
-                        <span className="badge-blue ml-1 flex-shrink-0 text-xs">
-                          {isWeighted(product.njesia) ? inCart.sasia.toFixed(3) : inCart.sasia}
+            {productsLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 animate-pulse">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-28 bg-slate-100 rounded-xl" />
+                ))}
+              </div>
+            ) : productsError ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 gap-3">
+                <p className="text-sm font-medium text-slate-500">Gabim gjatë ngarkimit</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="btn-secondary text-xs"
+                >
+                  Provo Sërish
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
+                {filteredProducts.map((product) => {
+                  const inCart = cart.find((i) => i.product.id === product.id)
+                  const outOfStock = product.sasia <= 0
+                  return (
+                    <motion.button
+                      key={product.id}
+                      whileHover={!outOfStock ? { scale: 1.01 } : {}}
+                      whileTap={!outOfStock ? { scale: 0.98 } : {}}
+                      onClick={() => !outOfStock && addToCart(product)}
+                      disabled={outOfStock}
+                      className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all min-h-[5rem] ${
+                        outOfStock
+                          ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                          : inCart
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm active:scale-95'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-1.5 sm:mb-2">
+                        <p className="font-medium text-slate-900 text-xs sm:text-sm leading-tight">{product.emri}</p>
+                        {inCart && (
+                          <span className="badge-blue ml-1 flex-shrink-0 text-xs">
+                            {isWeighted(product.njesia) ? inCart.sasia.toFixed(3) : inCart.sasia}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mb-1.5 sm:mb-2 truncate">{product.kategoria}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm sm:text-base font-bold text-slate-900">
+                          {formatCurrency(product.cmimiShitjes)}
                         </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 mb-1.5 sm:mb-2 truncate">{product.kategoria}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm sm:text-base font-bold text-slate-900">
-                        {formatCurrency(product.cmimiShitjes)}
-                      </span>
-                      <span className={`text-xs font-medium hidden sm:block ${product.sasia <= product.stokuMinimal ? 'text-red-500' : 'text-slate-400'}`}>
-                        {isWeighted(product.njesia) ? product.sasia.toFixed(3) : product.sasia} {product.njesia}
-                      </span>
-                    </div>
-                  </motion.button>
-                )
-              })}
-            </div>
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12 text-slate-400">
-                Nuk u gjet asnjë produkt
+                        <span className={`text-xs font-medium hidden sm:block ${product.sasia <= product.stokuMinimal ? 'text-red-500' : 'text-slate-400'}`}>
+                          {isWeighted(product.njesia) ? product.sasia.toFixed(3) : product.sasia} {product.njesia}
+                        </span>
+                      </div>
+                    </motion.button>
+                  )
+                })}
+                {filteredProducts.length === 0 && kerkimi && (
+                  <div className="col-span-full text-center py-12 text-slate-400">
+                    Nuk u gjet asnjë produkt
+                  </div>
+                )}
               </div>
             )}
           </div>

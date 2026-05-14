@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/contexts/RoleContext'
 import { Role, ROLE_LABELS } from '@/lib/roles'
+import toast from 'react-hot-toast'
 import {
   RiDashboardLine,
   RiShoppingBasketLine,
@@ -47,6 +48,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
+    toast.success('U largove me sukses')
     router.push('/login')
     router.refresh()
   }

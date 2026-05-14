@@ -8,6 +8,8 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { toArray } from '@/lib/utils'
+import CardSkeleton from '@/components/ui/CardSkeleton'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   RiAddLine,
   RiEditLine,
@@ -46,17 +48,28 @@ export default function FurnitoretPage() {
   const { role } = useRole()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState<Supplier | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
   const fetchSuppliers = useCallback(async () => {
-    const res = await fetch('/api/suppliers')
-    const data = await res.json()
-    setSuppliers(toArray<Supplier>(data, 'suppliers'))
-    setLoading(false)
+    setError(false)
+    try {
+      const res = await fetch('/api/suppliers')
+      if (res.status === 401) { window.location.href = '/login'; return }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setSuppliers(toArray<Supplier>(data, 'suppliers'))
+    } catch {
+      setError(true)
+      toast.error('Gabim gjatë ngarkimit')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -110,13 +123,20 @@ export default function FurnitoretPage() {
   }
 
   async function handleDelete(supplier: Supplier) {
-    const res = await fetch(`/api/suppliers/${supplier.id}`, { method: 'DELETE' })
-    if (res.ok) {
-      toast.success('Furnitori u fshi')
-      setDeleteModal(null)
-      fetchSuppliers()
-    } else {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/suppliers/${supplier.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Furnitori u fshi')
+        setDeleteModal(null)
+        fetchSuppliers()
+      } else {
+        toast.error('Gabim gjatë fshirjes')
+      }
+    } catch {
       toast.error('Gabim gjatë fshirjes')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -136,7 +156,9 @@ export default function FurnitoretPage() {
       />
 
       {loading ? (
-        <div className="card p-8 text-center text-slate-400">Duke ngarkuar...</div>
+        <CardSkeleton count={6} />
+      ) : error ? (
+        <div className="card"><ErrorState message="Gabim gjatë ngarkimit të furnitorëve" onRetry={fetchSuppliers} /></div>
       ) : suppliers.length === 0 ? (
         <div className="card p-12 text-center">
           <RiTruckLine className="text-4xl text-slate-200 mx-auto mb-3" />
@@ -302,7 +324,7 @@ export default function FurnitoretPage() {
       {/* Delete Confirmation */}
       <Modal
         isOpen={!!deleteModal}
-        onClose={() => setDeleteModal(null)}
+        onClose={() => !deleting && setDeleteModal(null)}
         title="Konfirmo Fshirjen"
         size="sm"
       >
@@ -313,11 +335,12 @@ export default function FurnitoretPage() {
         <div className="flex gap-3">
           <button
             onClick={() => deleteModal && handleDelete(deleteModal)}
+            disabled={deleting}
             className="btn-danger flex-1"
           >
-            Po, Fshi
+            {deleting ? 'Duke fshirë...' : 'Po, Fshi'}
           </button>
-          <button onClick={() => setDeleteModal(null)} className="btn-secondary">
+          <button onClick={() => setDeleteModal(null)} disabled={deleting} className="btn-secondary">
             Anulo
           </button>
         </div>

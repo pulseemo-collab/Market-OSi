@@ -8,6 +8,8 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatCurrency, formatDate, toArray } from '@/lib/utils'
+import TableSkeleton from '@/components/ui/TableSkeleton'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   RiBox3Line,
   RiAddLine,
@@ -84,6 +86,7 @@ export default function FurnizimePage() {
   const { role } = useRole()
   const [supplies, setSupplies] = useState<Supply[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [periudha, setPeriudha] = useState('te-gjitha')
@@ -106,11 +109,15 @@ export default function FurnizimePage() {
 
   const fetchSupplies = useCallback(async () => {
     setLoading(true)
+    setError(false)
     try {
       const res = await fetch('/api/supplies')
+      if (res.status === 401) { window.location.href = '/login'; return }
+      if (!res.ok) throw new Error()
       const data = await res.json()
       setSupplies(toArray<Supply>(data, 'supplies'))
     } catch {
+      setError(true)
       toast.error('Gabim gjatë ngarkimit')
     } finally {
       setLoading(false)
@@ -364,17 +371,17 @@ export default function FurnizimePage() {
 
       {/* Summary Cards */}
       {filteredSupplies.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-6">
           <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Furnizime</p>
             <p className="text-base sm:text-xl font-bold text-slate-900">{filteredSupplies.length}</p>
           </div>
           <div className="card p-3 sm:p-4">
-            <p className="text-xs font-medium text-slate-500 mb-1">Kostoja Totale</p>
+            <p className="text-xs font-medium text-slate-500 mb-1">Kostoja</p>
             <p className="text-base sm:text-xl font-bold text-slate-900">{formatCurrency(totalCost)}</p>
           </div>
-          <div className="card p-3 sm:p-4">
-            <p className="text-xs font-medium text-slate-500 mb-1">Produkte të Furnizuara</p>
+          <div className="card p-3 sm:p-4 col-span-2 sm:col-span-1">
+            <p className="text-xs font-medium text-slate-500 mb-1">Produkte Furnizuara</p>
             <p className="text-base sm:text-xl font-bold text-slate-900">{totalItems}</p>
           </div>
         </div>
@@ -383,7 +390,9 @@ export default function FurnizimePage() {
       {/* Supply History Table */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Duke ngarkuar...</div>
+          <TableSkeleton rows={5} cols={7} />
+        ) : error ? (
+          <ErrorState message="Gabim gjatë ngarkimit të furnizimeve" onRetry={fetchSupplies} />
         ) : filteredSupplies.length === 0 ? (
           <div className="p-12 text-center">
             <RiBox3Line className="text-4xl text-slate-200 mx-auto mb-3" />

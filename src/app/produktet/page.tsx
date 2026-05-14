@@ -8,6 +8,8 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatCurrency, isLowStock, toArray } from '@/lib/utils'
+import TableSkeleton from '@/components/ui/TableSkeleton'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   RiAddLine,
   RiSearchLine,
@@ -75,6 +77,7 @@ export default function ProduktetPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [kerkimi, setKerkimi] = useState('')
   const [kategoriaFilter, setKategoriaFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -90,13 +93,22 @@ export default function ProduktetPage() {
   const safeSuppliers = Array.isArray(suppliers) ? suppliers : []
 
   const fetchProducts = useCallback(async () => {
+    setError(false)
     const params = new URLSearchParams()
     if (kerkimi) params.set('kerkimi', kerkimi)
     if (kategoriaFilter) params.set('kategoria', kategoriaFilter)
-    const res = await fetch(`/api/products?${params}`)
-    const data = await res.json()
-    setProducts(toArray<Product>(data, 'products'))
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/products?${params}`)
+      if (res.status === 401) { window.location.href = '/login'; return }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setProducts(toArray<Product>(data, 'products'))
+    } catch {
+      setError(true)
+      toast.error('Gabim gjatë ngarkimit')
+    } finally {
+      setLoading(false)
+    }
   }, [kerkimi, kategoriaFilter])
 
   useEffect(() => {
@@ -287,7 +299,9 @@ export default function ProduktetPage() {
       {/* Products Table */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Duke ngarkuar...</div>
+          <TableSkeleton rows={6} cols={7} />
+        ) : error ? (
+          <ErrorState message="Gabim gjatë ngarkimit të produkteve" onRetry={fetchProducts} />
         ) : safeProducts.length === 0 ? (
           <div className="p-12 text-center">
             <p className="text-slate-400 mb-3">Nuk u gjet asnjë produkt</p>

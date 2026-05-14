@@ -9,6 +9,8 @@ import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import ExportButtons from '@/components/ui/ExportButtons'
 import { formatCurrency, formatDateTime, toArray } from '@/lib/utils'
+import TableSkeleton from '@/components/ui/TableSkeleton'
+import ErrorState from '@/components/ui/ErrorState'
 import {
   RiReceiptLine,
   RiArrowDownLine,
@@ -79,6 +81,7 @@ export default function HistorikuPage() {
   const { role } = useRole()
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [periudha, setPeriudha] = useState('sot')
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
@@ -94,10 +97,19 @@ export default function HistorikuPage() {
 
   const fetchSales = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/sales?periudha=${periudha}`)
-    const data = await res.json()
-    setSales(toArray<Sale>(data, 'sales'))
-    setLoading(false)
+    setError(false)
+    try {
+      const res = await fetch(`/api/sales?periudha=${periudha}`)
+      if (res.status === 401) { window.location.href = '/login'; return }
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setSales(toArray<Sale>(data, 'sales'))
+    } catch {
+      setError(true)
+      toast.error('Gabim gjatë ngarkimit')
+    } finally {
+      setLoading(false)
+    }
   }, [periudha])
 
   useEffect(() => {
@@ -301,7 +313,9 @@ export default function HistorikuPage() {
       {/* Sales Table */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Duke ngarkuar...</div>
+          <TableSkeleton rows={6} cols={isAdmin ? 8 : 6} />
+        ) : error ? (
+          <ErrorState message="Gabim gjatë ngarkimit të shitjeve" onRetry={fetchSales} />
         ) : sales.length === 0 ? (
           <div className="p-12 text-center">
             <RiReceiptLine className="text-4xl text-slate-200 mx-auto mb-3" />

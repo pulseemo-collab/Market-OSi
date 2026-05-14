@@ -237,7 +237,29 @@ export default function PorositjeTeSugjeruaraPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="card p-8 text-center text-slate-400">Duke ngarkuar...</div>
+        <div className="space-y-5 animate-pulse">
+          {[1, 2].map((i) => (
+            <div key={i} className="card overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-200 rounded-lg" />
+                  <div className="h-4 bg-slate-200 rounded w-40" />
+                </div>
+                <div className="h-9 bg-slate-200 rounded-lg w-32" />
+              </div>
+              <div className="p-4 space-y-3">
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="flex gap-6">
+                    <div className="h-4 bg-slate-100 rounded w-40" />
+                    <div className="h-4 bg-slate-100 rounded w-16" />
+                    <div className="h-4 bg-slate-100 rounded w-16" />
+                    <div className="h-4 bg-slate-100 rounded w-20" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : groups.length === 0 ? (
         <div className="card p-12 text-center">
           <RiCheckLine className="text-4xl text-green-400 mx-auto mb-3" />
