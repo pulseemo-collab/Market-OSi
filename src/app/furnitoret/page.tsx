@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -41,6 +43,7 @@ const emptyForm = {
 }
 
 export default function FurnitoretPage() {
+  const { role } = useRole()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -116,6 +119,8 @@ export default function FurnitoretPage() {
       toast.error('Gabim gjatë fshirjes')
     }
   }
+
+  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

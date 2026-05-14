@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -60,6 +62,7 @@ interface SupplyItemForm {
 }
 
 export default function PorositjeTeSugjeruaraPage() {
+  const { role } = useRole()
   const [groups, setGroups] = useState<SupplierGroup[]>([])
   const [totalProducts, setTotalProducts] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -187,6 +190,8 @@ export default function PorositjeTeSugjeruaraPage() {
 
   const modalTotal = modalItems.reduce((sum, item) => sum + item.sasia * item.cmimiBlerjes, 0)
   const suppliersWithId = groups.filter((g) => g.furnitorId !== null).length
+
+  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

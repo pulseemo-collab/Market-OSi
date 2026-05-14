@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -79,6 +81,7 @@ const PERIUDHAT = [
 ]
 
 export default function FurnizimePage() {
+  const { role } = useRole()
   const [supplies, setSupplies] = useState<Supply[]>([])
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -326,6 +329,8 @@ export default function FurnizimePage() {
 
   const totalCost = filteredSupplies.reduce((sum, s) => sum + s.totali, 0)
   const totalItems = filteredSupplies.reduce((sum, s) => sum + s.items.length, 0)
+
+  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

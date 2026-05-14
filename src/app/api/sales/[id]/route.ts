@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireRole } from '@/lib/auth-helpers'
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requireRole(['admin'])
+  if (error) return error
+
   try {
     const saleId = parseInt(params.id)
     if (isNaN(saleId)) {
@@ -140,6 +144,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requireRole(['admin'])
+  if (error) return error
+
   try {
     const saleId = parseInt(params.id)
 

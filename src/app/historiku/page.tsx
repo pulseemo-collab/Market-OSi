@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -74,6 +76,7 @@ const PERIUDHAT = [
 ]
 
 export default function HistorikuPage() {
+  const { role } = useRole()
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [periudha, setPeriudha] = useState('sot')
@@ -244,6 +247,10 @@ export default function HistorikuPage() {
   const totaliPeriudhes = sales.reduce((sum, s) => sum + s.totali, 0)
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
 
+  if (!role || !['admin', 'cashier'].includes(role)) return <AccessDenied />
+
+  const isAdmin = role === 'admin'
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
@@ -273,15 +280,17 @@ export default function HistorikuPage() {
 
       {/* Summary Cards */}
       {sales.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+        <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-2 sm:gap-4 mb-6`}>
           <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Shitjet Totale</p>
             <p className="text-base sm:text-xl font-bold text-slate-900">{formatCurrency(totaliPeriudhes)}</p>
           </div>
-          <div className="card p-3 sm:p-4">
-            <p className="text-xs font-medium text-slate-500 mb-1">Fitimi Total</p>
-            <p className="text-base sm:text-xl font-bold text-green-700">{formatCurrency(fiitimiPeriudhes)}</p>
-          </div>
+          {isAdmin && (
+            <div className="card p-3 sm:p-4">
+              <p className="text-xs font-medium text-slate-500 mb-1">Fitimi Total</p>
+              <p className="text-base sm:text-xl font-bold text-green-700">{formatCurrency(fiitimiPeriudhes)}</p>
+            </div>
+          )}
           <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Numri i Shitjeve</p>
             <p className="text-base sm:text-xl font-bold text-slate-900">{sales.length}</p>
@@ -308,10 +317,10 @@ export default function HistorikuPage() {
                   <th className="table-th">Produktet</th>
                   <th className="table-th text-center">Njësi</th>
                   <th className="table-th text-right">Totali</th>
-                  <th className="table-th text-right">Fitimi</th>
+                  {isAdmin && <th className="table-th text-right">Fitimi</th>}
                   <th className="table-th text-center">Detaje</th>
                   <th className="table-th text-center">Edito</th>
-                  <th className="table-th text-center">Fshi</th>
+                  {isAdmin && <th className="table-th text-center">Fshi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -343,9 +352,11 @@ export default function HistorikuPage() {
                     <td className="table-td text-right font-semibold text-slate-900">
                       {formatCurrency(sale.totali)}
                     </td>
-                    <td className="table-td text-right font-semibold text-green-700">
-                      {formatCurrency(sale.fitimi)}
-                    </td>
+                    {isAdmin && (
+                      <td className="table-td text-right font-semibold text-green-700">
+                        {formatCurrency(sale.fitimi)}
+                      </td>
+                    )}
                     <td className="table-td text-center">
                       <button
                         onClick={() => setSelectedSale(sale)}
@@ -364,15 +375,17 @@ export default function HistorikuPage() {
                         <RiEditLine className="text-lg" />
                       </button>
                     </td>
-                    <td className="table-td text-center">
-                      <button
-                        onClick={() => setSaleToDelete(sale)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Fshi faturën"
-                      >
-                        <RiDeleteBin6Line className="text-lg" />
-                      </button>
-                    </td>
+                    {isAdmin && (
+                      <td className="table-td text-center">
+                        <button
+                          onClick={() => setSaleToDelete(sale)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Fshi faturën"
+                        >
+                          <RiDeleteBin6Line className="text-lg" />
+                        </button>
+                      </td>
+                    )}
                   </motion.tr>
                 ))}
               </tbody>

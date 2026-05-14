@@ -3,6 +3,9 @@ import './globals.css'
 import ClientLayout from '@/components/layout/ClientLayout'
 import { Toaster } from 'react-hot-toast'
 import MetaMaskErrorFilter from '@/components/MetaMaskErrorFilter'
+import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
+import { Role } from '@/lib/roles'
 
 export const metadata: Metadata = {
   title: 'Market OS',
@@ -15,15 +18,38 @@ export const viewport: Viewport = {
   maximumScale: 1,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  let role: Role | null = null
+
+  try {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      let userRole = await prisma.userRole.findUnique({ where: { userId: user.id } })
+      if (!userRole) {
+        const count = await prisma.userRole.count()
+        const defaultRole = count === 0 ? 'admin' : 'staff'
+        userRole = await prisma.userRole.create({
+          data: { userId: user.id, email: user.email || '', roli: defaultRole },
+        })
+      }
+      role = userRole.roli as Role
+    }
+  } catch {
+    // If DB is unavailable, proceed without role (middleware still protects routes)
+  }
+
   return (
     <html lang="sq">
       <body>
-        <ClientLayout>
+        <ClientLayout role={role}>
           {children}
         </ClientLayout>
         <MetaMaskErrorFilter />

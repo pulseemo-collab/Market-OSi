@@ -93,3 +93,12 @@ model SaleItem {
   sale            Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product         Product @relation(fields: [productId], references: [id])
 }
+
+model UserRole {
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique
+  email     String
+  roli      String   @default("staff")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

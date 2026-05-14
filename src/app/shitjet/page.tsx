@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -52,6 +54,7 @@ function isWeighted(njesia: string) {
 }
 
 export default function ShitjetPage() {
+  const { role } = useRole()
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [kerkimi, setKerkimi] = useState('')
@@ -414,6 +417,8 @@ export default function ShitjetPage() {
   function printReceipt() {
     window.print()
   }
+
+  if (!role || !['admin', 'cashier'].includes(role)) return <AccessDenied />
 
   return (
     <div className="flex flex-col h-full">

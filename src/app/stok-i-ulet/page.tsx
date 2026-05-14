@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import PageHeader from '@/components/ui/PageHeader'
 import { toArray } from '@/lib/utils'
@@ -18,6 +20,7 @@ interface Product {
 }
 
 export default function StokUletPage() {
+  const { role } = useRole()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -47,6 +50,8 @@ export default function StokUletPage() {
 
   const kritiket = products.filter((p) => getSeverity(p) === 'kritike')
   const tjerat = products.filter((p) => getSeverity(p) !== 'kritike')
+
+  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

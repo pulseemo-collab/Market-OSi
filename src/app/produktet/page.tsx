@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRole } from '@/contexts/RoleContext'
+import AccessDenied from '@/components/AccessDenied'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -69,6 +71,7 @@ const emptyForm = {
 }
 
 export default function ProduktetPage() {
+  const { role } = useRole()
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -233,16 +236,22 @@ export default function ProduktetPage() {
 
   const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
+  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
+
+  const isAdmin = role === 'admin'
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Produktet"
         subtitle={`${safeProducts.length} produkte gjithsej${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
         action={
-          <button onClick={openAdd} className="btn-primary flex items-center gap-2">
-            <RiAddLine className="text-lg" />
-            Shto Produkt
-          </button>
+          isAdmin ? (
+            <button onClick={openAdd} className="btn-primary flex items-center gap-2">
+              <RiAddLine className="text-lg" />
+              Shto Produkt
+            </button>
+          ) : undefined
         }
       />
 
@@ -358,13 +367,15 @@ export default function ProduktetPage() {
                           >
                             <RiEditLine className="text-lg" />
                           </button>
-                          <button
-                            onClick={() => setDeleteModal(product)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Fshi"
-                          >
-                            <RiDeleteBin6Line className="text-lg" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeleteModal(product)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Fshi"
+                            >
+                              <RiDeleteBin6Line className="text-lg" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -486,25 +497,31 @@ export default function ProduktetPage() {
             </select>
           </div>
           <div>
-            <label className="label">Çmimi i Blerjes (L) *</label>
+            <label className="label">
+              Çmimi i Blerjes (L) *{!isAdmin && <span className="ml-1 text-xs text-slate-400">(vetëm admin)</span>}
+            </label>
             <input
               type="number"
               value={form.cmimiBlerjes}
-              onChange={(e) => setForm({ ...form, cmimiBlerjes: e.target.value })}
-              className="input"
+              onChange={(e) => isAdmin && setForm({ ...form, cmimiBlerjes: e.target.value })}
+              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
               placeholder="0"
               min="0"
+              readOnly={!isAdmin}
             />
           </div>
           <div>
-            <label className="label">Çmimi i Shitjes (L) *</label>
+            <label className="label">
+              Çmimi i Shitjes (L) *{!isAdmin && <span className="ml-1 text-xs text-slate-400">(vetëm admin)</span>}
+            </label>
             <input
               type="number"
               value={form.cmimiShitjes}
-              onChange={(e) => setForm({ ...form, cmimiShitjes: e.target.value })}
-              className="input"
+              onChange={(e) => isAdmin && setForm({ ...form, cmimiShitjes: e.target.value })}
+              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
               placeholder="0"
               min="0"
+              readOnly={!isAdmin}
             />
           </div>
           <div>

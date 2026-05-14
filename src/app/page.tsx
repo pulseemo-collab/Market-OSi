@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import ExportButtons from '@/components/ui/ExportButtons'
+import AccessDenied from '@/components/AccessDenied'
+import { useRole } from '@/contexts/RoleContext'
 import {
   RiMoneyDollarCircleLine,
   RiLineChartLine,
@@ -99,6 +101,7 @@ const fadeUp = {
 }
 
 export default function Dashboard() {
+  const { role } = useRole()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -159,6 +162,8 @@ export default function Dashboard() {
     month: 'long',
     year: 'numeric',
   })
+
+  if (!role || role !== 'admin') return <AccessDenied />
 
   if (loading) {
     return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAuthUserAndRole, requireRole } from '@/lib/auth-helpers'
 
 export async function GET(
   req: NextRequest,
@@ -23,6 +24,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { role, error: authError } = await getAuthUserAndRole()
+  if (authError) return authError
+
   try {
     const body = await req.json()
     const {
@@ -48,6 +52,12 @@ export async function PUT(
       )
     }
 
+    // Fetch existing product to preserve prices for non-admin
+    const existing = await prisma.product.findUnique({ where: { id: Number(params.id) } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+    }
+
     const product = await prisma.product.update({
       where: { id: Number(params.id) },
       data: {
@@ -55,8 +65,8 @@ export async function PUT(
         kategoria,
         sasia: Number(sasia),
         stokuMinimal: Number(stokuMinimal),
-        cmimiBlerjes: Number(cmimiBlerjes),
-        cmimiShitjes: Number(cmimiShitjes),
+        cmimiBlerjes: role === 'admin' ? Number(cmimiBlerjes) : existing.cmimiBlerjes,
+        cmimiShitjes: role === 'admin' ? Number(cmimiShitjes) : existing.cmimiShitjes,
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
         barcodes: {
@@ -88,6 +98,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requireRole(['admin'])
+  if (error) return error
+
   try {
     await prisma.product.delete({
       where: { id: Number(params.id) },
