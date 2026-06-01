@@ -11,7 +11,11 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts'
+import { formatCurrency } from '@/lib/utils'
 
 interface TooltipPayload {
   name: string
@@ -186,5 +190,118 @@ export function TopProductsChart({ data }: { data: ProductPoint[] }) {
         <Bar dataKey="njesi" fill="#8b5cf6" radius={[0, 4, 4, 0]} maxBarSize={20} />
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+const PAYMENT_COLORS = ['#10b981', '#8b5cf6']
+
+export function PaymentDonutChart({ cash, bank }: { cash: number; bank: number }) {
+  const total = cash + bank
+  const cashPct = total > 0 ? Math.round((cash / total) * 100) : 0
+  const bankPct = total > 0 ? 100 - cashPct : 0
+
+  const pieData =
+    total > 0
+      ? [
+          { name: 'Cash', value: cash },
+          { name: 'Bankë / Kartë', value: bank },
+        ]
+      : [{ name: 'Pa të dhëna', value: 1 }]
+
+  const isEmpty = total === 0
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-6 py-2">
+      {/* Donut */}
+      <div className="relative flex-shrink-0">
+        <ResponsiveContainer width={180} height={180}>
+          <PieChart>
+            <Pie
+              data={pieData}
+              cx="50%"
+              cy="50%"
+              innerRadius={54}
+              outerRadius={80}
+              dataKey="value"
+              strokeWidth={2}
+              stroke="#fff"
+              startAngle={90}
+              endAngle={-270}
+            >
+              {pieData.map((_, i) => (
+                <Cell
+                  key={i}
+                  fill={isEmpty ? '#e2e8f0' : PAYMENT_COLORS[i] ?? PAYMENT_COLORS[0]}
+                />
+              ))}
+            </Pie>
+            {!isEmpty && (
+              <Tooltip
+                formatter={(value, name) => [
+                  `${formatCurrency(Number(value))} (${name === 'Cash' ? cashPct : bankPct}%)`,
+                  name as string,
+                ]}
+                contentStyle={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                }}
+              />
+            )}
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Center label */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          {isEmpty ? (
+            <span className="text-xs text-slate-400 text-center px-2">Nuk ka<br />të dhëna</span>
+          ) : (
+            <>
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Gjithsej</span>
+              <span className="text-sm font-bold text-slate-900 mt-0.5">{formatCurrency(total)}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Legend + stats */}
+      <div className="flex-1 w-full space-y-4">
+        {/* Cash row */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-slate-700">Cash</span>
+            </div>
+            <span className="text-sm font-bold text-emerald-600">{cashPct}%</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+              style={{ width: `${cashPct}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{formatCurrency(cash)}</p>
+        </div>
+
+        {/* Bank row */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-slate-700">Bankë / Kartë</span>
+            </div>
+            <span className="text-sm font-bold text-violet-600">{bankPct}%</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-violet-500 rounded-full transition-all duration-500"
+              style={{ width: `${bankPct}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{formatCurrency(bank)}</p>
+        </div>
+      </div>
+    </div>
   )
 }

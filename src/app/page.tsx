@@ -38,6 +38,10 @@ const TopProductsChart = dynamic(
   () => import('@/components/ui/DashboardCharts').then((m) => m.TopProductsChart),
   { ssr: false, loading: () => <ChartSkeleton /> }
 )
+const PaymentDonutChart = dynamic(
+  () => import('@/components/ui/DashboardCharts').then((m) => m.PaymentDonutChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+)
 
 function ChartSkeleton() {
   return (
@@ -82,6 +86,8 @@ interface DashboardData {
   topProducts: Array<{ emri: string; njesi: number; fitimi: number }>
   shitjetRecente: RecentSale[]
   insights: Array<{ type: 'success' | 'warning' | 'info'; text: string }>
+  cashPeriudha: number
+  bankPeriudha: number
 }
 
 const PERIOD_LABELS: Record<Periudha, string> = {
@@ -318,6 +324,20 @@ export default function Dashboard() {
           color="amber"
         />
       </div>
+
+      {/* Payment Method Donut */}
+      <motion.div variants={fadeUp} custom={6} initial="hidden" animate="show" className="card">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-900">Shitjet sipas mënyrës së pagesës</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{periodLabel}</p>
+        </div>
+        <div className="p-5">
+          <PaymentDonutChart
+            cash={data?.cashPeriudha ?? 0}
+            bank={data?.bankPeriudha ?? 0}
+          />
+        </div>
+      </motion.div>
 
       {/* Reorder suggestions card */}
       {(data?.lowStockCount ?? 0) > 0 && (

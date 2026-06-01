@@ -41,6 +41,7 @@ interface Sale {
   totali: number
   fitimi: number
   shenime: string | null
+  paymentMethod: string
   createdAt: string
   items: SaleItem[]
 }
@@ -83,6 +84,7 @@ export default function HistorikuPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [periudha, setPeriudha] = useState('sot')
+  const [dataFiltri, setDataFiltri] = useState('')
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -99,7 +101,10 @@ export default function HistorikuPage() {
     setLoading(true)
     setError(false)
     try {
-      const res = await fetch(`/api/sales?periudha=${periudha}`)
+      const url = dataFiltri
+        ? `/api/sales?data=${dataFiltri}`
+        : `/api/sales?periudha=${periudha}`
+      const res = await fetch(url)
       if (res.status === 401) { window.location.href = '/login'; return }
       if (!res.ok) throw new Error()
       const data = await res.json()
@@ -110,7 +115,7 @@ export default function HistorikuPage() {
     } finally {
       setLoading(false)
     }
-  }, [periudha])
+  }, [periudha, dataFiltri])
 
   useEffect(() => {
     fetchSales()
@@ -270,15 +275,15 @@ export default function HistorikuPage() {
         subtitle={`${sales.length} shitje gjatë periudhës`}
       />
 
-      {/* Period Filter + Export */}
+      {/* Period Filter + Date + Export */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {PERIUDHAT.map((p) => (
             <button
               key={p.value}
-              onClick={() => setPeriudha(p.value)}
+              onClick={() => { setPeriudha(p.value); setDataFiltri('') }}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                periudha === p.value
+                periudha === p.value && !dataFiltri
                   ? 'bg-blue-600 text-white'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
               }`}
@@ -286,6 +291,20 @@ export default function HistorikuPage() {
               {p.label}
             </button>
           ))}
+          <input
+            type="date"
+            value={dataFiltri}
+            onChange={(e) => setDataFiltri(e.target.value)}
+            className="input !w-auto text-sm"
+          />
+          {dataFiltri && (
+            <button
+              onClick={() => setDataFiltri('')}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all"
+            >
+              Pastro filtrin
+            </button>
+          )}
         </div>
         <ExportButtons periudha={periudha} />
       </div>
@@ -313,7 +332,7 @@ export default function HistorikuPage() {
       {/* Sales Table */}
       <div className="card overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={6} cols={isAdmin ? 8 : 6} />
+          <TableSkeleton rows={6} cols={isAdmin ? 9 : 7} />
         ) : error ? (
           <ErrorState message="Gabim gjatë ngarkimit të shitjeve" onRetry={fetchSales} />
         ) : sales.length === 0 ? (
@@ -330,6 +349,7 @@ export default function HistorikuPage() {
                   <th className="table-th">Data & Ora</th>
                   <th className="table-th">Produktet</th>
                   <th className="table-th text-center">Njësi</th>
+                  <th className="table-th text-center">Pagesa</th>
                   <th className="table-th text-right">Totali</th>
                   {isAdmin && <th className="table-th text-right">Fitimi</th>}
                   <th className="table-th text-center">Detaje</th>
@@ -361,6 +381,15 @@ export default function HistorikuPage() {
                     <td className="table-td text-center">
                       <span className="badge-gray">
                         {sale.items.reduce((s, i) => s + i.sasia, 0)}
+                      </span>
+                    </td>
+                    <td className="table-td text-center">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        sale.paymentMethod === 'bank'
+                          ? 'bg-violet-100 text-violet-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {sale.paymentMethod === 'bank' ? 'Bankë' : 'Cash'}
                       </span>
                     </td>
                     <td className="table-td text-right font-semibold text-slate-900">
@@ -505,6 +534,12 @@ export default function HistorikuPage() {
                 <span className="text-slate-500">Marzhi</span>
                 <span className="font-semibold text-blue-600">
                   {((selectedSale.fitimi / selectedSale.totali) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Mënyra e Pagesës</span>
+                <span className={`font-semibold ${selectedSale.paymentMethod === 'bank' ? 'text-violet-700' : 'text-emerald-700'}`}>
+                  {selectedSale.paymentMethod === 'bank' ? 'Bankë / Kartë' : 'Cash'}
                 </span>
               </div>
             </div>

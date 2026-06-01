@@ -73,12 +73,13 @@ model ProductBarcode {
 }
 
 model Sale {
-  id          Int        @id @default(autoincrement())
-  totali      Float
-  fitimi      Float
-  shenime     String?
-  createdAt   DateTime   @default(now())
-  items       SaleItem[]
+  id            Int        @id @default(autoincrement())
+  totali        Float
+  fitimi        Float
+  shenime       String?
+  paymentMethod String     @default("cash")
+  createdAt     DateTime   @default(now())
+  items         SaleItem[]
 }
 
 model SaleItem {

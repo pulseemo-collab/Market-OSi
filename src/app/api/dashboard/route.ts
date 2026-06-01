@@ -59,6 +59,8 @@ export async function GET(request: NextRequest) {
       yesterdaySales,
       topPeriodProducts,
       recentSales,
+      cashPeriudhaAgg,
+      bankPeriudhaAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
         where: { createdAt: { gte: periodStart, lt: periodEnd } },
@@ -108,6 +110,14 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { items: true },
+      }),
+      prisma.sale.aggregate({
+        where: { createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'cash' },
+        _sum: { totali: true },
+      }),
+      prisma.sale.aggregate({
+        where: { createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'bank' },
+        _sum: { totali: true },
       }),
     ])
 
@@ -236,6 +246,8 @@ export async function GET(request: NextRequest) {
       topProducts,
       shitjetRecente: recentSales,
       insights,
+      cashPeriudha: cashPeriudhaAgg._sum.totali ?? 0,
+      bankPeriudha: bankPeriudhaAgg._sum.totali ?? 0,
     })
   } catch (error) {
     console.error('Dashboard error:', error)

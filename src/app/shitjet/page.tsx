@@ -39,6 +39,7 @@ interface CompletedSale {
   id: number
   totali: number
   fitimi: number
+  paymentMethod: string
   createdAt: string
   items: Array<{
     emriProduktit: string
@@ -67,6 +68,7 @@ export default function ShitjetPage() {
   const [barkodi, setBarkodi] = useState('')
   const [scanFlash, setScanFlash] = useState<'success' | 'error' | null>(null)
   const [scanMessage, setScanMessage] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank'>('cash')
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const searchRef = useRef<HTMLInputElement>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
@@ -397,6 +399,7 @@ export default function ShitjetPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          paymentMethod,
           items: cart.map((i) => ({
             productId: i.product.id,
             emriProduktit: i.product.emri,
@@ -416,6 +419,7 @@ export default function ShitjetPage() {
       const sale = await res.json()
       setReceiptModal(sale)
       setCart([])
+      setPaymentMethod('cash')
       refreshProducts()
       toast.success('Shitja u regjistrua me sukses!')
     } finally {
@@ -728,6 +732,34 @@ export default function ShitjetPage() {
               <span>TOTALI</span>
               <span>{formatCurrency(totali)}</span>
             </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-2">Mënyra e Pagesës</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPaymentMethod('cash')}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                    paymentMethod === 'cash'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  Cash
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('bank')}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                    paymentMethod === 'bank'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  Bankë / Kartë
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={completeSale}
               disabled={loading || cart.length === 0}
@@ -791,6 +823,12 @@ export default function ShitjetPage() {
               <div className="flex justify-between font-bold text-base">
                 <span>TOTALI</span>
                 <span>{formatCurrency(receiptModal.totali)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 mt-2">
+                <span>Pagesa</span>
+                <span className="font-medium">
+                  {receiptModal.paymentMethod === 'bank' ? 'Bankë / Kartë' : 'Cash'}
+                </span>
               </div>
               <div className="text-center mt-4 text-xs text-slate-400">
                 <p>Faleminderit për blerjen!</p>

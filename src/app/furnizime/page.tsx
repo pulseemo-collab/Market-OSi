@@ -90,6 +90,7 @@ export default function FurnizimePage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [periudha, setPeriudha] = useState('te-gjitha')
+  const [dataFiltri, setDataFiltri] = useState('')
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false)
@@ -300,8 +301,18 @@ export default function FurnizimePage() {
     }
   }
 
-  // Client-side period filter
+  // Client-side period + date filter
   const filteredSupplies = supplies.filter((s) => {
+    // Exact date filter overrides period
+    if (dataFiltri) {
+      const sDate = new Date(s.data)
+      const fDate = new Date(dataFiltri)
+      return (
+        sDate.getFullYear() === fDate.getFullYear() &&
+        sDate.getMonth() === fDate.getMonth() &&
+        sDate.getDate() === fDate.getDate()
+      )
+    }
     if (periudha === 'te-gjitha') return true
     const now = new Date()
     const sDate = new Date(s.data)
@@ -352,14 +363,14 @@ export default function FurnizimePage() {
         }
       />
 
-      {/* Period Filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      {/* Period Filter + Date */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         {PERIUDHAT.map((p) => (
           <button
             key={p.value}
-            onClick={() => setPeriudha(p.value)}
+            onClick={() => { setPeriudha(p.value); setDataFiltri('') }}
             className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              periudha === p.value
+              periudha === p.value && !dataFiltri
                 ? 'bg-blue-600 text-white'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
@@ -367,6 +378,20 @@ export default function FurnizimePage() {
             {p.label}
           </button>
         ))}
+        <input
+          type="date"
+          value={dataFiltri}
+          onChange={(e) => setDataFiltri(e.target.value)}
+          className="input !w-auto text-sm"
+        />
+        {dataFiltri && (
+          <button
+            onClick={() => setDataFiltri('')}
+            className="px-4 py-2.5 rounded-lg text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all"
+          >
+            Pastro filtrin
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}

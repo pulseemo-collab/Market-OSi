@@ -5,6 +5,20 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const periudha = searchParams.get('periudha') || 'sot'
+    const dataParam = searchParams.get('data') // YYYY-MM-DD for exact date filter
+
+    // Exact date filter
+    if (dataParam) {
+      const d = new Date(dataParam)
+      const dateStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
+      const dateEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0)
+      const salesByDate = await prisma.sale.findMany({
+        where: { createdAt: { gte: dateStart, lt: dateEnd } },
+        include: { items: { include: { product: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+      return NextResponse.json(salesByDate)
+    }
 
     const now = new Date()
     let dateFrom: Date
@@ -14,7 +28,7 @@ export async function GET(req: NextRequest) {
         dateFrom = new Date(now)
         dateFrom.setHours(0, 0, 0, 0)
         break
-      case 'dje':
+      case 'dje': {
         dateFrom = new Date(now)
         dateFrom.setDate(dateFrom.getDate() - 1)
         dateFrom.setHours(0, 0, 0, 0)
@@ -28,6 +42,7 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: 'desc' },
         })
         return NextResponse.json(salesDje)
+      }
       case 'jave':
         dateFrom = new Date(now)
         dateFrom.setDate(dateFrom.getDate() - 7)
@@ -63,7 +78,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { items, shenime } = body
+    const { items, shenime, paymentMethod } = body
+    const validPaymentMethod = ['cash', 'bank'].includes(paymentMethod) ? paymentMethod : 'cash'
 
     if (!items || items.length === 0) {
       return NextResponse.json(
@@ -106,6 +122,7 @@ export async function POST(req: NextRequest) {
           totali,
           fitimi,
           shenime: shenime || null,
+          paymentMethod: validPaymentMethod,
           items: {
             create: await Promise.all(
               items.map(async (item: {
