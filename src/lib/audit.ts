@@ -22,6 +22,9 @@ export const AUDIT_ACTIONS = {
   BACKUP_EXPORTED: 'backup_exported',
   BACKUP_RESTORED: 'backup_restored',
   BACKUP_RESTORE_FAILED: 'backup_restore_failed',
+  BILLING_PLAN_CHANGED: 'billing_plan_changed',
+  BILLING_STATUS_CHANGED: 'billing_status_changed',
+  BILLING_SUBSCRIPTION_CREATED: 'billing_subscription_created',
 } as const
 
 export const AUDIT_ENTITY_TYPES = {
@@ -32,6 +35,7 @@ export const AUDIT_ENTITY_TYPES = {
   USER: 'user',
   EXPORT: 'export',
   BACKUP: 'backup',
+  SUBSCRIPTION: 'subscription',
 } as const
 
 interface AuditParams {

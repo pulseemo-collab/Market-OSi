@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    const billing = { trial: 0, active: 0, past_due: 0, canceled: 0, expired: 0 }
+
     const orgsTable = organizations.map((org) => ({
       id: org.id,
       name: org.name,
@@ -62,6 +64,7 @@ export async function GET(req: NextRequest) {
       salesCount: org._count.sales,
       lastActivity: org.sales[0]?.createdAt ?? null,
       createdAt: org.createdAt,
+      subscription: null,
     }))
 
     return NextResponse.json({
@@ -72,6 +75,7 @@ export async function GET(req: NextRequest) {
       totalRevenue: salesAgg._sum.totali ?? 0,
       totalNotifications,
       totalAuditLogs,
+      billing,
       organizations: orgsTable,
     })
   } catch (err) {

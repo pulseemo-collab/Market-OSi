@@ -44,6 +44,7 @@ export const PERMISSIONS: Record<string, Role[]> = {
   'organizations:read':   ['platform_owner'],
   'organizations:manage': ['platform_owner'],
   'billing:read':         ['platform_owner'],
+  'billing:manage':       ['platform_owner'],
   'global:audit':         ['platform_owner'],
   'global:monitoring':    ['platform_owner'],
 }
