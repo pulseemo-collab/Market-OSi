@@ -31,6 +31,9 @@ export const PERMISSIONS: Record<string, Role[]> = {
   'users:manage':     ['owner'],
 
   'audit:read':       ['owner'],
+
+  'backup:create':    ['owner'],
+  'backup:restore':   ['owner'],
 }
 
 export const ROUTE_ACCESS: Record<string, Role[]> = {
@@ -44,6 +47,7 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/furnitoret':              ['owner', 'manager'],
   '/perdoruesit':             ['owner'],
   '/regjistri':               ['owner'],
+  '/backup':                  ['owner'],
 }
 
 export const ROLE_LABELS: Record<Role, string> = {

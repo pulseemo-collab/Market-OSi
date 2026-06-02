@@ -19,6 +19,9 @@ export const AUDIT_ACTIONS = {
   DELETE: 'delete',
   CHANGE_ROLE: 'change_role',
   EXPORT: 'export',
+  BACKUP_EXPORTED: 'backup_exported',
+  BACKUP_RESTORED: 'backup_restored',
+  BACKUP_RESTORE_FAILED: 'backup_restore_failed',
 } as const
 
 export const AUDIT_ENTITY_TYPES = {
@@ -28,6 +31,7 @@ export const AUDIT_ENTITY_TYPES = {
   SALE: 'sale',
   USER: 'user',
   EXPORT: 'export',
+  BACKUP: 'backup',
 } as const
 
 interface AuditParams {

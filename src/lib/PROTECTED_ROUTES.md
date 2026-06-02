@@ -32,6 +32,8 @@ All routes require authentication (401 if not logged in). Unauthorised roles rec
 | export:read         | ✓     | ✓       |         |          |
 | reorder:read        | ✓     | ✓       |         |          |
 | users:manage        | ✓     |         |         |          |
+| backup:create       | ✓     |         |         |          |
+| backup:restore      | ✓     |         |         |          |
 
 ## API Route Protection
 
@@ -59,6 +61,8 @@ All routes require authentication (401 if not logged in). Unauthorised roles rec
 | /api/dashboard               | GET    | dashboard:read     |
 | /api/users                   | GET    | users:manage       |
 | /api/users/[id]              | PUT    | users:manage       |
+| /api/backup                  | GET    | backup:create      |
+| /api/restore                 | POST   | backup:restore     |
 
 ## Error Responses
 
