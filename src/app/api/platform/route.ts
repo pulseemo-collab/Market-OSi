@@ -26,45 +26,31 @@ export async function GET(req: NextRequest) {
       prisma.organization.count(),
       prisma.userRole.count(),
       prisma.product.count(),
-      prisma.sale.aggregate({
-        _count: { _all: true },
-        _sum: { totali: true },
-      }),
+      prisma.sale.aggregate({ _count: { _all: true }, _sum: { totali: true } }),
       prisma.notification.count(),
       prisma.auditLog.count(),
       prisma.organization.findMany({
         select: {
           id: true,
           name: true,
+          isActive: true,
           createdAt: true,
-          _count: {
-            select: {
-              userRoles: true,
-              products: true,
-              sales: true,
-            },
-          },
-          sales: {
-            select: { createdAt: true },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
+          _count: { select: { userRoles: true, products: true, sales: true } },
+          sales: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
         orderBy: { createdAt: 'asc' },
       }),
     ])
 
-    const billing = { trial: 0, active: 0, past_due: 0, canceled: 0, expired: 0 }
-
     const orgsTable = organizations.map((org) => ({
       id: org.id,
       name: org.name,
+      isActive: org.isActive,
       usersCount: org._count.userRoles,
       productsCount: org._count.products,
       salesCount: org._count.sales,
       lastActivity: org.sales[0]?.createdAt ?? null,
       createdAt: org.createdAt,
-      subscription: null,
     }))
 
     return NextResponse.json({
@@ -75,7 +61,6 @@ export async function GET(req: NextRequest) {
       totalRevenue: salesAgg._sum.totali ?? 0,
       totalNotifications,
       totalAuditLogs,
-      billing,
       organizations: orgsTable,
     })
   } catch (err) {
