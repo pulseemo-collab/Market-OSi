@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 const MONTH_NAMES = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
 
 export async function GET(request: NextRequest) {
-  const { organizationId, error } = await requirePermission('dashboard:read')
+  const { userId, organizationId, error } = await requirePermission('dashboard:read')
   if (error) return error
+
+  const rl = rateLimit(request, 'dashboard', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const { searchParams } = new URL(request.url)

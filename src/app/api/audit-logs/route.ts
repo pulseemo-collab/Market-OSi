@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('audit:read')
+  const { userId, organizationId, error } = await requirePermission('audit:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'audit-logs', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const { searchParams } = new URL(req.url)

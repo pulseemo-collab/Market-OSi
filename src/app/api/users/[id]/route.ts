@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { Role, ROLE_LABELS } from '@/lib/roles'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
 
 const VALID_ROLES: Role[] = ['owner', 'manager', 'cashier', 'employee']
 
@@ -12,6 +13,9 @@ export async function PUT(
 ) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
+
+  const rl = rateLimit(req, 'auth', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const id = parseInt(params.id)

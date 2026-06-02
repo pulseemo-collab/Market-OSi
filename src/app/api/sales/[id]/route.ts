@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function PUT(
   req: NextRequest,
@@ -10,6 +11,9 @@ export async function PUT(
 ) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
+
+  const rl = rateLimit(req, 'sales', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const saleId = parseInt(params.id)
@@ -162,6 +166,9 @@ export async function DELETE(
 ) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
+
+  const rl = rateLimit(req, 'sales', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const saleId = parseInt(params.id)

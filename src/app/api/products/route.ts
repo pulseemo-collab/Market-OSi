@@ -3,10 +3,14 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('products:read')
+  const { userId, organizationId, error } = await requirePermission('products:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'products', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const { searchParams } = new URL(req.url)
@@ -49,6 +53,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('products:write')
   if (error) return error
+
+  const rl = rateLimit(req, 'products', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const body = await req.json()

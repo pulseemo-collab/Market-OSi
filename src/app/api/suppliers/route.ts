@@ -3,10 +3,14 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
-export async function GET() {
-  const { organizationId, error } = await requirePermission('suppliers:read')
+export async function GET(req: NextRequest) {
+  const { userId, organizationId, error } = await requirePermission('suppliers:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'suppliers', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const suppliers = await prisma.supplier.findMany({
@@ -28,6 +32,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
+
+  const rl = rateLimit(req, 'suppliers', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const body = await req.json()

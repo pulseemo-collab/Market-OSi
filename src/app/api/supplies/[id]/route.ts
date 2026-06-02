@@ -3,13 +3,17 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { organizationId, error } = await requirePermission('supplies:read')
+  const { userId, organizationId, error } = await requirePermission('supplies:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'supplies', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const id = parseInt(params.id)
@@ -42,11 +46,14 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('supplies:delete')
   if (error) return error
+
+  const rl = rateLimit(req, 'supplies', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const id = parseInt(params.id)

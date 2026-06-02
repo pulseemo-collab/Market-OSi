@@ -4,13 +4,17 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { hasPermission } from '@/lib/roles'
 import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { organizationId, error } = await requirePermission('products:read')
+  const { userId, organizationId, error } = await requirePermission('products:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'products', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const product = await prisma.product.findFirst({
@@ -33,6 +37,9 @@ export async function PUT(
 ) {
   const { userId, userEmail, role, organizationId, error: authError } = await requirePermission('products:write')
   if (authError) return authError
+
+  const rl = rateLimit(req, 'products', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const body = await req.json()
@@ -140,6 +147,9 @@ export async function DELETE(
 ) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('products:delete')
   if (error) return error
+
+  const rl = rateLimit(req, 'products', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const existing = await prisma.product.findFirst({

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('users:manage')
+  const { userId, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
+
+  const rl = rateLimit(req, 'auth', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const users = await prisma.userRole.findMany({

@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const { organizationId, error } = await requirePermission('reorder:read')
+export async function GET(req: NextRequest) {
+  const { userId, organizationId, error } = await requirePermission('reorder:read')
   if (error) return error
+
+  const rl = rateLimit(req, 'dashboard', userId, organizationId)
+  if (rl.limited) return rl.response!
 
   try {
     const products = await prisma.product.findMany({
