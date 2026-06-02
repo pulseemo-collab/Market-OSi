@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const { error } = await requirePermission('reorder:read')
+  if (error) return error
+
   try {
     const products = await prisma.product.findMany({
       include: { furnitor: true },

@@ -431,7 +431,7 @@ export default function ShitjetPage() {
     window.print()
   }
 
-  if (!role || !['admin', 'cashier'].includes(role)) return <AccessDenied />
+  if (!role || !['owner', 'cashier'].includes(role)) return <AccessDenied />
 
   return (
     <div className="flex flex-col h-full">

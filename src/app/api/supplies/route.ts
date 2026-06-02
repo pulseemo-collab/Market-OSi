@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET() {
+  const { error } = await requirePermission('supplies:read')
+  if (error) return error
+
   try {
     const supplies = await prisma.supply.findMany({
       include: {
@@ -22,6 +26,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const { error } = await requirePermission('supplies:write')
+  if (error) return error
+
   try {
     const body = await req.json()
     const { furnitorId, data, shenime, items } = body

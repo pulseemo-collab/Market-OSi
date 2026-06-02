@@ -248,9 +248,9 @@ export default function ProduktetPage() {
 
   const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
-  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
+  if (!role || !['owner', 'manager', 'employee'].includes(role)) return <AccessDenied />
 
-  const isAdmin = role === 'admin'
+  const isAdmin = role === 'owner' || role === 'manager'
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

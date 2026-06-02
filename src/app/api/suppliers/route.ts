@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET() {
+  const { error } = await requirePermission('suppliers:read')
+  if (error) return error
+
   try {
     const suppliers = await prisma.supplier.findMany({
       include: {
@@ -18,6 +22,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const { error } = await requirePermission('suppliers:write')
+  if (error) return error
+
   try {
     const body = await req.json()
     const { emri, telefoni, email, adresa, shenime } = body

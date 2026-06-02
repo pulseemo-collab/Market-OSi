@@ -5,7 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import MetaMaskErrorFilter from '@/components/MetaMaskErrorFilter'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
-import { Role } from '@/lib/roles'
+import { Role, LEGACY_ROLE_MAP } from '@/lib/roles'
 
 export const metadata: Metadata = {
   title: 'Market OS',
@@ -35,12 +35,13 @@ export default async function RootLayout({
       let userRole = await prisma.userRole.findUnique({ where: { userId: user.id } })
       if (!userRole) {
         const count = await prisma.userRole.count()
-        const defaultRole = count === 0 ? 'admin' : 'staff'
+        const defaultRole = count === 0 ? 'owner' : 'employee'
         userRole = await prisma.userRole.create({
           data: { userId: user.id, email: user.email || '', roli: defaultRole },
         })
       }
-      role = userRole.roli as Role
+      const rawRole = userRole.roli
+      role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
     }
   } catch {
     // If DB is unavailable, proceed without role (middleware still protects routes)

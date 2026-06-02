@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
+import { Role } from '@/lib/roles'
+
+const VALID_ROLES: Role[] = ['owner', 'manager', 'cashier', 'employee']
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requireRole(['admin'])
+  const { userId, error } = await requirePermission('users:manage')
   if (error) return error
 
   try {
@@ -18,8 +21,21 @@ export async function PUT(
     const body = await req.json()
     const { roli } = body
 
-    if (!['admin', 'cashier', 'staff'].includes(roli)) {
+    if (!VALID_ROLES.includes(roli)) {
       return NextResponse.json({ error: 'Rol i pavlefshëm' }, { status: 400 })
+    }
+
+    const targetUser = await prisma.userRole.findUnique({ where: { id } })
+    if (!targetUser) {
+      return NextResponse.json({ error: 'Përdoruesi nuk u gjet' }, { status: 404 })
+    }
+
+    // Prevent self-demotion (owner cannot remove their own owner access)
+    if (targetUser.userId === userId && roli !== 'owner') {
+      return NextResponse.json(
+        { error: 'Nuk mund të ndryshosh rolin tënd' },
+        { status: 403 }
+      )
     }
 
     const userRole = await prisma.userRole.update({

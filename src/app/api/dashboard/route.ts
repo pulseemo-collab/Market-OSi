@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export const dynamic = 'force-dynamic'
 
 const MONTH_NAMES = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('dashboard:read')
   if (error) return error
 
   try {

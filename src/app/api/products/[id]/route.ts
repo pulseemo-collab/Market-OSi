@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthUserAndRole, requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
+import { hasPermission } from '@/lib/roles'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requirePermission('products:read')
+  if (error) return error
+
   try {
     const product = await prisma.product.findUnique({
       where: { id: Number(params.id) },
@@ -24,7 +28,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { role, error: authError } = await getAuthUserAndRole()
+  const { role, error: authError } = await requirePermission('products:write')
   if (authError) return authError
 
   try {
@@ -52,11 +56,12 @@ export async function PUT(
       )
     }
 
-    // Fetch existing product to preserve prices for non-admin
     const existing = await prisma.product.findUnique({ where: { id: Number(params.id) } })
     if (!existing) {
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
     }
+
+    const canEditPrices = hasPermission(role, 'products:prices')
 
     const product = await prisma.product.update({
       where: { id: Number(params.id) },
@@ -65,8 +70,8 @@ export async function PUT(
         kategoria,
         sasia: Number(sasia),
         stokuMinimal: Number(stokuMinimal),
-        cmimiBlerjes: role === 'admin' ? Number(cmimiBlerjes) : existing.cmimiBlerjes,
-        cmimiShitjes: role === 'admin' ? Number(cmimiShitjes) : existing.cmimiShitjes,
+        cmimiBlerjes: canEditPrices ? Number(cmimiBlerjes) : existing.cmimiBlerjes,
+        cmimiShitjes: canEditPrices ? Number(cmimiShitjes) : existing.cmimiShitjes,
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
         barcodes: {
@@ -98,7 +103,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('products:delete')
   if (error) return error
 
   try {

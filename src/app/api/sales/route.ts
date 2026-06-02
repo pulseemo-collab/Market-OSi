@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
+  const { error } = await requirePermission('sales:read')
+  if (error) return error
+
   try {
     const { searchParams } = new URL(req.url)
     const periudha = searchParams.get('periudha') || 'sot'
@@ -76,6 +80,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const { error } = await requirePermission('sales:create')
+  if (error) return error
+
   try {
     const body = await req.json()
     const { items, shenime, paymentMethod } = body

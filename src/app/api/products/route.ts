@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
+  const { error } = await requirePermission('products:read')
+  if (error) return error
+
   try {
     const { searchParams } = new URL(req.url)
     const kerkimi = searchParams.get('kerkimi') || ''
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('products:write')
   if (error) return error
 
   try {

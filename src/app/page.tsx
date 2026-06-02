@@ -169,7 +169,7 @@ export default function Dashboard() {
     year: 'numeric',
   })
 
-  if (!role || role !== 'admin') return <AccessDenied />
+  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
 
   if (loading) {
     return (

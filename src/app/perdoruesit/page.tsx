@@ -17,12 +17,13 @@ interface UserEntry {
   createdAt: string
 }
 
-const ROLET: Role[] = ['admin', 'cashier', 'staff']
+const ROLET: Role[] = ['owner', 'manager', 'cashier', 'employee']
 
 const roleBadgeClass: Record<Role, string> = {
-  admin: 'bg-blue-100 text-blue-700',
-  cashier: 'bg-emerald-100 text-emerald-700',
-  staff: 'bg-slate-100 text-slate-600',
+  owner:    'bg-blue-100 text-blue-700',
+  manager:  'bg-violet-100 text-violet-700',
+  cashier:  'bg-emerald-100 text-emerald-700',
+  employee: 'bg-slate-100 text-slate-600',
 }
 
 export default function PerdoruesitPage() {
@@ -69,7 +70,7 @@ export default function PerdoruesitPage() {
     }
   }
 
-  if (!role || role !== 'admin') return <AccessDenied />
+  if (!role || role !== 'owner') return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -84,18 +85,22 @@ export default function PerdoruesitPage() {
           <RiShieldUserLine className="text-slate-400 text-base" />
           <span className="text-sm font-medium text-slate-700">Rolet e disponueshme</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <div className="bg-blue-50 rounded-lg p-3">
-            <p className="font-semibold text-blue-700 mb-1">Admin</p>
-            <p className="text-blue-600 text-xs">Akses i plotë — paneli, analitika, fshirje, çmime</p>
+            <p className="font-semibold text-blue-700 mb-1">Pronar</p>
+            <p className="text-blue-600 text-xs">Akses i plotë — të gjitha funksionet</p>
+          </div>
+          <div className="bg-violet-50 rounded-lg p-3">
+            <p className="font-semibold text-violet-700 mb-1">Menaxher</p>
+            <p className="text-violet-600 text-xs">Produktet, Furnitorët, Furnizime, Raporte, Paneli</p>
           </div>
           <div className="bg-emerald-50 rounded-lg p-3">
             <p className="font-semibold text-emerald-700 mb-1">Kasijer</p>
-            <p className="text-emerald-600 text-xs">POS (Shitjet) dhe Historiku bazik</p>
+            <p className="text-emerald-600 text-xs">POS (Shitjet) dhe Historiku</p>
           </div>
           <div className="bg-slate-50 rounded-lg p-3">
-            <p className="font-semibold text-slate-700 mb-1">Staf</p>
-            <p className="text-slate-600 text-xs">Produktet, Furnizime dhe Stok i Ulët</p>
+            <p className="font-semibold text-slate-700 mb-1">Punonjës</p>
+            <p className="text-slate-600 text-xs">Akses vetëm-lexim ku është e përshtatshme</p>
           </div>
         </div>
       </div>

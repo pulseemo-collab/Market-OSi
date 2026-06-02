@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('users:manage')
   if (error) return error
 
   try {

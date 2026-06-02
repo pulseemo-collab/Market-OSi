@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requirePermission('supplies:read')
+  if (error) return error
+
   try {
     const id = parseInt(params.id)
     if (isNaN(id)) {
@@ -38,6 +42,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { error } = await requirePermission('supplies:delete')
+  if (error) return error
+
   try {
     const id = parseInt(params.id)
     if (isNaN(id)) {

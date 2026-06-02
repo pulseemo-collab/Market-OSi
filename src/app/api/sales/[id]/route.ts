@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {
@@ -144,7 +144,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requireRole(['admin'])
+  const { error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {

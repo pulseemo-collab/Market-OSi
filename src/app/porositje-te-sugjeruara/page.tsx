@@ -191,7 +191,7 @@ export default function PorositjeTeSugjeruaraPage() {
   const modalTotal = modalItems.reduce((sum, item) => sum + item.sasia * item.cmimiBlerjes, 0)
   const suppliersWithId = groups.filter((g) => g.furnitorId !== null).length
 
-  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
+  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

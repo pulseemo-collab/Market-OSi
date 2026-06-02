@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
+  const { error } = await requirePermission('export:read')
+  if (error) return error
+
   try {
     const { searchParams } = new URL(request.url)
     const periudha = searchParams.get('periudha') || 'sot'

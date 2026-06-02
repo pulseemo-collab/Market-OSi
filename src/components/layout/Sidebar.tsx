@@ -23,15 +23,15 @@ import {
 } from 'react-icons/ri'
 
 const navItems = [
-  { href: '/', label: 'Paneli Kryesor', icon: RiDashboardLine, allowed: ['admin'] as Role[] },
-  { href: '/produktet', label: 'Produktet', icon: RiShoppingBasketLine, allowed: ['admin', 'staff'] as Role[] },
-  { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine, allowed: ['admin', 'cashier'] as Role[] },
-  { href: '/historiku', label: 'Historiku', icon: RiHistoryLine, allowed: ['admin', 'cashier'] as Role[] },
-  { href: '/stok-i-ulet', label: 'Stok i Ulët', icon: RiAlertLine, allowed: ['admin', 'staff'] as Role[] },
-  { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine, allowed: ['admin', 'staff'] as Role[] },
-  { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['admin', 'staff'] as Role[] },
-  { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['admin', 'staff'] as Role[] },
-  { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['admin'] as Role[] },
+  { href: '/', label: 'Paneli Kryesor', icon: RiDashboardLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/produktet', label: 'Produktet', icon: RiShoppingBasketLine, allowed: ['owner', 'manager', 'employee'] as Role[] },
+  { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine, allowed: ['owner', 'cashier'] as Role[] },
+  { href: '/historiku', label: 'Historiku', icon: RiHistoryLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
+  { href: '/stok-i-ulet', label: 'Stok i Ulët', icon: RiAlertLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['owner'] as Role[] },
 ]
 
 interface SidebarProps {

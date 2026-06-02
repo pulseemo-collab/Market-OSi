@@ -64,7 +64,7 @@ export default function StokUletPage() {
   const kritiket = products.filter((p) => getSeverity(p) === 'kritike')
   const tjerat = products.filter((p) => getSeverity(p) !== 'kritike')
 
-  if (!role || !['admin', 'staff'].includes(role)) return <AccessDenied />
+  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
