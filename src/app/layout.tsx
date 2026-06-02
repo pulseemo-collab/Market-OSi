@@ -3,9 +3,11 @@ import './globals.css'
 import ClientLayout from '@/components/layout/ClientLayout'
 import { Toaster } from 'react-hot-toast'
 import MetaMaskErrorFilter from '@/components/MetaMaskErrorFilter'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { Role, LEGACY_ROLE_MAP } from '@/lib/roles'
+import { setUserContext } from '@/lib/sentry'
 
 export const metadata: Metadata = {
   title: 'Market OS',
@@ -46,6 +48,12 @@ export default async function RootLayout({
       }
       const rawRole = userRole.roli
       role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
+      setUserContext({
+        userId: user.id,
+        userEmail: userRole.email,
+        role,
+        organizationId: userRole.organizationId,
+      })
     }
   } catch {
     // If DB is unavailable, proceed without role (middleware still protects routes)
@@ -55,7 +63,9 @@ export default async function RootLayout({
     <html lang="sq">
       <body>
         <ClientLayout role={role}>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </ClientLayout>
         <MetaMaskErrorFilter />
         <Toaster

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { captureApiError } from '@/lib/sentry'
 
 export async function GET() {
   const { organizationId, error } = await requirePermission('suppliers:read')
@@ -18,7 +19,8 @@ export async function GET() {
       orderBy: { emri: 'asc' },
     })
     return NextResponse.json(suppliers)
-  } catch {
+  } catch (error) {
+    captureApiError(error, { organizationId, route: '/api/suppliers', action: 'GET' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
 }
@@ -56,7 +58,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json(supplier, { status: 201 })
-  } catch {
+  } catch (error) {
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/suppliers', action: 'POST' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
 }

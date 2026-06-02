@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { hasPermission } from '@/lib/roles'
 import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { captureApiError } from '@/lib/sentry'
 
 export async function GET(
   req: NextRequest,
@@ -20,7 +21,8 @@ export async function GET(
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
     }
     return NextResponse.json(product)
-  } catch {
+  } catch (error) {
+    captureApiError(error, { organizationId, route: '/api/products/[id]', action: 'GET' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
 }
@@ -127,6 +129,7 @@ export async function PUT(
         { status: 409 }
       )
     }
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products/[id]', action: 'PUT' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
 }
@@ -164,7 +167,8 @@ export async function DELETE(
     })
 
     return NextResponse.json({ sukses: true })
-  } catch {
+  } catch (error) {
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products/[id]', action: 'DELETE' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
 }

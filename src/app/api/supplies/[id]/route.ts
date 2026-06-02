@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { captureApiError } from '@/lib/sentry'
 
 export async function GET(
   _req: NextRequest,
@@ -34,6 +35,7 @@ export async function GET(
 
     return NextResponse.json(supply)
   } catch (error) {
+    captureApiError(error, { organizationId, route: '/api/supplies/[id]', action: 'GET' })
     console.error('Supply GET error:', error)
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
@@ -93,6 +95,7 @@ export async function DELETE(
     if (error instanceof Error && error.message === 'NOT_FOUND') {
       return NextResponse.json({ error: 'Furnizimi nuk u gjet' }, { status: 404 })
     }
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/supplies/[id]', action: 'DELETE' })
     console.error('Supply DELETE error:', error)
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }

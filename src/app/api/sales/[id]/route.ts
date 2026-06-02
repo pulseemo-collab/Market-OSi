@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { captureApiError } from '@/lib/sentry'
 
 export async function PUT(
   req: NextRequest,
@@ -149,6 +150,7 @@ export async function PUT(
 
     return NextResponse.json(updatedSale)
   } catch (error) {
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'PUT' })
     console.error('Sale PUT error:', error)
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
@@ -202,6 +204,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'DELETE' })
     console.error('Sale DELETE error:', error)
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
   }
