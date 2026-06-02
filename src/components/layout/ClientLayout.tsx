@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { RiMenuLine, RiStore2Line } from 'react-icons/ri'
 import Sidebar from './Sidebar'
+import NotificationBell from './NotificationBell'
 import { RoleProvider } from '@/contexts/RoleContext'
 import { Role } from '@/lib/roles'
 
@@ -52,12 +53,13 @@ export default function ClientLayout({
             >
               <RiMenuLine className="text-xl" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1">
               <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
                 <RiStore2Line className="text-white text-sm" />
               </div>
               <span className="font-bold text-slate-900">Market OS</span>
             </div>
+            <NotificationBell />
           </header>
 
           <main className="flex-1 overflow-y-auto min-h-0">

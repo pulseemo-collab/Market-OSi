@@ -4,6 +4,9 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
+import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
+
+const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
 
 export async function GET(req: NextRequest) {
   const { userId, organizationId, error } = await requirePermission('sales:read')
@@ -190,6 +193,61 @@ export async function POST(req: NextRequest) {
       description: `Shitje e re #${sale.id} — ${sale.totali.toFixed(2)} L (${methodLabel}, ${sale.items.length} produkte)`,
       metadata: { totali: sale.totali, fitimi: sale.fitimi, paymentMethod: validPaymentMethod },
     })
+
+    // Trigger LARGE_SALE notification (assigned to the seller)
+    if (sale.totali >= LARGE_SALE_THRESHOLD) {
+      await createNotification({
+        organizationId: organizationId!,
+        userId: userId!,
+        type: NOTIFICATION_TYPES.LARGE_SALE,
+        title: 'Shitje e Madhe',
+        message: `Shitja #${sale.id} arriti ${sale.totali.toFixed(0)} L (${sale.items.length} produkte, ${methodLabel})`,
+        severity: NOTIFICATION_SEVERITIES.MEDIUM,
+        metadata: { saleId: sale.id, totali: sale.totali, fitimi: sale.fitimi, paymentMethod: validPaymentMethod },
+      })
+    }
+
+    // Trigger LOW_STOCK notifications for products that went below minimum
+    const soldProductIds = items.map((i: { productId: number }) => i.productId)
+    const updatedProducts = await prisma.product.findMany({
+      where: { id: { in: soldProductIds }, organizationId: organizationId! },
+      select: { id: true, emri: true, sasia: true, stokuMinimal: true, njesia: true },
+    })
+
+    // Deduplication: skip products that already have a recent unread LOW_STOCK notification
+    const recentLowStock = await prisma.notification.findMany({
+      where: {
+        organizationId: organizationId!,
+        type: NOTIFICATION_TYPES.LOW_STOCK,
+        isRead: false,
+        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+      select: { metadata: true },
+    })
+    const recentProductIds = new Set(
+      recentLowStock
+        .map((n) => (n.metadata as Record<string, unknown> | null)?.productId as number | undefined)
+        .filter((id): id is number => id != null)
+    )
+
+    for (const product of updatedProducts) {
+      if (product.sasia <= product.stokuMinimal && !recentProductIds.has(product.id)) {
+        const isCritical = product.sasia <= 0
+        await createNotification({
+          organizationId: organizationId!,
+          type: NOTIFICATION_TYPES.LOW_STOCK,
+          title: isCritical ? 'Stok i Zbrazur' : 'Stok i Ulët',
+          message: `"${product.emri}": ${product.sasia} ${product.njesia} (minimal: ${product.stokuMinimal})`,
+          severity: isCritical ? NOTIFICATION_SEVERITIES.CRITICAL : NOTIFICATION_SEVERITIES.HIGH,
+          metadata: {
+            productId: product.id,
+            productName: product.emri,
+            currentStock: product.sasia,
+            minimalStock: product.stokuMinimal,
+          },
+        })
+      }
+    }
 
     return NextResponse.json(sale, { status: 201 })
   } catch (error) {

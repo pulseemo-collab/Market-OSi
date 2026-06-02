@@ -9,16 +9,17 @@ datasource db {
 }
 
 model Organization {
-  id         Int         @id @default(autoincrement())
-  name       String
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  products   Product[]
-  sales      Sale[]
-  suppliers  Supplier[]
-  supplies   Supply[]
-  userRoles  UserRole[]
-  auditLogs  AuditLog[]
+  id            Int            @id @default(autoincrement())
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  products      Product[]
+  sales         Sale[]
+  suppliers     Supplier[]
+  supplies      Supply[]
+  userRoles     UserRole[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
 }
 
 model Supplier {
@@ -138,6 +139,20 @@ model AuditLog {
   entityType     String
   entityId       String?
   description    String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+}
+
+model Notification {
+  id             Int          @id @default(autoincrement())
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  type           String
+  title          String
+  message        String
+  severity       String       @default("medium")
+  isRead         Boolean      @default(false)
   metadata       Json?
   createdAt      DateTime     @default(now())
 }

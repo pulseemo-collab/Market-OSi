@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import * as Sentry from '@sentry/nextjs'
+import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -261,6 +262,19 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    await createNotification({
+      organizationId: orgId,
+      type: NOTIFICATION_TYPES.RESTORE_SUCCESS,
+      title: 'Rikuperim i Suksesshëm',
+      message: `Të dhënat u rikuperuan me sukses nga "${meta.organizationName}" (${meta.exportedAt.split('T')[0]})`,
+      severity: NOTIFICATION_SEVERITIES.HIGH,
+      metadata: {
+        backupOrgName: meta.organizationName,
+        exportedAt: meta.exportedAt,
+        counts,
+      },
+    })
+
     return NextResponse.json({ success: true, counts })
   } catch (err) {
     console.error('[Restore] Error:', err)
@@ -283,6 +297,18 @@ export async function POST(request: NextRequest) {
       description: `Dështoi rikuperimi i backup-it nga "${meta.organizationName}"`,
       metadata: {
         backupOrgId: meta.organizationId,
+        backupOrgName: meta.organizationName,
+        error: err instanceof Error ? err.message : 'E panjohur',
+      },
+    })
+
+    await createNotification({
+      organizationId: orgId,
+      type: NOTIFICATION_TYPES.RESTORE_FAILED,
+      title: 'Rikuperimi Dështoi',
+      message: `Dështoi rikuperimi nga "${meta.organizationName}": ${err instanceof Error ? err.message : 'Gabim i panjohur'}`,
+      severity: NOTIFICATION_SEVERITIES.CRITICAL,
+      metadata: {
         backupOrgName: meta.organizationName,
         error: err instanceof Error ? err.message : 'E panjohur',
       },

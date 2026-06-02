@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import * as Sentry from '@sentry/nextjs'
+import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,6 +116,15 @@ export async function GET(request: NextRequest) {
       entityType: AUDIT_ENTITY_TYPES.BACKUP,
       description: `U eksportua backup për organizatën "${organization.name}"`,
       metadata: { counts },
+    })
+
+    await createNotification({
+      organizationId: orgId,
+      type: NOTIFICATION_TYPES.BACKUP_SUCCESS,
+      title: 'Backup i Suksesshëm',
+      message: `Backup u eksportua me sukses — ${counts.products} produkte, ${counts.sales} shitje`,
+      severity: NOTIFICATION_SEVERITIES.LOW,
+      metadata: { counts, exportedBy: userEmail },
     })
 
     const orgSlug = sanitizeFilename(organization.name)

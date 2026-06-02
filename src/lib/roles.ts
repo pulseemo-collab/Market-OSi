@@ -34,6 +34,9 @@ export const PERMISSIONS: Record<string, Role[]> = {
 
   'backup:create':    ['owner'],
   'backup:restore':   ['owner'],
+
+  'notifications:read':   ['owner', 'manager', 'cashier'],
+  'notifications:manage': ['owner', 'manager'],
 }
 
 export const ROUTE_ACCESS: Record<string, Role[]> = {
@@ -48,6 +51,7 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/perdoruesit':             ['owner'],
   '/regjistri':               ['owner'],
   '/backup':                  ['owner'],
+  '/njoftime':               ['owner', 'manager', 'cashier'],
 }
 
 export const ROLE_LABELS: Record<Role, string> = {

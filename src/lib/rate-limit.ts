@@ -11,6 +11,7 @@ export type RouteType =
   | 'audit-logs'
   | 'exports'
   | 'backups'
+  | 'notifications'
 
 const LIMITS: Record<RouteType, number> = {
   auth: 10,
@@ -22,6 +23,7 @@ const LIMITS: Record<RouteType, number> = {
   'audit-logs': 30,
   exports: 10,
   backups: 5,
+  notifications: 60,
 }
 
 const WINDOW_MS = 60_000

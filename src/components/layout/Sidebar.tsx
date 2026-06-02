@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/contexts/RoleContext'
@@ -22,6 +23,7 @@ import {
   RiShieldUserLine,
   RiFileSearchLine,
   RiSave3Line,
+  RiBellLine,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -36,6 +38,7 @@ const navItems = [
   { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['owner'] as Role[] },
   { href: '/regjistri', label: 'Regjistri Auditimit', icon: RiFileSearchLine, allowed: ['owner'] as Role[] },
   { href: '/backup', label: 'Backup & Rikuperim', icon: RiSave3Line, allowed: ['owner'] as Role[] },
+  { href: '/njoftime', label: 'Njoftime', icon: RiBellLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
 ]
 
 interface SidebarProps {
@@ -46,6 +49,26 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { role } = useRole()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const canSeeNotifications = role === 'owner' || role === 'manager' || role === 'cashier'
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!canSeeNotifications) return
+    try {
+      const res = await fetch('/api/notifications?countOnly=true')
+      if (res.ok) {
+        const data = await res.json()
+        setUnreadCount(data.unreadCount ?? 0)
+      }
+    } catch {}
+  }, [canSeeNotifications])
+
+  useEffect(() => {
+    fetchUnreadCount()
+    const interval = setInterval(fetchUnreadCount, 30000)
+    return () => clearInterval(interval)
+  }, [fetchUnreadCount])
 
   if (pathname === '/login') return null
 
@@ -81,6 +104,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         {visibleItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href
+          const isNotifications = item.href === '/njoftime'
           return (
             <Link
               key={item.href}
@@ -99,7 +123,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
                   isActive ? 'text-blue-600' : 'text-slate-400'
                 )}
               />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {isNotifications && unreadCount > 0 && (
+                <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
           )
         })}
