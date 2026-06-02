@@ -24,6 +24,7 @@ import {
   RiFileSearchLine,
   RiSave3Line,
   RiBellLine,
+  RiGlobalLine,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -39,6 +40,7 @@ const navItems = [
   { href: '/regjistri', label: 'Regjistri Auditimit', icon: RiFileSearchLine, allowed: ['owner'] as Role[] },
   { href: '/backup', label: 'Backup & Rikuperim', icon: RiSave3Line, allowed: ['owner'] as Role[] },
   { href: '/njoftime', label: 'Njoftime', icon: RiBellLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
+  { href: '/platforma', label: 'Platforma', icon: RiGlobalLine, allowed: ['platform_owner'] as Role[] },
 ]
 
 interface SidebarProps {

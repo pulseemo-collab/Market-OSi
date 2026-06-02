@@ -20,10 +20,11 @@ interface UserEntry {
 const ROLET: Role[] = ['owner', 'manager', 'cashier', 'employee']
 
 const roleBadgeClass: Record<Role, string> = {
-  owner:    'bg-blue-100 text-blue-700',
-  manager:  'bg-violet-100 text-violet-700',
-  cashier:  'bg-emerald-100 text-emerald-700',
-  employee: 'bg-slate-100 text-slate-600',
+  owner:          'bg-blue-100 text-blue-700',
+  manager:        'bg-violet-100 text-violet-700',
+  cashier:        'bg-emerald-100 text-emerald-700',
+  employee:       'bg-slate-100 text-slate-600',
+  platform_owner: 'bg-orange-100 text-orange-700',
 }
 
 export default function PerdoruesitPage() {

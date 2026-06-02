@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'manager' | 'cashier' | 'employee'
+export type Role = 'owner' | 'manager' | 'cashier' | 'employee' | 'platform_owner'
 
 // Map old DB role strings to new roles for backward compatibility
 export const LEGACY_ROLE_MAP: Record<string, Role> = {
@@ -7,6 +7,7 @@ export const LEGACY_ROLE_MAP: Record<string, Role> = {
 }
 
 export const PERMISSIONS: Record<string, Role[]> = {
+  // Organization business permissions
   'products:read':    ['owner', 'manager', 'cashier', 'employee'],
   'products:write':   ['owner', 'manager'],
   'products:delete':  ['owner'],
@@ -37,6 +38,14 @@ export const PERMISSIONS: Record<string, Role[]> = {
 
   'notifications:read':   ['owner', 'manager', 'cashier'],
   'notifications:manage': ['owner', 'manager'],
+
+  // Platform-level permissions (platform_owner only)
+  'platform:read':        ['platform_owner'],
+  'organizations:read':   ['platform_owner'],
+  'organizations:manage': ['platform_owner'],
+  'billing:read':         ['platform_owner'],
+  'global:audit':         ['platform_owner'],
+  'global:monitoring':    ['platform_owner'],
 }
 
 export const ROUTE_ACCESS: Record<string, Role[]> = {
@@ -52,13 +61,15 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/regjistri':               ['owner'],
   '/backup':                  ['owner'],
   '/njoftime':               ['owner', 'manager', 'cashier'],
+  '/platforma':              ['platform_owner'],
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  owner:    'Pronar',
-  manager:  'Menaxher',
-  cashier:  'Kasijer',
-  employee: 'Punonjës',
+  owner:          'Pronar',
+  manager:        'Menaxher',
+  cashier:        'Kasijer',
+  employee:       'Punonjës',
+  platform_owner: 'Pronar Platforme',
 }
 
 export function hasPermission(role: Role | null, permission: string): boolean {
@@ -77,4 +88,8 @@ export function canAccess(role: Role | null, path: string): boolean {
 
 export function isOwner(role: Role | null): boolean {
   return role === 'owner'
+}
+
+export function isPlatformOwner(role: Role | null): boolean {
+  return role === 'platform_owner'
 }

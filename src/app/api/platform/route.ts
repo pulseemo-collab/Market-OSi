@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/auth-helpers'
+import { captureApiError } from '@/lib/sentry'
+import { rateLimit } from '@/lib/rate-limit'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(req: NextRequest) {
+  const { userId, organizationId, error } = await requirePermission('platform:read')
+  if (error) return error
+
+  const rl = rateLimit(req, 'platform', userId, organizationId)
+  if (rl.limited) return rl.response!
+
+  try {
+    const [
+      totalOrganizations,
+      totalUsers,
+      totalProducts,
+      salesAgg,
+      totalNotifications,
+      totalAuditLogs,
+      organizations,
+    ] = await Promise.all([
+      prisma.organization.count(),
+      prisma.userRole.count(),
+      prisma.product.count(),
+      prisma.sale.aggregate({
+        _count: { _all: true },
+        _sum: { totali: true },
+      }),
+      prisma.notification.count(),
+      prisma.auditLog.count(),
+      prisma.organization.findMany({
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          _count: {
+            select: {
+              userRoles: true,
+              products: true,
+              sales: true,
+            },
+          },
+          sales: {
+            select: { createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+
+    const orgsTable = organizations.map((org) => ({
+      id: org.id,
+      name: org.name,
+      usersCount: org._count.userRoles,
+      productsCount: org._count.products,
+      salesCount: org._count.sales,
+      lastActivity: org.sales[0]?.createdAt ?? null,
+      createdAt: org.createdAt,
+    }))
+
+    return NextResponse.json({
+      totalOrganizations,
+      totalUsers,
+      totalProducts,
+      totalSales: salesAgg._count._all,
+      totalRevenue: salesAgg._sum.totali ?? 0,
+      totalNotifications,
+      totalAuditLogs,
+      organizations: orgsTable,
+    })
+  } catch (err) {
+    captureApiError(err, { route: '/api/platform', action: 'GET' })
+    console.error('Platform dashboard error:', err)
+    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+  }
+}
