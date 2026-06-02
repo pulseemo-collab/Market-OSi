@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { hasPermission } from '@/lib/roles'
+import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function GET(
   req: NextRequest,
@@ -28,7 +29,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { role, organizationId, error: authError } = await requirePermission('products:write')
+  const { userId, userEmail, role, organizationId, error: authError } = await requirePermission('products:write')
   if (authError) return authError
 
   try {
@@ -65,6 +66,23 @@ export async function PUT(
 
     const canEditPrices = hasPermission(role, 'products:prices')
 
+    const newSasia = Number(sasia)
+    const newStokuMinimal = Number(stokuMinimal)
+    const newCmimiBlerjes = canEditPrices ? Number(cmimiBlerjes) : Number(existing.cmimiBlerjes)
+    const newCmimiShitjes = canEditPrices ? Number(cmimiShitjes) : Number(existing.cmimiShitjes)
+
+    const changes = buildFieldChanges([
+      { label: 'Emri', old: existing.emri, new: emri },
+      { label: 'Kategoria', old: existing.kategoria, new: kategoria },
+      { label: 'Stoku', old: existing.sasia, new: newSasia },
+      { label: 'Stoku minimal', old: existing.stokuMinimal, new: newStokuMinimal },
+      { label: 'Njësia', old: existing.njesia, new: njesia || 'copë' },
+      ...(canEditPrices ? [
+        { label: 'Çmimi blerjes', old: Number(existing.cmimiBlerjes), new: newCmimiBlerjes },
+        { label: 'Çmimi shitjes', old: Number(existing.cmimiShitjes), new: newCmimiShitjes },
+      ] : []),
+    ])
+
     const product = await prisma.product.update({
       where: { id: Number(params.id) },
       data: {
@@ -82,6 +100,18 @@ export async function PUT(
         },
       },
       include: { furnitor: true, barcodes: true },
+    })
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.UPDATE,
+      entityType: AUDIT_ENTITY_TYPES.PRODUCT,
+      entityId: product.id,
+      description: `Produkti "${product.emri}" u modifikua`,
+      metadata: { changes },
     })
 
     return NextResponse.json(product)
@@ -105,16 +135,34 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { organizationId, error } = await requirePermission('products:delete')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('products:delete')
   if (error) return error
 
   try {
+    const existing = await prisma.product.findFirst({
+      where: { id: Number(params.id), organizationId: organizationId! },
+      select: { id: true, emri: true, kategoria: true },
+    })
+
     const result = await prisma.product.deleteMany({
       where: { id: Number(params.id), organizationId: organizationId! },
     })
     if (result.count === 0) {
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
     }
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.DELETE,
+      entityType: AUDIT_ENTITY_TYPES.PRODUCT,
+      entityId: params.id,
+      description: `Produkti "${existing?.emri ?? `#${params.id}`}" u fshi`,
+      metadata: { kategoria: existing?.kategoria },
+    })
+
     return NextResponse.json({ sukses: true })
   } catch {
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })

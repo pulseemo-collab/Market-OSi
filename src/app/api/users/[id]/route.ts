@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
-import { Role } from '@/lib/roles'
+import { Role, ROLE_LABELS } from '@/lib/roles'
+import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 const VALID_ROLES: Role[] = ['owner', 'manager', 'cashier', 'employee']
 
@@ -9,7 +10,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { userId, organizationId, error } = await requirePermission('users:manage')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
   try {
@@ -39,9 +40,22 @@ export async function PUT(
       )
     }
 
+    const oldRole = targetUser.roli as Role
     const userRole = await prisma.userRole.update({
       where: { id },
       data: { roli },
+    })
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.CHANGE_ROLE,
+      entityType: AUDIT_ENTITY_TYPES.USER,
+      entityId: targetUser.userId,
+      description: `Roli i "${targetUser.email}" u ndryshua nga "${ROLE_LABELS[oldRole] ?? oldRole}" në "${ROLE_LABELS[roli as Role] ?? roli}"`,
+      metadata: { targetEmail: targetUser.email, oldRole, newRole: roli },
     })
 
     return NextResponse.json(userRole)

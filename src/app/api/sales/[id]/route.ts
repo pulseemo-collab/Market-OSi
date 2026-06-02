@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { organizationId, error } = await requirePermission('sales:manage')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {
@@ -128,6 +129,24 @@ export async function PUT(
       include: { items: { include: { product: true } } },
     })
 
+    const saleChanges = buildFieldChanges([
+      { label: 'Totali', old: existingSale.totali.toFixed(2) + ' L', new: totali.toFixed(2) + ' L' },
+      { label: 'Fitimi', old: existingSale.fitimi.toFixed(2) + ' L', new: fitimi.toFixed(2) + ' L' },
+      { label: 'Numri i artikujve', old: existingSale.items.length, new: validatedItems.length },
+    ])
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.UPDATE,
+      entityType: AUDIT_ENTITY_TYPES.SALE,
+      entityId: saleId,
+      description: `Shitja #${saleId} u modifikua`,
+      metadata: { changes: saleChanges },
+    })
+
     return NextResponse.json(updatedSale)
   } catch (error) {
     console.error('Sale PUT error:', error)
@@ -139,7 +158,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { organizationId, error } = await requirePermission('sales:manage')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {
@@ -167,6 +186,18 @@ export async function DELETE(
       }
 
       await tx.sale.delete({ where: { id: saleId } })
+    })
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.DELETE,
+      entityType: AUDIT_ENTITY_TYPES.SALE,
+      entityId: saleId,
+      description: `Shitja #${saleId} u fshi (${sale.totali.toFixed(2)} L)`,
+      metadata: { totali: sale.totali, fitimi: sale.fitimi },
     })
 
     return NextResponse.json({ success: true })

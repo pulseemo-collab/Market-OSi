@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function GET() {
   const { organizationId, error } = await requirePermission('suppliers:read')
@@ -23,12 +24,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('suppliers:write')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
 
   try {
     const body = await req.json()
-    const { emri, telefoni, email, adresa, shenime } = body
+    const { emri, telefoni, email: supplierEmail, adresa, shenime } = body
 
     if (!emri) {
       return NextResponse.json(
@@ -38,8 +39,20 @@ export async function POST(req: NextRequest) {
     }
 
     const supplier = await prisma.supplier.create({
-      data: { emri, telefoni, email, adresa, shenime, organizationId: organizationId! },
+      data: { emri, telefoni, email: supplierEmail, adresa, shenime, organizationId: organizationId! },
       include: { products: { select: { id: true, emri: true } } },
+    })
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.CREATE,
+      entityType: AUDIT_ENTITY_TYPES.SUPPLIER,
+      entityId: supplier.id,
+      description: `Furnitori "${supplier.emri}" u krijua`,
+      metadata: { telefoni: supplier.telefoni, email: supplier.email },
     })
 
     return NextResponse.json(supplier, { status: 201 })

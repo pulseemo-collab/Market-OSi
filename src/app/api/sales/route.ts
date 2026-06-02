@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   const { organizationId, error } = await requirePermission('sales:read')
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('sales:create')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:create')
   if (error) return error
 
   try {
@@ -166,6 +167,19 @@ export async function POST(req: NextRequest) {
       }
 
       return newSale
+    })
+
+    const methodLabel = validPaymentMethod === 'cash' ? 'Cash' : 'Bankë'
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.CREATE,
+      entityType: AUDIT_ENTITY_TYPES.SALE,
+      entityId: sale.id,
+      description: `Shitje e re #${sale.id} — ${sale.totali.toFixed(2)} L (${methodLabel}, ${sale.items.length} produkte)`,
+      metadata: { totali: sale.totali, fitimi: sale.fitimi, paymentMethod: validPaymentMethod },
     })
 
     return NextResponse.json(sale, { status: 201 })

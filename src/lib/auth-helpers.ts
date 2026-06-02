@@ -5,6 +5,7 @@ import { Role, LEGACY_ROLE_MAP, hasPermission } from './roles'
 
 export async function getAuthUserAndRole(): Promise<{
   userId: string | null
+  userEmail: string | null
   role: Role | null
   organizationId: number | null
   error: NextResponse | null
@@ -16,6 +17,7 @@ export async function getAuthUserAndRole(): Promise<{
     if (!user) {
       return {
         userId: null,
+        userEmail: null,
         role: null,
         organizationId: null,
         error: NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 }),
@@ -26,6 +28,7 @@ export async function getAuthUserAndRole(): Promise<{
     if (!userRole) {
       return {
         userId: null,
+        userEmail: null,
         role: null,
         organizationId: null,
         error: NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 }),
@@ -35,10 +38,11 @@ export async function getAuthUserAndRole(): Promise<{
     const rawRole = userRole.roli ?? 'employee'
     const role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
 
-    return { userId: user.id, role, organizationId: userRole.organizationId, error: null }
+    return { userId: user.id, userEmail: userRole.email, role, organizationId: userRole.organizationId, error: null }
   } catch {
     return {
       userId: null,
+      userEmail: null,
       role: null,
       organizationId: null,
       error: NextResponse.json({ error: 'Gabim në server' }, { status: 500 }),
@@ -48,6 +52,7 @@ export async function getAuthUserAndRole(): Promise<{
 
 export async function requireRole(allowedRoles: Role[]): Promise<{
   userId: string | null
+  userEmail: string | null
   role: Role | null
   organizationId: number | null
   error: NextResponse | null
@@ -58,6 +63,7 @@ export async function requireRole(allowedRoles: Role[]): Promise<{
   if (!result.role || !allowedRoles.includes(result.role)) {
     return {
       userId: result.userId,
+      userEmail: result.userEmail,
       role: result.role,
       organizationId: result.organizationId,
       error: NextResponse.json({ error: 'Nuk ke akses' }, { status: 403 }),
@@ -69,6 +75,7 @@ export async function requireRole(allowedRoles: Role[]): Promise<{
 
 export async function requirePermission(permission: string): Promise<{
   userId: string | null
+  userEmail: string | null
   role: Role | null
   organizationId: number | null
   error: NextResponse | null
@@ -79,6 +86,7 @@ export async function requirePermission(permission: string): Promise<{
   if (!hasPermission(result.role, permission)) {
     return {
       userId: result.userId,
+      userEmail: result.userEmail,
       role: result.role,
       organizationId: result.organizationId,
       error: NextResponse.json({ error: 'Nuk ke akses' }, { status: 403 }),

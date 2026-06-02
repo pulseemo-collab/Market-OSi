@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  const { organizationId, error } = await requirePermission('export:read')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('export:read')
   if (error) return error
 
   try {
@@ -80,6 +81,17 @@ export async function GET(request: Request) {
     const stokUlet = produktet.filter((p) => p.sasia <= p.stokuMinimal)
     const totali = shitjet.reduce((s, x) => s + x.totali, 0)
     const fitimi = shitjet.reduce((s, x) => s + x.fitimi, 0)
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.EXPORT,
+      entityType: AUDIT_ENTITY_TYPES.EXPORT,
+      description: `U eksportua raporti për periudhën "${periudhaLabel}"`,
+      metadata: { periudha, periudhaLabel, numriShitjeve: shitjet.length, totali },
+    })
 
     return NextResponse.json({
       periudhaLabel,

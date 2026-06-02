@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function GET() {
   const { organizationId, error } = await requirePermission('supplies:read')
@@ -27,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { organizationId, error } = await requirePermission('supplies:write')
+  const { userId, userEmail, role, organizationId, error } = await requirePermission('supplies:write')
   if (error) return error
 
   try {
@@ -106,6 +107,18 @@ export async function POST(req: NextRequest) {
       }
 
       return newSupply
+    })
+
+    await logAuditAction({
+      userId: userId!,
+      userEmail: userEmail!,
+      userRole: role!,
+      organizationId: organizationId!,
+      action: AUDIT_ACTIONS.CREATE,
+      entityType: AUDIT_ENTITY_TYPES.SUPPLY,
+      entityId: supply.id,
+      description: `Furnizim i ri u krijua — ${supply.items.length} produkte, totali ${supply.totali.toFixed(2)} L`,
+      metadata: { totali: supply.totali, numriProdukteve: supply.items.length, furnitorId },
     })
 
     return NextResponse.json(supply, { status: 201 })
