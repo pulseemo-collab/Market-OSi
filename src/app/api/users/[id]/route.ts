@@ -9,7 +9,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { userId, error } = await requirePermission('users:manage')
+  const { userId, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
   try {
@@ -25,12 +25,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Rol i pavlefshëm' }, { status: 400 })
     }
 
-    const targetUser = await prisma.userRole.findUnique({ where: { id } })
+    const targetUser = await prisma.userRole.findFirst({
+      where: { id, organizationId: organizationId! },
+    })
     if (!targetUser) {
       return NextResponse.json({ error: 'Përdoruesi nuk u gjet' }, { status: 404 })
     }
 
-    // Prevent self-demotion (owner cannot remove their own owner access)
     if (targetUser.userId === userId && roli !== 'owner') {
       return NextResponse.json(
         { error: 'Nuk mund të ndryshosh rolin tënd' },

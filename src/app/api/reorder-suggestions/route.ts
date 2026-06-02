@@ -5,11 +5,12 @@ import { requirePermission } from '@/lib/auth-helpers'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { error } = await requirePermission('reorder:read')
+  const { organizationId, error } = await requirePermission('reorder:read')
   if (error) return error
 
   try {
     const products = await prisma.product.findMany({
+      where: { organizationId: organizationId! },
       include: { furnitor: true },
       orderBy: { emri: 'asc' },
     })

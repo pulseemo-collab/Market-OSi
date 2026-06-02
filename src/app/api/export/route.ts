@@ -5,7 +5,7 @@ import { requirePermission } from '@/lib/auth-helpers'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  const { error } = await requirePermission('export:read')
+  const { organizationId, error } = await requirePermission('export:read')
   if (error) return error
 
   try {
@@ -53,17 +53,21 @@ export async function GET(request: Request) {
         periudhaLabel = 'Sot'
     }
 
+    const orgFilter = { organizationId: organizationId! }
+
     const [shitjet, produktet, furnizimet] = await Promise.all([
       prisma.sale.findMany({
-        where: { createdAt: { gte: periodStart, lt: periodEnd } },
+        where: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd } },
         include: { items: true },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.product.findMany({
+        where: orgFilter,
         include: { furnitor: { select: { emri: true } } },
         orderBy: { emri: 'asc' },
       }),
       prisma.supply.findMany({
+        where: orgFilter,
         include: {
           furnitor: { select: { emri: true } },
           items: true,

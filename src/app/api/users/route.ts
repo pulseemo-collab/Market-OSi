@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
-  const { error } = await requirePermission('users:manage')
+  const { organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
   try {
     const users = await prisma.userRole.findMany({
+      where: { organizationId: organizationId! },
       orderBy: { createdAt: 'asc' },
     })
     return NextResponse.json(users)

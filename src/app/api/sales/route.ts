@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
-  const { error } = await requirePermission('sales:read')
+  const { organizationId, error } = await requirePermission('sales:read')
   if (error) return error
 
   try {
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       const dateStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
       const dateEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0)
       const salesByDate = await prisma.sale.findMany({
-        where: { createdAt: { gte: dateStart, lt: dateEnd } },
+        where: { organizationId: organizationId!, createdAt: { gte: dateStart, lt: dateEnd } },
         include: { items: { include: { product: true } } },
         orderBy: { createdAt: 'desc' },
       })
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
         djeTomorrow.setDate(djeTomorrow.getDate() + 1)
         const salesDje = await prisma.sale.findMany({
           where: {
+            organizationId: organizationId!,
             createdAt: { gte: dateFrom, lt: djeTomorrow },
           },
           include: { items: { include: { product: true } } },
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
 
     const sales = await prisma.sale.findMany({
       where: {
+        organizationId: organizationId!,
         createdAt: { gte: dateFrom },
       },
       include: {
@@ -80,7 +82,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requirePermission('sales:create')
+  const { organizationId, error } = await requirePermission('sales:create')
   if (error) return error
 
   try {
@@ -95,13 +97,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validate stock and calculate totals
     let totali = 0
     let fitimi = 0
 
     for (const item of items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
+      const product = await prisma.product.findFirst({
+        where: { id: item.productId, organizationId: organizationId! },
       })
 
       if (!product) {
@@ -122,7 +123,6 @@ export async function POST(req: NextRequest) {
       fitimi += (product.cmimiShitjes - product.cmimiBlerjes) * item.sasia
     }
 
-    // Create sale and reduce stock in a transaction
     const sale = await prisma.$transaction(async (tx) => {
       const newSale = await tx.sale.create({
         data: {
@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
           fitimi,
           shenime: shenime || null,
           paymentMethod: validPaymentMethod,
+          organizationId: organizationId!,
           items: {
             create: await Promise.all(
               items.map(async (item: {
@@ -139,8 +140,8 @@ export async function POST(req: NextRequest) {
                 cmimiBlerjes: number
                 cmimiShitjes: number
               }) => {
-                const product = await tx.product.findUnique({
-                  where: { id: item.productId },
+                const product = await tx.product.findFirst({
+                  where: { id: item.productId, organizationId: organizationId! },
                 })
                 return {
                   productId: item.productId,
@@ -157,10 +158,9 @@ export async function POST(req: NextRequest) {
         include: { items: { include: { product: true } } },
       })
 
-      // Reduce stock for each item
       for (const item of items) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, organizationId: organizationId! },
           data: { sasia: { decrement: item.sasia } },
         })
       }

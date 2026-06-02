@@ -36,8 +36,12 @@ export default async function RootLayout({
       if (!userRole) {
         const count = await prisma.userRole.count()
         const defaultRole = count === 0 ? 'owner' : 'employee'
+        let org = await prisma.organization.findFirst({ orderBy: { id: 'asc' } })
+        if (!org) {
+          org = await prisma.organization.create({ data: { name: 'Default Market' } })
+        }
         userRole = await prisma.userRole.create({
-          data: { userId: user.id, email: user.email || '', roli: defaultRole },
+          data: { userId: user.id, email: user.email || '', roli: defaultRole, organizationId: org.id },
         })
       }
       const rawRole = userRole.roli

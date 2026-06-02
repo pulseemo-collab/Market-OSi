@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET() {
-  const { error } = await requirePermission('suppliers:read')
+  const { organizationId, error } = await requirePermission('suppliers:read')
   if (error) return error
 
   try {
     const suppliers = await prisma.supplier.findMany({
+      where: { organizationId: organizationId! },
       include: {
         products: {
           select: { id: true, emri: true },
@@ -22,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requirePermission('suppliers:write')
+  const { organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
 
   try {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supplier = await prisma.supplier.create({
-      data: { emri, telefoni, email, adresa, shenime },
+      data: { emri, telefoni, email, adresa, shenime, organizationId: organizationId! },
       include: { products: { select: { id: true, emri: true } } },
     })
 

@@ -3,6 +3,12 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
+  // Ensure default organization exists
+  let org = await prisma.organization.findFirst({ orderBy: { id: 'asc' } })
+  if (!org) {
+    org = await prisma.organization.create({ data: { name: 'Default Market' } })
+  }
+
   const furnitor1 = await prisma.supplier.upsert({
     where: { id: 1 },
     update: {},
@@ -12,6 +18,7 @@ async function main() {
       email: 'info@distrib-tirana.al',
       adresa: 'Rruga Kavajës, Tiranë',
       shenime: 'Furnitor kryesor për produkte ushqimore',
+      organizationId: org.id,
     },
   })
 
@@ -24,6 +31,7 @@ async function main() {
       email: 'kontakt@agrofresh.al',
       adresa: 'Rruga e Durrësit, Tiranë',
       shenime: 'Produkte të freskëta dhe organike',
+      organizationId: org.id,
     },
   })
 
@@ -157,6 +165,7 @@ async function main() {
       update: {},
       create: {
         ...productData,
+        organizationId: org.id,
         barcodes: {
           create: [{ barcode }],
         },

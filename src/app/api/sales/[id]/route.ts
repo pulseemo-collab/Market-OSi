@@ -6,7 +6,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('sales:manage')
+  const { organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {
@@ -22,8 +22,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Nuk ka produkte në shitje' }, { status: 400 })
     }
 
-    const existingSale = await prisma.sale.findUnique({
-      where: { id: saleId },
+    const existingSale = await prisma.sale.findFirst({
+      where: { id: saleId, organizationId: organizationId! },
       include: { items: true },
     })
 
@@ -31,13 +31,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Fatura nuk u gjet' }, { status: 404 })
     }
 
-    // Map original quantities per productId (for stock restoration check)
     const originalQtyMap = new Map<number, number>()
     for (const item of existingSale.items) {
       originalQtyMap.set(item.productId, (originalQtyMap.get(item.productId) || 0) + item.sasia)
     }
 
-    // Validate items and calculate new totals
     let totali = 0
     let fitimi = 0
 
@@ -58,12 +56,13 @@ export async function PUT(
         return NextResponse.json({ error: 'Të dhëna të pavlefshme' }, { status: 400 })
       }
 
-      const product = await prisma.product.findUnique({ where: { id: productId } })
+      const product = await prisma.product.findFirst({
+        where: { id: productId, organizationId: organizationId! },
+      })
       if (!product) {
         return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
       }
 
-      // Available stock = current stock + original quantity from this sale (will be restored)
       const originalQty = originalQtyMap.get(productId) || 0
       const availableStock = product.sasia + originalQty
 
@@ -89,18 +88,15 @@ export async function PUT(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Restore original stock
       for (const origItem of existingSale.items) {
-        await tx.product.update({
-          where: { id: origItem.productId },
+        await tx.product.updateMany({
+          where: { id: origItem.productId, organizationId: organizationId! },
           data: { sasia: { increment: origItem.sasia } },
         })
       }
 
-      // 2. Delete old sale items
       await tx.saleItem.deleteMany({ where: { saleId } })
 
-      // 3. Update sale totals and create new items
       await tx.sale.update({
         where: { id: saleId },
         data: {
@@ -119,10 +115,9 @@ export async function PUT(
         },
       })
 
-      // 4. Decrement stock for new quantities
       for (const item of validatedItems) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, organizationId: organizationId! },
           data: { sasia: { decrement: item.sasia } },
         })
       }
@@ -144,7 +139,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('sales:manage')
+  const { organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
   try {
@@ -154,8 +149,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
     }
 
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organizationId: organizationId! },
       include: { items: true },
     })
 
@@ -165,8 +160,8 @@ export async function DELETE(
 
     await prisma.$transaction(async (tx) => {
       for (const item of sale.items) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, organizationId: organizationId! },
           data: { sasia: { increment: item.sasia } },
         })
       }

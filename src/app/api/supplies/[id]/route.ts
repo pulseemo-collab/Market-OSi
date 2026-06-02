@@ -6,7 +6,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('supplies:read')
+  const { organizationId, error } = await requirePermission('supplies:read')
   if (error) return error
 
   try {
@@ -15,8 +15,8 @@ export async function GET(
       return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
     }
 
-    const supply = await prisma.supply.findUnique({
-      where: { id },
+    const supply = await prisma.supply.findFirst({
+      where: { id, organizationId: organizationId! },
       include: {
         furnitor: { select: { id: true, emri: true } },
         items: {
@@ -42,7 +42,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('supplies:delete')
+  const { organizationId, error } = await requirePermission('supplies:delete')
   if (error) return error
 
   try {
@@ -52,16 +52,16 @@ export async function DELETE(
     }
 
     await prisma.$transaction(async (tx) => {
-      const supply = await tx.supply.findUnique({
-        where: { id },
+      const supply = await tx.supply.findFirst({
+        where: { id, organizationId: organizationId! },
         include: { items: true },
       })
 
       if (!supply) throw new Error('NOT_FOUND')
 
       for (const item of supply.items) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, organizationId: organizationId! },
           data: { sasia: { decrement: item.sasia } },
         })
       }

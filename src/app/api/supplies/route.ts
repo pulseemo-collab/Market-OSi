@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET() {
-  const { error } = await requirePermission('supplies:read')
+  const { organizationId, error } = await requirePermission('supplies:read')
   if (error) return error
 
   try {
     const supplies = await prisma.supply.findMany({
+      where: { organizationId: organizationId! },
       include: {
         furnitor: { select: { id: true, emri: true } },
         items: {
@@ -26,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requirePermission('supplies:write')
+  const { organizationId, error } = await requirePermission('supplies:write')
   if (error) return error
 
   try {
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
           data: data ? new Date(data) : new Date(),
           shenime: shenime || null,
           totali,
+          organizationId: organizationId!,
           items: {
             create: items.map((item: {
               productId: number
@@ -94,8 +96,8 @@ export async function POST(req: NextRequest) {
       })
 
       for (const item of items) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, organizationId: organizationId! },
           data: {
             sasia: { increment: item.sasia },
             ...(item.updatePrice ? { cmimiBlerjes: item.cmimiBlerjes } : {}),

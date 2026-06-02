@@ -6,10 +6,17 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('suppliers:write')
+  const { organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
 
   try {
+    const existing = await prisma.supplier.findFirst({
+      where: { id: Number(params.id), organizationId: organizationId! },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Furnitori nuk u gjet' }, { status: 404 })
+    }
+
     const body = await req.json()
     const { emri, telefoni, email, adresa, shenime } = body
 
@@ -29,11 +36,16 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('suppliers:delete')
+  const { organizationId, error } = await requirePermission('suppliers:delete')
   if (error) return error
 
   try {
-    await prisma.supplier.delete({ where: { id: Number(params.id) } })
+    const result = await prisma.supplier.deleteMany({
+      where: { id: Number(params.id), organizationId: organizationId! },
+    })
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Furnitori nuk u gjet' }, { status: 404 })
+    }
     return NextResponse.json({ sukses: true })
   } catch {
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })

@@ -7,12 +7,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('products:read')
+  const { organizationId, error } = await requirePermission('products:read')
   if (error) return error
 
   try {
-    const product = await prisma.product.findUnique({
-      where: { id: Number(params.id) },
+    const product = await prisma.product.findFirst({
+      where: { id: Number(params.id), organizationId: organizationId! },
       include: { furnitor: true, barcodes: true },
     })
     if (!product) {
@@ -28,7 +28,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { role, error: authError } = await requirePermission('products:write')
+  const { role, organizationId, error: authError } = await requirePermission('products:write')
   if (authError) return authError
 
   try {
@@ -56,7 +56,9 @@ export async function PUT(
       )
     }
 
-    const existing = await prisma.product.findUnique({ where: { id: Number(params.id) } })
+    const existing = await prisma.product.findFirst({
+      where: { id: Number(params.id), organizationId: organizationId! },
+    })
     if (!existing) {
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
     }
@@ -103,13 +105,16 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await requirePermission('products:delete')
+  const { organizationId, error } = await requirePermission('products:delete')
   if (error) return error
 
   try {
-    await prisma.product.delete({
-      where: { id: Number(params.id) },
+    const result = await prisma.product.deleteMany({
+      where: { id: Number(params.id), organizationId: organizationId! },
     })
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+    }
     return NextResponse.json({ sukses: true })
   } catch {
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
-  const { error } = await requirePermission('products:read')
+  const { organizationId, error } = await requirePermission('products:read')
   if (error) return error
 
   try {
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
     const products = await prisma.product.findMany({
       where: {
+        organizationId: organizationId!,
         AND: [
           kerkimi
             ? {
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requirePermission('products:write')
+  const { organizationId, error } = await requirePermission('products:write')
   if (error) return error
 
   try {
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
         cmimiShitjes: Number(cmimiShitjes),
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
+        organizationId: organizationId!,
         barcodes: {
           create: validBarcodes.map((barcode) => ({ barcode })),
         },

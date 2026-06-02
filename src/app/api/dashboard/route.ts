@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 const MONTH_NAMES = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
 
 export async function GET(request: NextRequest) {
-  const { error } = await requirePermission('dashboard:read')
+  const { organizationId, error } = await requirePermission('dashboard:read')
   if (error) return error
 
   try {
@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
     const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0)
 
-    // Period filter
     let periodStart: Date
     let periodEnd: Date = tomorrowStart
     switch (periudha) {
@@ -47,6 +46,8 @@ export async function GET(request: NextRequest) {
         periodStart = todayStart
     }
 
+    const orgFilter = { organizationId: organizationId! }
+
     const [
       periodSales,
       monthSales,
@@ -63,65 +64,66 @@ export async function GET(request: NextRequest) {
       bankPeriudhaAgg,
     ] = await Promise.all([
       prisma.sale.findMany({
-        where: { createdAt: { gte: periodStart, lt: periodEnd } },
+        where: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd } },
         select: { totali: true, fitimi: true, items: { select: { sasia: true } } },
       }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: monthStart, lt: tomorrowStart } },
+        where: { ...orgFilter, createdAt: { gte: monthStart, lt: tomorrowStart } },
         select: { totali: true, fitimi: true },
       }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
+        where: { ...orgFilter, createdAt: { gte: todayStart, lt: tomorrowStart } },
         select: { totali: true, fitimi: true },
       }),
       prisma.product.findMany({
+        where: orgFilter,
         select: { id: true, emri: true, sasia: true, stokuMinimal: true, kategoria: true },
         orderBy: { emri: 'asc' },
       }),
-      prisma.supplier.count(),
+      prisma.supplier.count({ where: orgFilter }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: last30Start, lt: tomorrowStart } },
+        where: { ...orgFilter, createdAt: { gte: last30Start, lt: tomorrowStart } },
         select: { totali: true, fitimi: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: last12Start, lt: tomorrowStart } },
+        where: { ...orgFilter, createdAt: { gte: last12Start, lt: tomorrowStart } },
         select: { totali: true, fitimi: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: prevMonthStart, lt: monthStart } },
+        where: { ...orgFilter, createdAt: { gte: prevMonthStart, lt: monthStart } },
         select: { totali: true },
       }),
       prisma.sale.findMany({
-        where: { createdAt: { gte: yesterdayStart, lt: todayStart } },
+        where: { ...orgFilter, createdAt: { gte: yesterdayStart, lt: todayStart } },
         select: { totali: true },
       }),
       prisma.saleItem
         .groupBy({
           by: ['productId', 'emriProduktit'],
-          where: { sale: { createdAt: { gte: periodStart, lt: periodEnd } } },
+          where: { sale: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd } } },
           _sum: { sasia: true, fitimi: true },
           orderBy: { _sum: { sasia: 'desc' } },
           take: 8,
         })
         .catch(() => []),
       prisma.sale.findMany({
+        where: orgFilter,
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: { items: true },
       }),
       prisma.sale.aggregate({
-        where: { createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'cash' },
+        where: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'cash' },
         _sum: { totali: true },
       }),
       prisma.sale.aggregate({
-        where: { createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'bank' },
+        where: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd }, paymentMethod: 'bank' },
         _sum: { totali: true },
       }),
     ])
 
-    // Period KPI
     const periudhaTotali = periodSales.reduce((s, x) => s + x.totali, 0)
     const periudhaFitimi = periodSales.reduce((s, x) => s + x.fitimi, 0)
     const periudhaNumri = periodSales.length
@@ -130,18 +132,15 @@ export async function GET(request: NextRequest) {
       0
     )
 
-    // Fixed KPIs
     const shitjetSotTotali = todaySalesRaw.reduce((s, x) => s + x.totali, 0)
     const shitjetMuajitTotali = monthSales.reduce((s, x) => s + x.totali, 0)
     const shitjetMuajitFitimi = monthSales.reduce((s, x) => s + x.fitimi, 0)
 
-    // Low stock
     const lowStockProducts = allProducts
       .filter((p) => p.sasia <= p.stokuMinimal)
       .sort((a, b) => a.sasia / a.stokuMinimal - b.sasia / b.stokuMinimal)
       .slice(0, 8)
 
-    // Daily chart — last 30 days
     const dailyMap = new Map<string, { shitjet: number; fitimi: number }>()
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
@@ -163,7 +162,6 @@ export async function GET(request: NextRequest) {
       fitimi: Math.round(v.fitimi),
     }))
 
-    // Monthly chart — last 12 months
     const monthlyMap = new Map<string, { muaj: string; shitjet: number; fitimi: number }>()
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -185,14 +183,12 @@ export async function GET(request: NextRequest) {
       fitimi: Math.round(v.fitimi),
     }))
 
-    // Top products formatted
     const topProducts = topPeriodProducts.map((p) => ({
       emri: p.emriProduktit,
       njesi: p._sum.sasia ?? 0,
       fitimi: Math.round(p._sum.fitimi ?? 0),
     }))
 
-    // Business insights
     const insights: Array<{ type: 'success' | 'warning' | 'info'; text: string }> = []
 
     if (topProducts.length > 0) {
