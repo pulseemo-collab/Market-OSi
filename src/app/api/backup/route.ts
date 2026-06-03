@@ -5,6 +5,7 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import * as Sentry from '@sentry/nextjs'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,9 @@ export async function GET(request: NextRequest) {
 
   const rl = rateLimit(request, 'exports', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const orgId = organizationId!

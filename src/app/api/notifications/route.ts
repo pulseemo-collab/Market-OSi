@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,9 @@ export async function GET(req: NextRequest) {
 
   const rl = rateLimit(req, 'notifications', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const { searchParams } = new URL(req.url)

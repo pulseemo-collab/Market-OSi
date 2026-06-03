@@ -7,7 +7,9 @@ import Link from 'next/link'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import ExportButtons from '@/components/ui/ExportButtons'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
 import { useRole } from '@/contexts/RoleContext'
+import { useSubscription } from '@/hooks/useSubscription'
 import {
   RiMoneyDollarCircleLine,
   RiLineChartLine,
@@ -108,6 +110,7 @@ const fadeUp = {
 
 export default function Dashboard() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -170,6 +173,7 @@ export default function Dashboard() {
   })
 
   if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   if (loading) {
     return (

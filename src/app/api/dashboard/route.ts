@@ -3,17 +3,21 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export const dynamic = 'force-dynamic'
 
 const MONTH_NAMES = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
 
 export async function GET(request: NextRequest) {
-  const { userId, organizationId, error } = await requirePermission('dashboard:read')
+  const { userId, role, organizationId, error } = await requirePermission('dashboard:read')
   if (error) return error
 
   const rl = rateLimit(request, 'dashboard', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const { searchParams } = new URL(request.url)

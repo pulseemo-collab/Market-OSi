@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -74,6 +76,7 @@ const emptyForm = {
 
 export default function ProduktetPage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -249,6 +252,7 @@ export default function ProduktetPage() {
   const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
   if (!role || !['owner', 'manager', 'employee'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   const isAdmin = role === 'owner' || role === 'manager'
 

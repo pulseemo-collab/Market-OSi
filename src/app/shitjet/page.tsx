@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -56,6 +58,7 @@ function isWeighted(njesia: string) {
 
 export default function ShitjetPage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [kerkimi, setKerkimi] = useState('')
@@ -432,6 +435,7 @@ export default function ShitjetPage() {
   }
 
   if (!role || !['owner', 'cashier'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (
     <div className="flex flex-col h-full">

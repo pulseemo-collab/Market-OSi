@@ -5,15 +5,19 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
 
 export async function GET(req: NextRequest) {
-  const { userId, organizationId, error } = await requirePermission('sales:read')
+  const { userId, role, organizationId, error } = await requirePermission('sales:read')
   if (error) return error
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const { searchParams } = new URL(req.url)
@@ -97,6 +101,9 @@ export async function POST(req: NextRequest) {
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const body = await req.json()

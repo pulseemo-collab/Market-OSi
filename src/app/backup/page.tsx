@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import PageHeader from '@/components/ui/PageHeader'
 import toast from 'react-hot-toast'
 import {
@@ -84,6 +86,7 @@ function validateBackupShape(data: unknown): data is ParsedBackup {
 
 export default function BackupPage() {
   const { role } = useRole()
+  const subscription = useSubscription()
 
   // Export state
   const [exporting, setExporting] = useState(false)
@@ -99,6 +102,7 @@ export default function BackupPage() {
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null)
 
   if (!role || role !== 'owner') return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   // ── Export ──────────────────────────────────────────────────────────────
   const handleDownload = async () => {

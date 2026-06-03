@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -84,6 +86,7 @@ const PERIUDHAT = [
 
 export default function FurnizimePage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [supplies, setSupplies] = useState<Supply[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -349,6 +352,7 @@ export default function FurnizimePage() {
   const totalItems = filteredSupplies.reduce((sum, s) => sum + s.items.length, 0)
 
   if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

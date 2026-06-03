@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
 
   const rl = rateLimit(request, 'exports', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const { searchParams } = new URL(request.url)

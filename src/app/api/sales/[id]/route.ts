@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export async function PUT(
   req: NextRequest,
@@ -14,6 +15,9 @@ export async function PUT(
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const saleId = parseInt(params.id)
@@ -169,6 +173,9 @@ export async function DELETE(
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const saleId = parseInt(params.id)

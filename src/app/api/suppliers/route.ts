@@ -4,13 +4,17 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export async function GET(req: NextRequest) {
-  const { userId, organizationId, error } = await requirePermission('suppliers:read')
+  const { userId, role, organizationId, error } = await requirePermission('suppliers:read')
   if (error) return error
 
   const rl = rateLimit(req, 'suppliers', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const suppliers = await prisma.supplier.findMany({
@@ -35,6 +39,9 @@ export async function POST(req: NextRequest) {
 
   const rl = rateLimit(req, 'suppliers', userId, organizationId)
   if (rl.limited) return rl.response!
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const body = await req.json()

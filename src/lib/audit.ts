@@ -25,6 +25,7 @@ export const AUDIT_ACTIONS = {
   BILLING_PLAN_CHANGED: 'billing_plan_changed',
   BILLING_STATUS_CHANGED: 'billing_status_changed',
   BILLING_SUBSCRIPTION_CREATED: 'billing_subscription_created',
+  BILLING_ACCESS_BLOCKED: 'billing_access_blocked',
 } as const
 
 export const AUDIT_ENTITY_TYPES = {

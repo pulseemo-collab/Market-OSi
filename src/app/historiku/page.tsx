@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -80,6 +82,7 @@ const PERIUDHAT = [
 
 export default function HistorikuPage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -265,6 +268,7 @@ export default function HistorikuPage() {
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
 
   if (!role || !['owner', 'manager', 'cashier'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   const isAdmin = role === 'owner' || role === 'manager'
 

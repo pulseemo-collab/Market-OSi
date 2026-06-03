@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export async function POST(_req: NextRequest) {
   const { userId, role, organizationId, error } = await requirePermission('notifications:read')
   if (error) return error
+
+  const billing = await checkSubscriptionAccess(organizationId!, role!)
+  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
     const userFilter = role === 'cashier' ? { userId: userId! } : {}

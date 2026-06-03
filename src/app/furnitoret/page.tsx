@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -46,6 +48,7 @@ const emptyForm = {
 
 export default function FurnitoretPage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -141,6 +144,7 @@ export default function FurnitoretPage() {
   }
 
   if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
+import SubscriptionExpired from '@/components/SubscriptionExpired'
+import { useSubscription } from '@/hooks/useSubscription'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatDateTime, formatRelativeTime, cn } from '@/lib/utils'
 import {
@@ -66,6 +68,7 @@ type FilterType = 'all' | 'unread'
 
 export default function NjoftimePage() {
   const { role } = useRole()
+  const subscription = useSubscription()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -129,6 +132,7 @@ export default function NjoftimePage() {
   }
 
   if (!canAccess) return <AccessDenied />
+  if (subscription === 'blocked') return <SubscriptionExpired />
 
   const displayed = notifications
 
