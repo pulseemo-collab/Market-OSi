@@ -17,6 +17,7 @@ export const AUDIT_ACTIONS = {
   CREATE: 'create',
   UPDATE: 'update',
   DELETE: 'delete',
+  ARCHIVE: 'archive',
   CHANGE_ROLE: 'change_role',
   EXPORT: 'export',
   BACKUP_EXPORTED: 'backup_exported',

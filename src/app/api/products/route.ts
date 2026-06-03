@@ -21,10 +21,19 @@ export async function GET(req: NextRequest) {
     const kerkimi = searchParams.get('kerkimi') || ''
     const kategoria = searchParams.get('kategoria') || ''
     const stokUlet = searchParams.get('stokUlet') === 'true'
+    const arkivuar = searchParams.get('arkivuar') || 'active'
+
+    const archivedWhere =
+      arkivuar === 'archived'
+        ? { isArchived: true }
+        : arkivuar === 'all'
+          ? {}
+          : { isArchived: false }
 
     const products = await prisma.product.findMany({
       where: {
         organizationId: organizationId!,
+        ...archivedWhere,
         AND: [
           kerkimi
             ? {

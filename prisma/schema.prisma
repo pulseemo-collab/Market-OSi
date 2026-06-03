@@ -48,6 +48,8 @@ model Product {
   cmimiBlerjes   Float
   cmimiShitjes   Float
   njesia         String           @default("cope")
+  isArchived     Boolean          @default(false)
+  archivedAt     DateTime?
   furnitorId     Int?
   organizationId Int
   organization   Organization     @relation(fields: [organizationId], references: [id])

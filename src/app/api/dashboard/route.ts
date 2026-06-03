@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         select: { totali: true, fitimi: true },
       }),
       prisma.product.findMany({
-        where: orgFilter,
+        where: { ...orgFilter, isArchived: false },
         select: { id: true, emri: true, sasia: true, stokuMinimal: true, kategoria: true },
         orderBy: { emri: 'asc' },
       }),

@@ -42,6 +42,8 @@ interface Product {
   cmimiBlerjes: number
   cmimiShitjes: number
   njesia: string
+  isArchived: boolean
+  archivedAt: string | null
   furnitorId: number | null
   furnitor: Supplier | null
   createdAt: string
@@ -83,6 +85,7 @@ export default function ProduktetPage() {
   const [error, setError] = useState(false)
   const [kerkimi, setKerkimi] = useState('')
   const [kategoriaFilter, setKategoriaFilter] = useState('')
+  const [arkivuarFilter, setArkivuarFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState<Product | null>(null)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
@@ -100,6 +103,7 @@ export default function ProduktetPage() {
     const params = new URLSearchParams()
     if (kerkimi) params.set('kerkimi', kerkimi)
     if (kategoriaFilter) params.set('kategoria', kategoriaFilter)
+    params.set('arkivuar', arkivuarFilter)
     try {
       const res = await fetch(`/api/products?${params}`)
       if (res.status === 401) { window.location.href = '/login'; return }
@@ -112,7 +116,7 @@ export default function ProduktetPage() {
     } finally {
       setLoading(false)
     }
-  }, [kerkimi, kategoriaFilter])
+  }, [kerkimi, kategoriaFilter, arkivuarFilter])
 
   useEffect(() => {
     fetchProducts()
@@ -241,7 +245,12 @@ export default function ProduktetPage() {
   async function handleDelete(product: Product) {
     const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' })
     if (res.ok) {
-      toast.success('Produkti u fshi')
+      const data = await res.json()
+      if (data.arkivuar) {
+        toast.success('Produkti u arkivua sepse ka histori shitjesh.')
+      } else {
+        toast.success('Produkti u fshi me sukses.')
+      }
       setDeleteModal(null)
       fetchProducts()
     } else {
@@ -249,7 +258,8 @@ export default function ProduktetPage() {
     }
   }
 
-  const lowStockCount = safeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
+  const activeProducts = safeProducts.filter((p) => !p.isArchived)
+  const lowStockCount = activeProducts.filter((p) => isLowStock(p.sasia, p.stokuMinimal)).length
 
   if (!role || !['owner', 'manager', 'employee'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
@@ -260,7 +270,7 @@ export default function ProduktetPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Produktet"
-        subtitle={`${safeProducts.length} produkte gjithsej${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
+        subtitle={`${safeProducts.length} produkte${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
         action={
           isAdmin ? (
             <button onClick={openAdd} className="btn-primary flex items-center gap-2">
@@ -295,6 +305,17 @@ export default function ProduktetPage() {
               {KATEGORITE.map((k) => (
                 <option key={k} value={k}>{k}</option>
               ))}
+            </select>
+          </div>
+          <div className="relative sm:w-44">
+            <select
+              value={arkivuarFilter}
+              onChange={(e) => setArkivuarFilter(e.target.value as 'active' | 'archived' | 'all')}
+              className="input appearance-none"
+            >
+              <option value="active">Aktive</option>
+              <option value="archived">Të Arkivuara</option>
+              <option value="all">Të Gjitha</option>
             </select>
           </div>
         </div>
@@ -338,7 +359,12 @@ export default function ProduktetPage() {
                       className="table-row"
                     >
                       <td className="table-td">
-                        <span className="font-medium text-slate-900">{product.emri}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-slate-900">{product.emri}</span>
+                          {product.isArchived && (
+                            <span className="text-xs text-amber-600 font-medium">Arkivuar</span>
+                          )}
+                        </div>
                       </td>
                       <td className="table-td">
                         {product.barcodes.length === 0 ? (

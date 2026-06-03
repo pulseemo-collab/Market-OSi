@@ -167,12 +167,34 @@ export async function DELETE(
       select: { id: true, emri: true, kategoria: true },
     })
 
-    const result = await prisma.product.deleteMany({
-      where: { id: Number(params.id), organizationId: organizationId! },
-    })
-    if (result.count === 0) {
+    if (!existing) {
       return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
     }
+
+    const hasSales = (await prisma.saleItem.count({ where: { productId: existing.id } })) > 0
+
+    if (hasSales) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { isArchived: true, archivedAt: new Date() },
+      })
+
+      await logAuditAction({
+        userId: userId!,
+        userEmail: userEmail!,
+        userRole: role!,
+        organizationId: organizationId!,
+        action: AUDIT_ACTIONS.ARCHIVE,
+        entityType: AUDIT_ENTITY_TYPES.PRODUCT,
+        entityId: params.id,
+        description: `Produkti "${existing.emri}" u arkivua (ka histori shitjesh)`,
+        metadata: { kategoria: existing.kategoria },
+      })
+
+      return NextResponse.json({ sukses: true, arkivuar: true })
+    }
+
+    await prisma.product.delete({ where: { id: existing.id } })
 
     await logAuditAction({
       userId: userId!,
@@ -182,11 +204,11 @@ export async function DELETE(
       action: AUDIT_ACTIONS.DELETE,
       entityType: AUDIT_ENTITY_TYPES.PRODUCT,
       entityId: params.id,
-      description: `Produkti "${existing?.emri ?? `#${params.id}`}" u fshi`,
-      metadata: { kategoria: existing?.kategoria },
+      description: `Produkti "${existing.emri}" u fshi`,
+      metadata: { kategoria: existing.kategoria },
     })
 
-    return NextResponse.json({ sukses: true })
+    return NextResponse.json({ sukses: true, arkivuar: false })
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products/[id]', action: 'DELETE' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
