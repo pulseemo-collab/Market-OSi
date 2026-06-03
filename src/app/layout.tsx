@@ -45,10 +45,9 @@ export default async function RootLayout({
               name: 'Default Market',
               subscription: {
                 create: {
-                  plan: 'free',
-                  status: 'trial',
-                  trialStartsAt: new Date(),
-                  trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  plan: 'trial',
+                  status: 'trialing',
+                  trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 },
               },
             },

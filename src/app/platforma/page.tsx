@@ -8,6 +8,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import Modal from '@/components/ui/Modal'
 import { formatDateTime } from '@/lib/utils'
 import { ROLE_LABELS } from '@/lib/roles'
+import { getPlanInfo, getStatusInfo, BILLING_PLANS, BILLING_STATUSES } from '@/lib/billing'
 import toast from 'react-hot-toast'
 import {
   RiGlobalLine,
@@ -26,10 +27,19 @@ import {
   RiToggleFill,
   RiUserLine,
   RiLoader4Line,
-  RiLockLine,
+  RiSaveLine,
+  RiHistoryLine,
+  RiCalendarLine,
 } from 'react-icons/ri'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OrgSubscription {
+  plan: string
+  status: string
+  trialEndsAt: string | null
+  currentPeriodEnd: string | null
+}
 
 interface OrgRow {
   id: number
@@ -40,6 +50,7 @@ interface OrgRow {
   salesCount: number
   lastActivity: string | null
   createdAt: string
+  subscription: OrgSubscription | null
 }
 
 interface PlatformStats {
@@ -58,6 +69,31 @@ interface UserEntry {
   userId: string
   email: string
   roli: string
+  createdAt: string
+}
+
+interface SubscriptionDetail {
+  id: number
+  organizationId: number
+  plan: string
+  status: string
+  trialEndsAt: string | null
+  currentPeriodStart: string | null
+  currentPeriodEnd: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface AuditEntry {
+  id: number
+  organizationId: number
+  changedByEmail: string
+  oldPlan: string | null
+  newPlan: string | null
+  oldStatus: string | null
+  newStatus: string | null
+  notes: string | null
   createdAt: string
 }
 
@@ -82,6 +118,29 @@ function StatCard({
       </p>
     </motion.div>
   )
+}
+
+function PlanBadge({ plan }: { plan: string }) {
+  const info = getPlanInfo(plan)
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${info.color}`}>
+      {info.label}
+    </span>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const info = getStatusInfo(status)
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${info.color}`}>
+      {info.label}
+    </span>
+  )
+}
+
+function toInputDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return new Date(iso).toISOString().slice(0, 10)
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -114,6 +173,16 @@ export default function PlatformaPage() {
   const [usersOrgName, setUsersOrgName] = useState('')
   const [users, setUsers] = useState<UserEntry[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
+
+  // Billing modal
+  const [billingOrg, setBillingOrg] = useState<OrgRow | null>(null)
+  const [billingDetail, setBillingDetail] = useState<SubscriptionDetail | null>(null)
+  const [billingLogs, setBillingLogs] = useState<AuditEntry[]>([])
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingSaving, setBillingSaving] = useState(false)
+  const [billingForm, setBillingForm] = useState({
+    plan: '', status: '', trialEndsAt: '', currentPeriodStart: '', currentPeriodEnd: '', notes: '',
+  })
 
   // ─── Fetch stats ──────────────────────────────────────────────────────────
 
@@ -197,6 +266,68 @@ export default function PlatformaPage() {
     }
   }
 
+  // ─── Open billing modal ───────────────────────────────────────────────────
+
+  async function openBilling(org: OrgRow) {
+    setBillingOrg(org)
+    setBillingDetail(null)
+    setBillingLogs([])
+    setBillingLoading(true)
+    try {
+      const res = await fetch(`/api/platform/subscriptions/${org.id}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gabim')
+      const sub: SubscriptionDetail = data.subscription
+      setBillingDetail(sub)
+      setBillingLogs(data.auditLogs ?? [])
+      setBillingForm({
+        plan:               sub.plan,
+        status:             sub.status,
+        trialEndsAt:        toInputDate(sub.trialEndsAt),
+        currentPeriodStart: toInputDate(sub.currentPeriodStart),
+        currentPeriodEnd:   toInputDate(sub.currentPeriodEnd),
+        notes:              sub.notes ?? '',
+      })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Gabim gjatë ngarkimit')
+      setBillingOrg(null)
+    } finally {
+      setBillingLoading(false)
+    }
+  }
+
+  async function saveBilling() {
+    if (!billingOrg) return
+    setBillingSaving(true)
+    try {
+      const res = await fetch(`/api/platform/subscriptions/${billingOrg.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan:               billingForm.plan,
+          status:             billingForm.status,
+          trialEndsAt:        billingForm.trialEndsAt || null,
+          currentPeriodStart: billingForm.currentPeriodStart || null,
+          currentPeriodEnd:   billingForm.currentPeriodEnd || null,
+          notes:              billingForm.notes || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gabim')
+      setBillingDetail(data.subscription)
+      toast.success('Abonimi u ruajt')
+      fetchStats()
+      // Refresh audit logs
+      const logsRes = await fetch(`/api/platform/subscriptions/${billingOrg.id}`)
+      const logsData = await logsRes.json()
+      if (logsRes.ok) setBillingLogs(logsData.auditLogs ?? [])
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Gabim gjatë ruajtjes')
+    } finally {
+      setBillingSaving(false)
+    }
+  }
+
   // ─── Guard ────────────────────────────────────────────────────────────────
 
   if (!role || role !== 'platform_owner') return <AccessDenied />
@@ -216,6 +347,18 @@ export default function PlatformaPage() {
         { label: 'Auditim', value: stats.totalAuditLogs, icon: RiFileSearchLine, color: 'bg-slate-100 text-slate-600' },
       ]
     : []
+
+  // Subscription summary counts
+  const subCounts = stats
+    ? stats.organizations.reduce(
+        (acc, org) => {
+          const s = org.subscription?.status ?? 'none'
+          acc[s] = (acc[s] ?? 0) + 1
+          return acc
+        },
+        {} as Record<string, number>
+      )
+    : {}
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -264,7 +407,7 @@ export default function PlatformaPage() {
             ))}
           </div>
 
-          {/* Billing placeholder */}
+          {/* Subscriptions summary */}
           <motion.div
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}
             className="mb-7"
@@ -273,9 +416,28 @@ export default function PlatformaPage() {
               <RiCoinLine className="text-slate-400 text-base" />
               <h2 className="text-sm font-semibold text-slate-700">Abonimet</h2>
             </div>
-            <div className="card p-5 flex items-center gap-3 text-slate-400">
-              <RiLockLine className="text-xl flex-shrink-0" />
-              <span className="text-sm">Abonimet do të aktivizohen në një hap tjetër.</span>
+            <div className="card p-4">
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(BILLING_STATUSES).map(([key, info]) => {
+                  const count = subCounts[key] ?? 0
+                  return (
+                    <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${info.color}`}>
+                        {info.label}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700">{count}</span>
+                    </div>
+                  )
+                })}
+                {(subCounts['none'] ?? 0) > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
+                      Pa abonim
+                    </span>
+                    <span className="text-sm font-bold text-slate-700">{subCounts['none']}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
 
@@ -301,6 +463,7 @@ export default function PlatformaPage() {
                       <tr>
                         <th className="table-th">#</th>
                         <th className="table-th">Organizata</th>
+                        <th className="table-th">Abonimi</th>
                         <th className="table-th text-right">Përdorues</th>
                         <th className="table-th text-right">Produkte</th>
                         <th className="table-th text-right">Shitje</th>
@@ -336,6 +499,16 @@ export default function PlatformaPage() {
                                 </div>
                               </div>
                             </td>
+                            <td className="table-td">
+                              {org.subscription ? (
+                                <div className="flex flex-col gap-1">
+                                  <PlanBadge plan={org.subscription.plan} />
+                                  <StatusBadge status={org.subscription.status} />
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-300 italic">—</span>
+                              )}
+                            </td>
                             <td className="table-td text-right">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
                                 <RiTeamLine className="text-xs" />{org.usersCount}
@@ -369,6 +542,13 @@ export default function PlatformaPage() {
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
                                 >
                                   <RiUserLine className="text-base" />
+                                </button>
+                                <button
+                                  onClick={() => openBilling(org)}
+                                  title="Menaxho abonim"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                >
+                                  <RiCoinLine className="text-base" />
                                 </button>
                                 <button
                                   onClick={() => toggleOrg(org)}
@@ -466,6 +646,144 @@ export default function PlatformaPage() {
                 </span>
               </div>
             ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Billing Modal ────────────────────────────────────────────────────── */}
+      <Modal
+        isOpen={billingOrg !== null}
+        onClose={() => { setBillingOrg(null); setBillingDetail(null); setBillingLogs([]) }}
+        title={`Abonimi — ${billingOrg?.name ?? ''}`}
+        size="lg"
+      >
+        {billingLoading ? (
+          <div className="py-10 flex justify-center">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !billingDetail ? (
+          <div className="py-10 text-center">
+            <RiCoinLine className="text-4xl text-slate-200 mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">Nuk ka abonim për këtë organizatë</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Current state badges */}
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+              <PlanBadge plan={billingDetail.plan} />
+              <StatusBadge status={billingDetail.status} />
+              {billingDetail.trialEndsAt && (
+                <span className="text-xs text-slate-500 flex items-center gap-1">
+                  <RiCalendarLine />
+                  Provë deri: {new Date(billingDetail.trialEndsAt).toLocaleDateString('sq-AL')}
+                </span>
+              )}
+            </div>
+
+            {/* Edit form */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Plan</label>
+                <select
+                  value={billingForm.plan}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, plan: e.target.value }))}
+                  className="input w-full text-sm"
+                >
+                  {Object.entries(BILLING_PLANS).map(([key, info]) => (
+                    <option key={key} value={key}>{info.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Status</label>
+                <select
+                  value={billingForm.status}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, status: e.target.value }))}
+                  className="input w-full text-sm"
+                >
+                  {Object.entries(BILLING_STATUSES).map(([key, info]) => (
+                    <option key={key} value={key}>{info.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Provë deri më</label>
+                <input
+                  type="date"
+                  value={billingForm.trialEndsAt}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, trialEndsAt: e.target.value }))}
+                  className="input w-full text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Perioda fillon</label>
+                <input
+                  type="date"
+                  value={billingForm.currentPeriodStart}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, currentPeriodStart: e.target.value }))}
+                  className="input w-full text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Perioda mbaron</label>
+                <input
+                  type="date"
+                  value={billingForm.currentPeriodEnd}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, currentPeriodEnd: e.target.value }))}
+                  className="input w-full text-sm"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Shënime</label>
+                <textarea
+                  value={billingForm.notes}
+                  onChange={(e) => setBillingForm((f) => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  placeholder="Shënime opsionale..."
+                  className="input w-full text-sm resize-none"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={saveBilling}
+              disabled={billingSaving}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {billingSaving ? <RiLoader4Line className="animate-spin" /> : <RiSaveLine />}
+              Ruaj Ndryshimet
+            </button>
+
+            {/* Audit log */}
+            {billingLogs.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <RiHistoryLine className="text-slate-400 text-sm" />
+                  <span className="text-xs font-semibold text-slate-600">Historia e Ndryshimeve</span>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {billingLogs.map((log) => (
+                    <div key={log.id} className="text-xs px-3 py-2 rounded-lg bg-slate-50 space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-700">{log.changedByEmail}</span>
+                        <span className="text-slate-400">{formatDateTime(new Date(log.createdAt))}</span>
+                      </div>
+                      {log.oldPlan !== null && (
+                        <div className="text-slate-500">
+                          Plan: <span className="font-medium">{log.oldPlan}</span> → <span className="font-medium text-slate-700">{log.newPlan}</span>
+                        </div>
+                      )}
+                      {log.oldStatus !== null && (
+                        <div className="text-slate-500">
+                          Status: <span className="font-medium">{log.oldStatus}</span> → <span className="font-medium text-slate-700">{log.newStatus}</span>
+                        </div>
+                      )}
+                      {log.notes && <div className="text-slate-400 italic">{log.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>

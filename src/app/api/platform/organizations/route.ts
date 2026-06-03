@@ -21,7 +21,16 @@ export async function POST(req: NextRequest) {
     }
 
     const org = await prisma.organization.create({
-      data: { name },
+      data: {
+        name,
+        subscription: {
+          create: {
+            plan: 'trial',
+            status: 'trialing',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          },
+        },
+      },
     })
 
     return NextResponse.json({ organization: org }, { status: 201 })

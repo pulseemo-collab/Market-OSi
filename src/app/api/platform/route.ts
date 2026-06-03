@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
           name: true,
           isActive: true,
           createdAt: true,
+          subscription: {
+            select: { plan: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+          },
           _count: { select: { userRoles: true, products: true, sales: true } },
           sales: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
@@ -51,6 +54,14 @@ export async function GET(req: NextRequest) {
       salesCount: org._count.sales,
       lastActivity: org.sales[0]?.createdAt ?? null,
       createdAt: org.createdAt,
+      subscription: org.subscription
+        ? {
+            plan: org.subscription.plan,
+            status: org.subscription.status,
+            trialEndsAt: org.subscription.trialEndsAt,
+            currentPeriodEnd: org.subscription.currentPeriodEnd,
+          }
+        : null,
     }))
 
     return NextResponse.json({

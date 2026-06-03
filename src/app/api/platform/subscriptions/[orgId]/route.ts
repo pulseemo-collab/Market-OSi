@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { captureApiError } from '@/lib/sentry'
-import { isValidPlan, isValidStatus, BILLING_AUDIT_ACTIONS } from '@/lib/billing'
+import { isValidPlan, isValidStatus } from '@/lib/billing'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,17 +23,16 @@ export async function GET(
   }
 
   try {
-    const subscription = await prisma.subscription.findUnique({
-      where: { organizationId: orgId },
-      include: {
-        billingAuditLogs: {
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        },
-      },
-    })
+    const [subscription, auditLogs] = await Promise.all([
+      prisma.subscription.findUnique({ where: { organizationId: orgId } }),
+      prisma.billingAuditLog.findMany({
+        where: { organizationId: orgId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+    ])
 
-    return NextResponse.json({ subscription })
+    return NextResponse.json({ subscription, auditLogs })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/subscriptions/[orgId]', action: 'GET' })
     return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
@@ -58,7 +56,7 @@ export async function PUT(
 
   try {
     const body = await req.json()
-    const { plan, status, trialStartsAt, trialEndsAt, currentPeriodStart, currentPeriodEnd, notes } = body
+    const { plan, status, trialEndsAt, currentPeriodStart, currentPeriodEnd, notes } = body
 
     if (plan !== undefined && !isValidPlan(plan)) {
       return NextResponse.json({ error: 'Plan i pavlefshëm' }, { status: 400 })
@@ -72,71 +70,33 @@ export async function PUT(
       return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
     }
 
-    const previousState = {
-      plan: existing.plan, status: existing.status,
-      trialStartsAt: existing.trialStartsAt, trialEndsAt: existing.trialEndsAt,
-      currentPeriodStart: existing.currentPeriodStart, currentPeriodEnd: existing.currentPeriodEnd,
-      canceledAt: existing.canceledAt, notes: existing.notes,
-    }
-
-    const updateData: Prisma.SubscriptionUpdateInput = {}
-    const newStateRecord: Record<string, unknown> = {}
-
-    if (plan !== undefined) { updateData.plan = plan; newStateRecord.plan = plan }
-    if (status !== undefined) {
-      updateData.status = status
-      newStateRecord.status = status
-      if (status === 'canceled' && !existing.canceledAt) { updateData.canceledAt = new Date(); newStateRecord.canceledAt = new Date().toISOString() }
-      if (status !== 'canceled') { updateData.canceledAt = null; newStateRecord.canceledAt = null }
-    }
-    if (trialStartsAt !== undefined) {
-      const v = trialStartsAt ? new Date(trialStartsAt) : null
-      updateData.trialStartsAt = v; newStateRecord.trialStartsAt = v?.toISOString() ?? null
-    }
-    if (trialEndsAt !== undefined) {
-      const v = trialEndsAt ? new Date(trialEndsAt) : null
-      updateData.trialEndsAt = v; newStateRecord.trialEndsAt = v?.toISOString() ?? null
-    }
-    if (currentPeriodStart !== undefined) {
-      const v = currentPeriodStart ? new Date(currentPeriodStart) : null
-      updateData.currentPeriodStart = v; newStateRecord.currentPeriodStart = v?.toISOString() ?? null
-    }
-    if (currentPeriodEnd !== undefined) {
-      const v = currentPeriodEnd ? new Date(currentPeriodEnd) : null
-      updateData.currentPeriodEnd = v; newStateRecord.currentPeriodEnd = v?.toISOString() ?? null
-    }
-    if (notes !== undefined) { updateData.notes = notes || null; newStateRecord.notes = notes || null }
-
     const updated = await prisma.subscription.update({
       where: { organizationId: orgId },
-      data: updateData,
+      data: {
+        ...(plan !== undefined && { plan }),
+        ...(status !== undefined && { status }),
+        ...(trialEndsAt !== undefined && { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null }),
+        ...(currentPeriodStart !== undefined && { currentPeriodStart: currentPeriodStart ? new Date(currentPeriodStart) : null }),
+        ...(currentPeriodEnd !== undefined && { currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null }),
+        ...(notes !== undefined && { notes: notes || null }),
+      },
     })
 
-    const auditActions: string[] = []
-    if (plan !== undefined && plan !== existing.plan) auditActions.push(BILLING_AUDIT_ACTIONS.PLAN_CHANGED)
-    if (status !== undefined && status !== existing.status) {
-      auditActions.push(BILLING_AUDIT_ACTIONS.STATUS_CHANGED)
-      if (status === 'canceled') auditActions.push(BILLING_AUDIT_ACTIONS.CANCELED)
-      if (status === 'active') auditActions.push(BILLING_AUDIT_ACTIONS.ACTIVATED)
-    }
-    const datesChanged =
-      (trialStartsAt !== undefined && String(trialStartsAt ?? '') !== String(existing.trialStartsAt ?? '')) ||
-      (trialEndsAt !== undefined && String(trialEndsAt ?? '') !== String(existing.trialEndsAt ?? '')) ||
-      (currentPeriodStart !== undefined && String(currentPeriodStart ?? '') !== String(existing.currentPeriodStart ?? '')) ||
-      (currentPeriodEnd !== undefined && String(currentPeriodEnd ?? '') !== String(existing.currentPeriodEnd ?? ''))
-    if (datesChanged) auditActions.push(BILLING_AUDIT_ACTIONS.DATES_UPDATED)
-    if (notes !== undefined && (notes || null) !== existing.notes) auditActions.push(BILLING_AUDIT_ACTIONS.NOTES_UPDATED)
+    const planChanged   = plan   !== undefined && plan   !== existing.plan
+    const statusChanged = status !== undefined && status !== existing.status
 
-    if (auditActions.length > 0) {
-      await prisma.billingAuditLog.createMany({
-        data: auditActions.map((action) => ({
-          subscriptionId: existing.id,
+    if (planChanged || statusChanged) {
+      await prisma.billingAuditLog.create({
+        data: {
           organizationId: orgId,
-          actorEmail: userEmail ?? 'unknown',
-          action,
-          previousState: previousState as Prisma.InputJsonValue,
-          newState: newStateRecord as Prisma.InputJsonValue,
-        })),
+          changedByUserId: userId ?? 'unknown',
+          changedByEmail:  userEmail ?? 'unknown',
+          oldPlan:    planChanged   ? existing.plan   : null,
+          newPlan:    planChanged   ? plan             : null,
+          oldStatus:  statusChanged ? existing.status  : null,
+          newStatus:  statusChanged ? status            : null,
+          notes:      notes ?? null,
+        },
       })
     }
 

@@ -160,30 +160,28 @@ model Notification {
 }
 
 model Subscription {
-  id                 Int               @id @default(autoincrement())
-  organizationId     Int               @unique
-  organization       Organization      @relation(fields: [organizationId], references: [id])
-  plan               String            @default("free")
-  status             String            @default("trial")
-  trialStartsAt      DateTime?
+  id                 Int      @id @default(autoincrement())
+  organizationId     Int      @unique
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  plan               String   @default("trial")
+  status             String   @default("trialing")
   trialEndsAt        DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
-  canceledAt         DateTime?
   notes              String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  billingAuditLogs   BillingAuditLog[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model BillingAuditLog {
-  id             Int          @id @default(autoincrement())
-  subscriptionId Int
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  organizationId Int
-  actorEmail     String
-  action         String
-  previousState  Json?
-  newState       Json?
-  createdAt      DateTime     @default(now())
+  id              Int      @id @default(autoincrement())
+  organizationId  Int
+  changedByUserId String
+  changedByEmail  String
+  oldPlan         String?
+  newPlan         String?
+  oldStatus       String?
+  newStatus       String?
+  notes           String?
+  createdAt       DateTime @default(now())
 }
