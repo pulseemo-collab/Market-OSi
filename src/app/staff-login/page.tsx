@@ -1,12 +1,10 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RiStore2Line, RiDeleteBackLine, RiLockLine, RiUserLine } from 'react-icons/ri'
 
 export default function StaffLoginPage() {
-  const router = useRouter()
   const [emri, setEmri] = useState('')
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
@@ -41,15 +39,14 @@ export default function StaffLoginPage() {
         setPin('')
         return
       }
-      router.push('/shitjet')
-      router.refresh()
+      window.location.href = '/shitjet'
     } catch {
       setError('Gabim gjatë hyrjes')
       setPin('')
     } finally {
       setLoading(false)
     }
-  }, [emri, pin, loading, router])
+  }, [emri, pin, loading])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
