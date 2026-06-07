@@ -80,9 +80,17 @@ const PERIUDHAT = [
   { value: 'muaj', label: 'Ky Muaj' },
 ]
 
+interface StaffSession {
+  staffId: number
+  staffName: string
+  staffRole: string
+}
+
 export default function HistorikuPage() {
   const { role } = useRole()
   const subscription = useSubscription()
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null)
+  const [staffSessionLoading, setStaffSessionLoading] = useState(true)
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -100,6 +108,14 @@ export default function HistorikuPage() {
   const [addProductSearch, setAddProductSearch] = useState('')
   const [showAddProduct, setShowAddProduct] = useState(false)
 
+  useEffect(() => {
+    fetch('/api/staff-auth/session')
+      .then((r) => r.json())
+      .then((data) => setStaffSession(data.session ?? null))
+      .catch(() => {})
+      .finally(() => setStaffSessionLoading(false))
+  }, [])
+
   const fetchSales = useCallback(async () => {
     setLoading(true)
     setError(false)
@@ -108,7 +124,10 @@ export default function HistorikuPage() {
         ? `/api/sales?data=${dataFiltri}`
         : `/api/sales?periudha=${periudha}`
       const res = await fetch(url)
-      if (res.status === 401) { window.location.href = '/login'; return }
+      if (res.status === 401) {
+        window.location.href = staffSession ? '/staff-login' : '/login'
+        return
+      }
       if (!res.ok) throw new Error()
       const data = await res.json()
       setSales(toArray<Sale>(data, 'sales'))
@@ -267,7 +286,9 @@ export default function HistorikuPage() {
   const totaliPeriudhes = sales.reduce((sum, s) => sum + s.totali, 0)
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
 
-  if (!role || !['owner', 'manager', 'cashier'].includes(role)) return <AccessDenied />
+  const hasStaffAccess = staffSession?.staffRole === 'cashier'
+  if (!staffSessionLoading && !role && !hasStaffAccess) return <AccessDenied />
+  if (role && !['owner', 'manager', 'cashier'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const isAdmin = role === 'owner' || role === 'manager'

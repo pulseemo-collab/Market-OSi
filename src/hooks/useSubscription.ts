@@ -10,7 +10,7 @@ export function useSubscription(): SubStatus {
   useEffect(() => {
     fetch('/api/subscription-status')
       .then((r) => r.json())
-      .then((d: { allowed: boolean }) => setStatus(d.allowed ? 'allowed' : 'blocked'))
+      .then((d: { allowed?: boolean }) => setStatus(d.allowed === false ? 'blocked' : 'allowed'))
       .catch(() => setStatus('allowed'))
   }, [])
 

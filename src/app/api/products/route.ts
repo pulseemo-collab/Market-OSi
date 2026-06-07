@@ -5,10 +5,27 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { resolveStaffAuth } from '@/lib/staff-auth'
+import type { Role } from '@/lib/roles'
 
 export async function GET(req: NextRequest) {
-  const { userId, role, organizationId, error } = await requirePermission('products:read')
-  if (error) return error
+  // Dual auth: Supabase session or staff PIN session
+  const supabase = await requirePermission('products:read')
+  let userId: string | null
+  let role: Role | null
+  let organizationId: number | null
+
+  if (!supabase.error) {
+    userId = supabase.userId
+    role = supabase.role
+    organizationId = supabase.organizationId
+  } else {
+    const staff = await resolveStaffAuth(req, ['cashier', 'employee'])
+    if (staff.error) return staff.error
+    userId = staff.userId
+    role = staff.staffRole as Role
+    organizationId = staff.organizationId
+  }
 
   const rl = rateLimit(req, 'products', userId, organizationId)
   if (rl.limited) return rl.response!

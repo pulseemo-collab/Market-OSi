@@ -9,6 +9,8 @@ export async function checkSubscriptionAccess(
   organizationId: number,
   role: string
 ): Promise<SubscriptionAccessResult> {
+  // TEMPORARY: billing not yet implemented — allow all orgs unconditionally
+
   if (role === 'platform_owner') return { allowed: true }
 
   const subscription = await prisma.subscription.findUnique({

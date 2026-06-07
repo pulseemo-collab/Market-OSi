@@ -25,6 +25,7 @@ import {
   RiSave3Line,
   RiBellLine,
   RiGlobalLine,
+  RiFingerprint2Line,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -37,11 +38,25 @@ const navItems = [
   { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['owner', 'manager'] as Role[] },
   { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['owner'] as Role[] },
+  { href: '/personal', label: 'Personal PIN', icon: RiFingerprint2Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/regjistri', label: 'Regjistri Auditimit', icon: RiFileSearchLine, allowed: ['owner'] as Role[] },
   { href: '/backup', label: 'Backup & Rikuperim', icon: RiSave3Line, allowed: ['owner'] as Role[] },
   { href: '/njoftime', label: 'Njoftime', icon: RiBellLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
   { href: '/platforma', label: 'Platforma', icon: RiGlobalLine, allowed: ['platform_owner'] as Role[] },
 ]
+
+// Navigation visible to PIN staff after login
+const STAFF_NAV_ITEMS = [
+  { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine },
+  { href: '/historiku', label: 'Historiku', icon: RiHistoryLine },
+]
+
+interface StaffSession {
+  staffId: number
+  staffName: string
+  staffRole: string
+  organizationId: number
+}
 
 interface SidebarProps {
   onClose?: () => void
@@ -52,8 +67,25 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const router = useRouter()
   const { role } = useRole()
   const [unreadCount, setUnreadCount] = useState(0)
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null)
+  const [staffLoading, setStaffLoading] = useState(true)
 
   const canSeeNotifications = role === 'owner' || role === 'manager' || role === 'cashier'
+
+  // Detect PIN staff session when there's no Supabase role.
+  // Re-run on pathname so a new login immediately shows the correct name.
+  useEffect(() => {
+    if (role !== null) {
+      setStaffLoading(false)
+      return
+    }
+    setStaffLoading(true)
+    fetch('/api/staff-auth/session')
+      .then((r) => r.json())
+      .then((data) => setStaffSession(data.session ?? null))
+      .catch(() => setStaffSession(null))
+      .finally(() => setStaffLoading(false))
+  }, [role, pathname])
 
   const fetchUnreadCount = useCallback(async () => {
     if (!canSeeNotifications) return
@@ -72,7 +104,9 @@ export default function Sidebar({ onClose }: SidebarProps) {
     return () => clearInterval(interval)
   }, [fetchUnreadCount])
 
-  if (pathname === '/login') return null
+  // Hide sidebar on all auth pages
+  const isAuthPage = pathname === '/login' || pathname === '/staff-login' || pathname === '/login/manager'
+  if (isAuthPage) return null
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -82,9 +116,29 @@ export default function Sidebar({ onClose }: SidebarProps) {
     router.refresh()
   }
 
-  const visibleItems = navItems.filter(
-    (item) => role !== null && item.allowed.includes(role)
-  )
+  const handleStaffLogout = async () => {
+    await fetch('/api/staff-auth/logout', { method: 'POST' })
+    setStaffSession(null)
+    toast.success('U largove me sukses')
+    router.push('/staff-login')
+    router.refresh()
+  }
+
+  const isStaffMode = role === null && staffSession !== null
+
+  const visibleItems = role !== null
+    ? navItems.filter((item) => item.allowed.includes(role))
+    : isStaffMode
+      ? STAFF_NAV_ITEMS
+      : []
+
+  const displayRole = role
+    ? ROLE_LABELS[role]
+    : staffSession
+      ? staffSession.staffRole === 'cashier'
+        ? 'Kasijer (PIN)'
+        : 'Punonjës (PIN)'
+      : null
 
   return (
     <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
@@ -138,16 +192,21 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-slate-100 space-y-1">
-        {role && (
+        {displayRole && (
           <div className="flex items-center gap-2 px-3 py-2 mb-1">
             <RiShieldUserLine className="text-slate-400 text-base flex-shrink-0" />
-            <span className="text-xs text-slate-400">
-              {ROLE_LABELS[role]}
-            </span>
+            <div className="min-w-0">
+              {isStaffMode && staffSession && (
+                <span className="text-xs font-medium text-slate-700 block truncate">
+                  {staffSession.staffName}
+                </span>
+              )}
+              <span className="text-xs text-slate-400">{displayRole}</span>
+            </div>
           </div>
         )}
         <button
-          onClick={handleLogout}
+          onClick={isStaffMode ? handleStaffLogout : handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all duration-150 group"
         >
           <RiLogoutBoxRLine className="text-lg flex-shrink-0 text-slate-400 group-hover:text-red-500" />

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import SubscriptionExpired from '@/components/SubscriptionExpired'
@@ -18,7 +19,17 @@ import {
   RiPrinterLine,
   RiCheckLine,
   RiBarcodeLine,
+  RiLogoutBoxRLine,
+  RiUserLine,
 } from 'react-icons/ri'
+
+interface StaffSession {
+  staffId: number
+  staffName: string
+  staffRole: string
+  organizationId: number
+  expiresAt: string
+}
 
 interface Product {
   id: number
@@ -59,6 +70,9 @@ function isWeighted(njesia: string) {
 export default function ShitjetPage() {
   const { role } = useRole()
   const subscription = useSubscription()
+  const router = useRouter()
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null)
+  const [staffSessionLoading, setStaffSessionLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [kerkimi, setKerkimi] = useState('')
@@ -77,6 +91,20 @@ export default function ShitjetPage() {
   const barcodeRef = useRef<HTMLInputElement>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const receiptModalRef = useRef<CompletedSale | null>(null)
+
+  // Load staff session (PIN-based auth)
+  useEffect(() => {
+    fetch('/api/staff-auth/session')
+      .then((r) => r.json())
+      .then((data) => setStaffSession(data.session ?? null))
+      .catch(() => {})
+      .finally(() => setStaffSessionLoading(false))
+  }, [])
+
+  const handleStaffLogout = useCallback(async () => {
+    await fetch('/api/staff-auth/logout', { method: 'POST' })
+    router.push('/staff-login')
+  }, [router])
 
   // Keep receiptModalRef in sync for the document click handler (avoids stale closure)
   useEffect(() => { receiptModalRef.current = receiptModal }, [receiptModal])
@@ -410,6 +438,10 @@ export default function ShitjetPage() {
             cmimiBlerjes: i.product.cmimiBlerjes,
             cmimiShitjes: i.product.cmimiShitjes,
           })),
+          ...(staffSession && {
+            staffId: staffSession.staffId,
+            staffName: staffSession.staffName,
+          }),
         }),
       })
 
@@ -434,7 +466,20 @@ export default function ShitjetPage() {
     window.print()
   }
 
-  if (!role || !['owner', 'cashier'].includes(role)) return <AccessDenied />
+  // Access: Supabase owner/cashier OR staff PIN cashier session
+  const hasSupabaseAccess = role && ['owner', 'cashier'].includes(role)
+  const hasStaffAccess = staffSession?.staffRole === 'cashier'
+
+  // Still loading staff session — wait before showing access denied
+  if (!staffSessionLoading && !hasSupabaseAccess && !hasStaffAccess) {
+    // Redirect staff to their login rather than showing generic AccessDenied
+    if (!role) {
+      router.push('/staff-login')
+      return null
+    }
+    return <AccessDenied />
+  }
+
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (
@@ -478,7 +523,22 @@ export default function ShitjetPage() {
           }`}
         >
           <div className="p-4 sm:p-5 border-b border-slate-100 space-y-3">
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">Shitjet — POS</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900">Shitjet — POS</h1>
+              {staffSession && (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <RiUserLine className="text-slate-400" />
+                  <span className="font-medium text-slate-700">{staffSession.staffName}</span>
+                  <button
+                    onClick={handleStaffLogout}
+                    className="ml-1 p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    title="Dil"
+                  >
+                    <RiLogoutBoxRLine className="text-base" />
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Barcode Scanner Input */}
             <div>

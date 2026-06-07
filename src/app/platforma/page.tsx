@@ -26,6 +26,7 @@ import {
   RiToggleLine,
   RiToggleFill,
   RiUserLine,
+  RiUserAddLine,
   RiLoader4Line,
   RiSaveLine,
   RiHistoryLine,
@@ -174,6 +175,11 @@ export default function PlatformaPage() {
   const [users, setUsers] = useState<UserEntry[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
 
+  // Add-user form (inside users modal)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRoli, setInviteRoli] = useState('employee')
+  const [inviting, setInviting] = useState(false)
+
   // Billing modal
   const [billingOrg, setBillingOrg] = useState<OrgRow | null>(null)
   const [billingDetail, setBillingDetail] = useState<SubscriptionDetail | null>(null)
@@ -252,6 +258,8 @@ export default function PlatformaPage() {
     setUsersOrgId(org.id)
     setUsersOrgName(org.name)
     setUsers([])
+    setInviteEmail('')
+    setInviteRoli('employee')
     setUsersLoading(true)
     try {
       const res = await fetch(`/api/platform/organizations/${org.id}/users`)
@@ -263,6 +271,34 @@ export default function PlatformaPage() {
       setUsersOrgId(null)
     } finally {
       setUsersLoading(false)
+    }
+  }
+
+  // ─── Add user to org ──────────────────────────────────────────────────────
+
+  async function addUserToOrg() {
+    if (!usersOrgId || !inviteEmail.trim()) return
+    setInviting(true)
+    try {
+      const res = await fetch(`/api/platform/organizations/${usersOrgId}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim(), roli: inviteRoli }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gabim')
+      toast.success(data.message || 'Përdoruesi u shtua')
+      setInviteEmail('')
+      setInviteRoli('employee')
+      // Refresh user list
+      const usersRes = await fetch(`/api/platform/organizations/${usersOrgId}/users`)
+      const usersData = await usersRes.json()
+      if (usersRes.ok) setUsers(usersData.users)
+      fetchStats()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Gabim gjatë shtimit')
+    } finally {
+      setInviting(false)
     }
   }
 
@@ -544,6 +580,13 @@ export default function PlatformaPage() {
                                   <RiUserLine className="text-base" />
                                 </button>
                                 <button
+                                  onClick={() => openUsers(org)}
+                                  title="Shto përdorues"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                >
+                                  <RiUserAddLine className="text-base" />
+                                </button>
+                                <button
                                   onClick={() => openBilling(org)}
                                   title="Menaxho abonim"
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
@@ -619,14 +662,58 @@ export default function PlatformaPage() {
         title={`Përdoruesit — ${usersOrgName}`}
         size="md"
       >
+        {/* Add-user form */}
+        <div className="mb-5 p-4 rounded-xl border border-green-100 bg-green-50">
+          <div className="flex items-center gap-2 mb-3">
+            <RiUserAddLine className="text-green-600 text-sm" />
+            <span className="text-sm font-semibold text-green-800">Shto Përdorues të Ri</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addUserToOrg() }}
+              placeholder="email@shembull.com"
+              className="input w-full text-sm"
+              disabled={inviting}
+            />
+            <div className="flex gap-2">
+              <select
+                value={inviteRoli}
+                onChange={(e) => setInviteRoli(e.target.value)}
+                className="input flex-1 text-sm"
+                disabled={inviting}
+              >
+                <option value="owner">Pronar</option>
+                <option value="manager">Menaxher</option>
+                <option value="cashier">Kasijer</option>
+                <option value="employee">Punonjës</option>
+              </select>
+              <button
+                onClick={addUserToOrg}
+                disabled={inviting || !inviteEmail.trim()}
+                className="btn-primary flex items-center gap-1.5 text-sm px-4"
+              >
+                {inviting
+                  ? <RiLoader4Line className="animate-spin" />
+                  : <RiUserAddLine />
+                }
+                Shto
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Existing users list */}
         {usersLoading ? (
-          <div className="py-10 flex justify-center">
+          <div className="py-8 flex justify-center">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : users.length === 0 ? (
-          <div className="py-10 text-center">
+          <div className="py-8 text-center">
             <RiTeamLine className="text-4xl text-slate-200 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">Nuk ka përdorues në këtë organizatë</p>
+            <p className="text-slate-400 text-sm">Nuk ka përdorues në këtë organizatë akoma</p>
           </div>
         ) : (
           <div className="space-y-2">

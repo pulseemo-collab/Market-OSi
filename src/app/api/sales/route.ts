@@ -6,12 +6,29 @@ import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { resolveStaffAuth } from '@/lib/staff-auth'
+import type { Role } from '@/lib/roles'
 
 const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
 
 export async function GET(req: NextRequest) {
-  const { userId, role, organizationId, error } = await requirePermission('sales:read')
-  if (error) return error
+  // Dual auth: Supabase session or staff cashier session
+  const supabase = await requirePermission('sales:read')
+  let userId: string | null
+  let role: Role | null
+  let organizationId: number | null
+
+  if (!supabase.error) {
+    userId = supabase.userId
+    role = supabase.role
+    organizationId = supabase.organizationId
+  } else {
+    const staff = await resolveStaffAuth(req, ['cashier'])
+    if (staff.error) return staff.error
+    userId = staff.userId
+    role = staff.staffRole as Role
+    organizationId = staff.organizationId
+  }
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
@@ -96,8 +113,30 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:create')
-  if (error) return error
+  // Dual auth: Supabase session or staff cashier session
+  const supabase = await requirePermission('sales:create')
+  let userId: string | null
+  let userEmail: string | null
+  let role: Role | null
+  let organizationId: number | null
+  let saleStaffId: number | undefined
+  let saleStaffName: string | undefined
+
+  if (!supabase.error) {
+    userId = supabase.userId
+    userEmail = supabase.userEmail
+    role = supabase.role
+    organizationId = supabase.organizationId
+  } else {
+    const staff = await resolveStaffAuth(req, ['cashier'])
+    if (staff.error) return staff.error
+    userId = staff.userId
+    userEmail = staff.staffName
+    role = staff.staffRole as Role
+    organizationId = staff.organizationId
+    saleStaffId = staff.staffId
+    saleStaffName = staff.staffName
+  }
 
   const rl = rateLimit(req, 'sales', userId, organizationId)
   if (rl.limited) return rl.response!
@@ -151,6 +190,8 @@ export async function POST(req: NextRequest) {
           shenime: shenime || null,
           paymentMethod: validPaymentMethod,
           organizationId: organizationId!,
+          staffId: saleStaffId ?? null,
+          staffName: saleStaffName ?? null,
           items: {
             create: await Promise.all(
               items.map(async (item: {
@@ -189,6 +230,7 @@ export async function POST(req: NextRequest) {
     })
 
     const methodLabel = validPaymentMethod === 'cash' ? 'Cash' : 'Bankë'
+    const staffLabel = saleStaffName ? ` nga ${saleStaffName}` : ''
     await logAuditAction({
       userId: userId!,
       userEmail: userEmail!,
@@ -197,8 +239,8 @@ export async function POST(req: NextRequest) {
       action: AUDIT_ACTIONS.CREATE,
       entityType: AUDIT_ENTITY_TYPES.SALE,
       entityId: sale.id,
-      description: `Shitje e re #${sale.id} — ${sale.totali.toFixed(2)} L (${methodLabel}, ${sale.items.length} produkte)`,
-      metadata: { totali: sale.totali, fitimi: sale.fitimi, paymentMethod: validPaymentMethod },
+      description: `Shitje e re #${sale.id} — ${sale.totali.toFixed(2)} L (${methodLabel}, ${sale.items.length} produkte${staffLabel})`,
+      metadata: { totali: sale.totali, fitimi: sale.fitimi, paymentMethod: validPaymentMethod, staffId: saleStaffId, staffName: saleStaffName },
     })
 
     // Trigger LARGE_SALE notification (assigned to the seller)

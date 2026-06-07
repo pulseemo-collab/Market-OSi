@@ -59,6 +59,7 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/furnizime':               ['owner', 'manager'],
   '/furnitoret':              ['owner', 'manager'],
   '/perdoruesit':             ['owner'],
+  '/personal':                ['owner', 'manager'],
   '/regjistri':               ['owner'],
   '/backup':                  ['owner'],
   '/njoftime':               ['owner', 'manager', 'cashier'],

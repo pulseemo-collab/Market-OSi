@@ -27,6 +27,13 @@ export const AUDIT_ACTIONS = {
   BILLING_STATUS_CHANGED: 'billing_status_changed',
   BILLING_SUBSCRIPTION_CREATED: 'billing_subscription_created',
   BILLING_ACCESS_BLOCKED: 'billing_access_blocked',
+  STAFF_CREATED: 'staff_created',
+  STAFF_DEACTIVATED: 'staff_deactivated',
+  STAFF_ACTIVATED: 'staff_activated',
+  STAFF_PIN_CHANGED: 'staff_pin_changed',
+  STAFF_LOGIN: 'staff_login',
+  STAFF_LOGIN_FAILED: 'staff_login_failed',
+  STAFF_LOCKED: 'staff_locked',
 } as const
 
 export const AUDIT_ENTITY_TYPES = {
@@ -38,6 +45,7 @@ export const AUDIT_ENTITY_TYPES = {
   EXPORT: 'export',
   BACKUP: 'backup',
   SUBSCRIPTION: 'subscription',
+  STAFF: 'staff',
 } as const
 
 interface AuditParams {

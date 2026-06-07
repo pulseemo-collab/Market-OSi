@@ -22,6 +22,7 @@ model Organization {
   auditLogs     AuditLog[]
   notifications Notification[]
   subscription  Subscription?
+  staff         Staff[]
 }
 
 model Supplier {
@@ -104,6 +105,9 @@ model Sale {
   paymentMethod  String       @default("cash")
   organizationId Int
   organization   Organization @relation(fields: [organizationId], references: [id])
+  staffId        Int?
+  staffName      String?
+  staff          Staff?       @relation(fields: [staffId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
   items          SaleItem[]
 }
@@ -186,4 +190,36 @@ model BillingAuditLog {
   newStatus       String?
   notes           String?
   createdAt       DateTime @default(now())
+}
+
+model Staff {
+  id             Int            @id @default(autoincrement())
+  organizationId Int
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  emri           String
+  kodi           String?
+  roli           String         @default("cashier")
+  pinHash        String
+  isActive       Boolean        @default(true)
+  failedAttempts Int            @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sessions       StaffSession[]
+  sales          Sale[]
+
+  @@unique([organizationId, kodi])
+  @@index([organizationId])
+}
+
+model StaffSession {
+  id             Int      @id @default(autoincrement())
+  token          String   @unique
+  staffId        Int
+  staff          Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  organizationId Int
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([staffId])
 }

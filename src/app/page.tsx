@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
@@ -110,6 +111,7 @@ const fadeUp = {
 
 export default function Dashboard() {
   const { role } = useRole()
+  const router = useRouter()
   const subscription = useSubscription()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -172,6 +174,11 @@ export default function Dashboard() {
     year: 'numeric',
   })
 
+  useEffect(() => {
+    if (role === 'platform_owner') router.replace('/platforma')
+  }, [role, router])
+
+  if (role === 'platform_owner') return null
   if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
