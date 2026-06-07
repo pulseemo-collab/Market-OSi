@@ -94,12 +94,20 @@ export default function ShitjetPage() {
 
   // Load staff session (PIN-based auth)
   useEffect(() => {
-    fetch('/api/staff-auth/session')
+    fetch('/api/staff-auth/session', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => setStaffSession(data.session ?? null))
       .catch(() => {})
       .finally(() => setStaffSessionLoading(false))
   }, [])
+
+  // Redirect unauthorised staff to their login page (must be in useEffect, not during render)
+  useEffect(() => {
+    if (staffSessionLoading) return
+    if (!role && !(staffSession?.staffRole === 'cashier')) {
+      router.push('/staff-login')
+    }
+  }, [staffSessionLoading, role, staffSession, router])
 
   const handleStaffLogout = useCallback(async () => {
     await fetch('/api/staff-auth/logout', { method: 'POST' })
@@ -135,9 +143,9 @@ export default function ShitjetPage() {
 
   useEffect(() => {
     setProductsError(false)
-    fetch('/api/products')
+    fetch('/api/products', { credentials: 'include' })
       .then((r) => {
-        if (r.status === 401) { window.location.href = '/login'; return r }
+        if (r.status === 401) { router.push(role ? '/login' : '/staff-login'); return r }
         return r
       })
       .then((r) => r.json())
@@ -470,14 +478,14 @@ export default function ShitjetPage() {
   const hasSupabaseAccess = role && ['owner', 'cashier'].includes(role)
   const hasStaffAccess = staffSession?.staffRole === 'cashier'
 
-  // Still loading staff session — wait before showing access denied
-  if (!staffSessionLoading && !hasSupabaseAccess && !hasStaffAccess) {
-    // Redirect staff to their login rather than showing generic AccessDenied
-    if (!role) {
-      router.push('/staff-login')
-      return null
-    }
-    return <AccessDenied />
+  // Wait until the staff session check completes before rendering anything
+  if (staffSessionLoading) return null
+
+  if (!hasSupabaseAccess && !hasStaffAccess) {
+    // Supabase user with insufficient role
+    if (role) return <AccessDenied />
+    // Staff with no valid session — the useEffect above handles the redirect
+    return null
   }
 
   if (subscription === 'blocked') return <SubscriptionExpired />

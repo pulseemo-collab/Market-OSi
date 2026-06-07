@@ -104,7 +104,13 @@ export async function POST(req: NextRequest) {
     })
 
     // organizationId comes from DB — never trusted from the client
-    const token = await createStaffSession(staff.id, staff.organizationId)
+    let token: string
+    try {
+      token = await createStaffSession(staff.id, staff.organizationId)
+    } catch (sessionError) {
+      captureApiError(sessionError, { route: '/api/staff-auth/login', action: 'POST' })
+      return NextResponse.json({ error: 'Sesioni nuk u krijua. Provoni përsëri.' }, { status: 500 })
+    }
 
     await logAuditAction({
       userId: `staff:${staff.id}`,

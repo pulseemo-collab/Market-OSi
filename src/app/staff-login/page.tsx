@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RiStore2Line, RiDeleteBackLine, RiLockLine, RiUserLine } from 'react-icons/ri'
 
 export default function StaffLoginPage() {
+  const router = useRouter()
   const [emri, setEmri] = useState('')
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,6 +32,7 @@ export default function StaffLoginPage() {
       const res = await fetch('/api/staff-auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ emri: emri.trim(), pin }),
       })
       const data = await res.json()
@@ -38,14 +41,15 @@ export default function StaffLoginPage() {
         setPin('')
         return
       }
-      window.location.href = '/shitjet'
+      router.push('/shitjet')
+      router.refresh()
     } catch {
       setError('Gabim gjatë hyrjes')
       setPin('')
     } finally {
       setLoading(false)
     }
-  }, [emri, pin, loading])
+  }, [emri, pin, loading, router])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
