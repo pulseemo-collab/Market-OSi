@@ -44,6 +44,9 @@ export async function middleware(request: NextRequest) {
     sp.get('type') === 'recovery' ||
     sp.has('access_token') ||
     sp.has('refresh_token')
+    sp.has('code') || 
+    sp.has('error') ||
+    sp.has('error_code') 
 
   if (hasRecoveryParam) {
     if (pathname !== '/reset-password') {
