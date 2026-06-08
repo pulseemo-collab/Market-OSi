@@ -1,47 +1,49 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { RiStore2Line, RiEyeLine, RiEyeOffLine, RiLoader4Line, RiArrowLeftLine } from 'react-icons/ri'
+import { RiStore2Line, RiEyeLine, RiEyeOffLine, RiLoader4Line } from 'react-icons/ri'
 
-export default function ManagerLoginPage() {
-  const [email, setEmail] = useState('')
+export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const passwordUpdated = searchParams.get('success') === 'password_updated'
-  const linkExpired = searchParams.get('error') === 'link_expired'
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (password !== confirmPassword) {
+      setError('Fjalëkalimet nuk përputhen')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Fjalëkalimi duhet të ketë të paktën 6 karaktere')
+      return
+    }
+
     setLoading(true)
-
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error: updateError } = await supabase.auth.updateUser({ password })
 
-    if (error) {
-      setError('Email ose fjalëkalim i gabuar')
+    if (updateError) {
+      setError('Gabim gjatë ndryshimit të fjalëkalimit. Provo sërish.')
       setLoading(false)
       return
     }
 
-    // Resolve org and store in cookie so staff-login can use it
-    await fetch('/api/auth/org-context').catch(() => {})
-
-    router.push('/')
-    router.refresh()
+    await supabase.auth.signOut()
+    router.push('/login/manager?success=password_updated')
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
             <RiStore2Line className="text-white text-xl" />
@@ -52,50 +54,14 @@ export default function ManagerLoginPage() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Link
-              href="/login"
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
-            >
-              <RiArrowLeftLine className="text-base" />
-            </Link>
-            <h1 className="text-slate-900 font-semibold text-lg">Hyrja e Menaxherit</h1>
-          </div>
+          <h1 className="text-slate-900 font-semibold text-lg mb-2">Fjalëkalim i Ri</h1>
+          <p className="text-sm text-slate-500 mb-6">Vendos fjalëkalimin tënd të ri më poshtë.</p>
 
-          {passwordUpdated && (
-            <div className="text-sm text-green-700 bg-green-50 border border-green-100 px-3.5 py-2.5 rounded-lg mb-4">
-              Fjalëkalimi u ndryshua me sukses. Mund të hysh tani.
-            </div>
-          )}
-          {linkExpired && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3.5 py-2.5 rounded-lg mb-4">
-              Linku ka skaduar. Provo sërish rivendosjen e fjalëkalimit.
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Email */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="email@shembull.com"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Fjalëkalimi
+                Fjalëkalimi i Ri
               </label>
               <div className="relative">
                 <input
@@ -103,7 +69,7 @@ export default function ManagerLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-10"
                   placeholder="••••••••"
                 />
@@ -120,24 +86,29 @@ export default function ManagerLoginPage() {
                   )}
                 </button>
               </div>
-              <div className="flex justify-end mt-1.5">
-                <Link
-                  href="/login/manager/forgot-password"
-                  className="text-xs text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  Harrove fjalëkalimin?
-                </Link>
-              </div>
             </div>
 
-            {/* Error */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Konfirmo Fjalëkalimin
+              </label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="••••••••"
+              />
+            </div>
+
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3.5 py-2.5 rounded-lg">
                 {error}
               </div>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -146,10 +117,10 @@ export default function ManagerLoginPage() {
               {loading ? (
                 <>
                   <RiLoader4Line className="animate-spin" />
-                  Duke hyrë...
+                  Duke ruajtur...
                 </>
               ) : (
-                'Hyr'
+                'Ruaj Fjalëkalimin'
               )}
             </button>
           </form>

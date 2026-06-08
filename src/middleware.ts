@@ -31,6 +31,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Auth callback (password reset link) — always allow through without redirects
+  if (pathname.startsWith('/auth/')) {
+    return supabaseResponse
+  }
+
   // Read the staff_session cookie once — used in multiple branches below
   const staffSessionToken = request.cookies.get('staff_session')?.value
   const hasStaffSession = !!staffSessionToken
@@ -58,9 +63,18 @@ export async function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(p + '/'),
   )
 
-  const isAuthPage = pathname === '/login' || pathname === '/login/manager'
+  // Pages accessible without a Supabase session
+  const isPublicAuthPage =
+    pathname === '/login' ||
+    pathname === '/login/manager' ||
+    pathname === '/login/manager/forgot-password' ||
+    pathname === '/login/manager/reset-password' ||
+    pathname === '/reset-password'
 
-  if (!user && !isAuthPage) {
+  // Only redirect authenticated users away from the main login pages (not reset-password)
+  const isLoginPage = pathname === '/login' || pathname === '/login/manager'
+
+  if (!user && !isPublicAuthPage) {
     if (isStaffAllowedPath && hasStaffSession) {
       // Cookie found — allow through. Full session validation (expiry, isActive,
       // subscription) is enforced inside the page and API routes.
@@ -81,7 +95,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthPage) {
+  if (user && isLoginPage) {
     console.log(`[Middleware] ${pathname}: authenticated user on auth page → redirecting to /`)
     const url = request.nextUrl.clone()
     url.pathname = '/'
