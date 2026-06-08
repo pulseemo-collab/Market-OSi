@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { RiStore2Line, RiEyeLine, RiEyeOffLine, RiLoader4Line, RiArrowLeftLine } from 'react-icons/ri'
 
-export default function ManagerLoginPage() {
+function ManagerLoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -160,5 +160,13 @@ export default function ManagerLoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function ManagerLoginPage() {
+  return (
+    <Suspense>
+      <ManagerLoginForm />
+    </Suspense>
   )
 }
