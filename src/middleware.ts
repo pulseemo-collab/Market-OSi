@@ -31,10 +31,38 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Auth callback (password reset link) — always allow through without redirects
+  // Auth callback — always allow through without redirects
   if (pathname.startsWith('/auth/')) {
     return supabaseResponse
   }
+
+  // ── Recovery flow ─────────────────────────────────────────────────────────
+  // Supabase may include these params on any URL after verifying a recovery token.
+  // Redirect to /reset-password so the hash/code isn't lost to a later redirect.
+  const sp = request.nextUrl.searchParams
+  const hasRecoveryParam =
+    sp.get('type') === 'recovery' ||
+    sp.has('access_token') ||
+    sp.has('refresh_token')
+
+  if (hasRecoveryParam) {
+    if (pathname !== '/reset-password') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/reset-password'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // Cookie set by /auth/callback after a successful recovery code exchange.
+  // Keeps an authenticated user on /reset-password even if they navigate away.
+  const recoveryInProgress = !!request.cookies.get('recovery_in_progress')?.value
+  if (recoveryInProgress && user && pathname !== '/reset-password') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/reset-password'
+    return NextResponse.redirect(url)
+  }
+  // ── End recovery flow ─────────────────────────────────────────────────────
 
   // Read the staff_session cookie once — used in multiple branches below
   const staffSessionToken = request.cookies.get('staff_session')?.value
