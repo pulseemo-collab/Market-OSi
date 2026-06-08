@@ -94,18 +94,30 @@ export default function ShitjetPage() {
 
   // Load staff session (PIN-based auth)
   useEffect(() => {
+    console.log('[ShitjetPage] fetching /api/staff-auth/session…')
     fetch('/api/staff-auth/session', { credentials: 'include' })
       .then((r) => r.json())
-      .then((data) => setStaffSession(data.session ?? null))
-      .catch(() => {})
+      .then((data) => {
+        console.log('[ShitjetPage] session response:', data)
+        setStaffSession(data.session ?? null)
+      })
+      .catch((err) => {
+        console.error('[ShitjetPage] session fetch error:', err)
+      })
       .finally(() => setStaffSessionLoading(false))
   }, [])
 
   // Redirect unauthorised staff to their login page (must be in useEffect, not during render)
   useEffect(() => {
     if (staffSessionLoading) return
-    if (!role && !(staffSession?.staffRole === 'cashier')) {
-      router.push('/staff-login')
+    const hasAccess = role
+      ? ['owner', 'cashier'].includes(role)
+      : staffSession?.staffRole === 'cashier'
+    console.log(`[ShitjetPage] auth check — role=${role} staffRole=${staffSession?.staffRole} hasAccess=${hasAccess}`)
+    if (!hasAccess) {
+      const dest = role ? '/login' : '/staff-login'
+      console.log(`[ShitjetPage] no access → redirecting to ${dest}`)
+      router.push(dest)
     }
   }, [staffSessionLoading, role, staffSession, router])
 
@@ -141,15 +153,31 @@ export default function ShitjetPage() {
     return () => document.removeEventListener('click', onDocClick)
   }, [])
 
+  // Wait until auth is resolved before fetching products.
+  // This prevents a race where the products API returns 401 before the
+  // staff session fetch has completed, causing a premature redirect.
   useEffect(() => {
+    if (staffSessionLoading) return  // not ready yet
+
+    const hasAccess = role
+      ? ['owner', 'cashier'].includes(role)
+      : staffSession?.staffRole === 'cashier'
+    if (!hasAccess) return  // redirect effect handles this case
+
     setProductsError(false)
+    setProductsLoading(true)
+    console.log('[ShitjetPage] fetching /api/products…')
     fetch('/api/products', { credentials: 'include' })
       .then((r) => {
-        if (r.status === 401) { router.push(role ? '/login' : '/staff-login'); return r }
-        return r
+        console.log('[ShitjetPage] products response status:', r.status)
+        if (!r.ok) {
+          setProductsError(true)
+          return null
+        }
+        return r.json()
       })
-      .then((r) => r.json())
       .then((data) => {
+        if (!data) return
         const arr = toArray<Product>(data, 'products')
         setProducts(arr)
         setFilteredProducts(arr)
@@ -160,7 +188,7 @@ export default function ShitjetPage() {
         setProductsError(true)
       })
       .finally(() => setProductsLoading(false))
-  }, [])
+  }, [staffSessionLoading, role, staffSession])
 
   const refreshProducts = useCallback(() => {
     fetch('/api/products')

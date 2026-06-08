@@ -11,6 +11,20 @@ export default function StaffLoginPage() {
   const [error, setError] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
+  // If the user already has a valid staff session, skip the login form.
+  useEffect(() => {
+    fetch('/api/staff-auth/session', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data) => {
+        console.log('[StaffLoginPage] existing session check:', data)
+        if (data.session?.staffRole === 'cashier') {
+          console.log('[StaffLoginPage] already authenticated → /shitjet')
+          window.location.href = '/shitjet'
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const handlePinDigit = (digit: string) => {
     if (pin.length >= 6) return
     setPin((prev) => prev + digit)

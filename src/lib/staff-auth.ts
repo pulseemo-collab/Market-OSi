@@ -42,6 +42,7 @@ export interface StaffSessionData {
 export async function getStaffSession(req: NextRequest): Promise<StaffSessionData | null> {
   try {
     const token = req.cookies.get(STAFF_SESSION_COOKIE)?.value
+    console.log(`[getStaffSession] cookie found=${!!token}`)
     if (!token) return null
 
     const session = await prisma.staffSession.findUnique({
@@ -49,13 +50,19 @@ export async function getStaffSession(req: NextRequest): Promise<StaffSessionDat
       include: { staff: true },
     })
 
+    console.log(`[getStaffSession] session found=${!!session} staffId=${session?.staffId} orgId=${session?.organizationId}`)
     if (!session) return null
     if (session.expiresAt < new Date()) {
+      console.log(`[getStaffSession] session expired at ${session.expiresAt}`)
       await prisma.staffSession.delete({ where: { id: session.id } }).catch(() => {})
       return null
     }
-    if (!session.staff.isActive) return null
+    if (!session.staff.isActive) {
+      console.log(`[getStaffSession] staff isActive=false`)
+      return null
+    }
 
+    console.log(`[getStaffSession] valid session — staffRole=${session.staff.roli} orgId=${session.organizationId}`)
     return {
       sessionId: session.id,
       staffId: session.staffId,
@@ -64,7 +71,8 @@ export async function getStaffSession(req: NextRequest): Promise<StaffSessionDat
       organizationId: session.organizationId,
       expiresAt: session.expiresAt,
     }
-  } catch {
+  } catch (err) {
+    console.error('[getStaffSession] unexpected error:', err)
     return null
   }
 }
