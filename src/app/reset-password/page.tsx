@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { RiStore2Line, RiEyeLine, RiEyeOffLine, RiLoader4Line } from 'react-icons/ri'
@@ -14,34 +14,75 @@ export default function ResetPasswordPage() {
   const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const readyRef = useRef(false)
 
   useEffect(() => {
     const supabase = createClient()
+
+    // PKCE flow: code in query params
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
 
     if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
         if (error) {
-          setExchangeError(true)
+          // Code exchange failed — check if a session already exists (e.g. code was already exchanged)
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session) {
+            readyRef.current = true
+            setReady(true)
+          } else {
+            setExchangeError(true)
+          }
         } else {
+          readyRef.current = true
           setReady(true)
         }
       })
       return
     }
 
-    // Implicit flow: tokens arrive in the hash fragment — Supabase fires PASSWORD_RECOVERY
+    // Implicit flow: hash tokens — Supabase fires PASSWORD_RECOVERY or SIGNED_IN
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        readyRef.current = true
         setReady(true)
       }
     })
 
-    // Timeout — if no recovery event after 4 s, redirect to error
+    // Fallback: check if there's already a session (tokens processed before listener registered)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        readyRef.current = true
+        setReady(true)
+      }
+    })
+
+    // Also try parsing hash tokens explicitly if present
+    const hash = window.location.hash
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      if (accessToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken ?? '',
+        }).then(({ error }) => {
+          if (!error) {
+            readyRef.current = true
+            setReady(true)
+          }
+        })
+      }
+    }
+
     const timeout = setTimeout(() => {
-      setExchangeError(true)
-    }, 4000)
+      // Only redirect to error if the form hasn't been shown yet
+      if (!readyRef.current) {
+        setExchangeError(true)
+      }
+    }, 5000)
 
     return () => {
       subscription.unsubscribe()
@@ -50,10 +91,11 @@ export default function ResetPasswordPage() {
   }, [])
 
   useEffect(() => {
-    if (exchangeError) {
+    // Only redirect if we have an error AND the form was never made ready
+    if (exchangeError && !ready) {
       router.replace('/login/manager?error=link_expired')
     }
-  }, [exchangeError, router])
+  }, [exchangeError, ready, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -114,7 +156,7 @@ export default function ResetPasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Fjalëkalimi i Ri
+                Fjalëkalimi i ri
               </label>
               <div className="relative">
                 <input
@@ -143,7 +185,7 @@ export default function ResetPasswordPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Konfirmo Fjalëkalimin
+                Konfirmo fjalëkalimin
               </label>
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -173,7 +215,7 @@ export default function ResetPasswordPage() {
                   Duke ruajtur...
                 </>
               ) : (
-                'Ruaj Fjalëkalimin'
+                'Ndrysho fjalëkalimin'
               )}
             </button>
           </form>
