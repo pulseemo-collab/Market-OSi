@@ -15,26 +15,34 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const readyRef = useRef(false)
+  // Guard against React Strict Mode double-invoke which would exhaust a one-time PKCE code.
+  const exchangeAttempted = useRef(false)
 
   useEffect(() => {
+    if (exchangeAttempted.current) return
+    exchangeAttempted.current = true
+
     const supabase = createClient()
 
-    // PKCE flow: code in query params
+    // PKCE flow: ?code=... in query params
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
 
     if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
+      supabase.auth.exchangeCodeForSession(code).then(async ({ data, error }) => {
         if (error) {
-          // Code exchange failed — check if a session already exists (e.g. code was already exchanged)
+          // Code already consumed (e.g. Strict Mode second run) — check for an existing session.
           const { data: { session } } = await supabase.auth.getSession()
           if (session) {
+            console.log('[ResetPassword] Code exchange failed but session exists (re-used code OK):', session.user?.email)
             readyRef.current = true
             setReady(true)
           } else {
+            console.log('[ResetPassword] Code exchange failed, no session:', error.message)
             setExchangeError(true)
           }
         } else {
+          console.log('[ResetPassword] Code exchange success, session:', data.session?.user?.email)
           readyRef.current = true
           setReady(true)
         }
@@ -43,22 +51,24 @@ export default function ResetPasswordPage() {
     }
 
     // Implicit flow: hash tokens — Supabase fires PASSWORD_RECOVERY or SIGNED_IN
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        console.log('[ResetPassword] Auth state change:', event, session?.user?.email)
         readyRef.current = true
         setReady(true)
       }
     })
 
-    // Fallback: check if there's already a session (tokens processed before listener registered)
+    // Fallback: session already processed before the listener registered
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+      if (session && !readyRef.current) {
+        console.log('[ResetPassword] Existing session found (no code):', session.user?.email)
         readyRef.current = true
         setReady(true)
       }
     })
 
-    // Also try parsing hash tokens explicitly if present
+    // Explicit hash token parsing as a last resort
     const hash = window.location.hash
     if (hash) {
       const hashParams = new URLSearchParams(hash.substring(1))
@@ -69,7 +79,7 @@ export default function ResetPasswordPage() {
           access_token: accessToken,
           refresh_token: refreshToken ?? '',
         }).then(({ error }) => {
-          if (!error) {
+          if (!error && !readyRef.current) {
             readyRef.current = true
             setReady(true)
           }
@@ -78,8 +88,8 @@ export default function ResetPasswordPage() {
     }
 
     const timeout = setTimeout(() => {
-      // Only redirect to error if the form hasn't been shown yet
       if (!readyRef.current) {
+        console.log('[ResetPassword] Timeout — no session established after 5 s')
         setExchangeError(true)
       }
     }, 5000)
@@ -91,7 +101,6 @@ export default function ResetPasswordPage() {
   }, [])
 
   useEffect(() => {
-    // Only redirect if we have an error AND the form was never made ready
     if (exchangeError && !ready) {
       router.replace('/login/manager?error=link_expired')
     }
@@ -113,14 +122,27 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     const supabase = createClient()
-    const { error } = await supabase.auth.updateUser({ password })
 
-    if (error) {
-      setFormError('Gabim gjatë ndryshimit të fjalëkalimit. Provo sërish.')
+    // Verify a valid session exists before attempting the update.
+    const { data: { session } } = await supabase.auth.getSession()
+    console.log('[ResetPassword] Session before updateUser:', session ? `user=${session.user?.email}` : 'null')
+
+    if (!session) {
+      setFormError('Sesioni ka skaduar. Kërko një lidhje të re rivendosjeje.')
       setLoading(false)
       return
     }
 
+    const { error } = await supabase.auth.updateUser({ password })
+
+    if (error) {
+      console.log('[ResetPassword] updateUser error:', error.message)
+      setFormError(error.message)
+      setLoading(false)
+      return
+    }
+
+    console.log('[ResetPassword] updateUser success')
     await supabase.auth.signOut()
     router.push('/login/manager?success=password_updated')
   }
