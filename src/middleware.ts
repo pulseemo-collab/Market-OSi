@@ -29,8 +29,20 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+const { pathname } = request.nextUrl
+const sp = request.nextUrl.searchParams
 
+const isRecoveryFlow =
+  sp.get('type') === 'recovery' ||
+  sp.has('access_token') ||
+  sp.has('refresh_token') ||
+  sp.has('code')
+
+if (isRecoveryFlow && pathname !== '/reset-password') {
+  const url = request.nextUrl.clone()
+  url.pathname = '/reset-password'
+  return NextResponse.redirect(url)
+}
   // Auth callback — always allow through without redirects
   if (pathname.startsWith('/auth/')) {
     return supabaseResponse
@@ -39,7 +51,6 @@ export async function middleware(request: NextRequest) {
   // ── Recovery flow ─────────────────────────────────────────────────────────
   // Supabase may include these params on any URL after verifying a recovery token.
   // Redirect to /reset-password so the hash/code isn't lost to a later redirect.
-  const sp = request.nextUrl.searchParams
   const hasRecoveryParam =
     sp.get('type') === 'recovery' ||
     sp.has('access_token') ||
