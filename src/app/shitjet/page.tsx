@@ -87,6 +87,7 @@ export default function ShitjetPage() {
   const [scanMessage, setScanMessage] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank'>('cash')
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
+  const [orgName, setOrgName] = useState<string>('Market OS')
   const searchRef = useRef<HTMLInputElement>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -105,6 +106,14 @@ export default function ShitjetPage() {
         console.error('[ShitjetPage] session fetch error:', err)
       })
       .finally(() => setStaffSessionLoading(false))
+  }, [])
+
+  // Load organisation name for receipt branding
+  useEffect(() => {
+    fetch('/api/auth/org-context')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.orgName) setOrgName(data.orgName) })
+      .catch(() => {})
   }, [])
 
   // Redirect unauthorised staff to their login page (must be in useEffect, not during render)
@@ -897,7 +906,7 @@ export default function ShitjetPage() {
             {/* Printable Receipt */}
             <div id="receipt" className="font-mono">
               <div className="text-center mb-4">
-                <h2 className="text-lg font-bold">MARKET OS</h2>
+                <h2 className="text-lg font-bold">{orgName.toUpperCase()}</h2>
                 <p className="text-xs text-slate-500">Sistemi i Marketit</p>
                 <p className="text-xs text-slate-400 mt-1">{formatDateTime(receiptModal.createdAt)}</p>
                 <p className="text-xs text-slate-400">Fatura #{receiptModal.id}</p>

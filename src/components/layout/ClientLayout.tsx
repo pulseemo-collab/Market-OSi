@@ -8,19 +8,25 @@ import NotificationBell from './NotificationBell'
 import { RoleProvider } from '@/contexts/RoleContext'
 import { Role } from '@/lib/roles'
 
+const AUTH_PATHS = ['/login', '/login/options', '/register', '/staff-login']
+
 export default function ClientLayout({
   children,
   role,
+  orgName,
 }: {
   children: React.ReactNode
   role: Role | null
+  orgName?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
-  if (pathname === '/login') {
+  if (AUTH_PATHS.includes(pathname)) {
     return <RoleProvider role={role}>{children}</RoleProvider>
   }
+
+  const displayName = orgName || 'Market OS'
 
   return (
     <RoleProvider role={role}>
@@ -39,7 +45,7 @@ export default function ClientLayout({
             open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
-          <Sidebar onClose={() => setOpen(false)} />
+          <Sidebar onClose={() => setOpen(false)} orgName={orgName} />
         </div>
 
         {/* Right side: top bar + page content */}
@@ -53,11 +59,11 @@ export default function ClientLayout({
             >
               <RiMenuLine className="text-xl" />
             </button>
-            <div className="flex items-center gap-2 flex-1">
-              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                 <RiStore2Line className="text-white text-sm" />
               </div>
-              <span className="font-bold text-slate-900">Market OS</span>
+              <span className="font-bold text-slate-900 truncate">{displayName}</span>
             </div>
             <NotificationBell />
           </header>

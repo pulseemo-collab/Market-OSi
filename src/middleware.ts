@@ -108,13 +108,19 @@ if (isRecoveryFlow && pathname !== '/reset-password') {
   // Pages accessible without a Supabase session
   const isPublicAuthPage =
     pathname === '/login' ||
+    pathname === '/login/options' ||
+    pathname === '/register' ||
     pathname === '/login/manager' ||
     pathname === '/login/manager/forgot-password' ||
     pathname === '/login/manager/reset-password' ||
     pathname === '/reset-password'
 
-  // Only redirect authenticated users away from the main login pages (not reset-password)
-  const isLoginPage = pathname === '/login' || pathname === '/login/manager'
+  // Redirect authenticated users away from these pages
+  const isLoginPage =
+    pathname === '/login' ||
+    pathname === '/login/options' ||
+    pathname === '/register' ||
+    pathname === '/login/manager'
 
   if (!user && !isPublicAuthPage) {
     if (isStaffAllowedPath && hasStaffSession) {

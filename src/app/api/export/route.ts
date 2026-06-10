@@ -64,7 +64,8 @@ export async function GET(request: NextRequest) {
 
     const orgFilter = { organizationId: organizationId! }
 
-    const [shitjet, produktet, furnizimet] = await Promise.all([
+    const [org, shitjet, produktet, furnizimet] = await Promise.all([
+      prisma.organization.findUnique({ where: { id: organizationId! }, select: { name: true } }),
       prisma.sale.findMany({
         where: { ...orgFilter, createdAt: { gte: periodStart, lt: periodEnd } },
         include: { items: true },
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({
+      orgName: org?.name || null,
       periudhaLabel,
       nga: ngaParam || null,
       deri: deriParam || null,

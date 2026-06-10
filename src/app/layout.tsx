@@ -26,6 +26,7 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   let role: Role | null = null
+  let orgName: string | null = null
 
   try {
     const supabase = createClient()
@@ -34,37 +35,21 @@ export default async function RootLayout({
     } = await supabase.auth.getUser()
 
     if (user) {
-      let userRole = await prisma.userRole.findUnique({ where: { userId: user.id } })
-      if (!userRole) {
-        const count = await prisma.userRole.count()
-        const defaultRole = count === 0 ? 'owner' : 'employee'
-        let org = await prisma.organization.findFirst({ orderBy: { id: 'asc' } })
-        if (!org) {
-          org = await prisma.organization.create({
-            data: {
-              name: 'Default Market',
-              subscription: {
-                create: {
-                  plan: 'trial',
-                  status: 'trialing',
-                  trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-                },
-              },
-            },
-          })
-        }
-        userRole = await prisma.userRole.create({
-          data: { userId: user.id, email: user.email || '', roli: defaultRole, organizationId: org.id },
+      const userRole = await prisma.userRole.findUnique({
+        where: { userId: user.id },
+        include: { organization: { select: { name: true } } },
+      })
+      if (userRole) {
+        const rawRole = userRole.roli
+        role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
+        orgName = userRole.organization?.name ?? null
+        setUserContext({
+          userId: user.id,
+          userEmail: userRole.email,
+          role,
+          organizationId: userRole.organizationId,
         })
       }
-      const rawRole = userRole.roli
-      role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
-      setUserContext({
-        userId: user.id,
-        userEmail: userRole.email,
-        role,
-        organizationId: userRole.organizationId,
-      })
     }
   } catch {
     // If DB is unavailable, proceed without role (middleware still protects routes)
@@ -73,7 +58,7 @@ export default async function RootLayout({
   return (
     <html lang="sq">
       <body>
-        <ClientLayout role={role}>
+        <ClientLayout role={role} orgName={orgName}>
           <ErrorBoundary>
             {children}
           </ErrorBoundary>

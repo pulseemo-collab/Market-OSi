@@ -60,9 +60,10 @@ interface StaffSession {
 
 interface SidebarProps {
   onClose?: () => void
+  orgName?: string | null
 }
 
-export default function Sidebar({ onClose }: SidebarProps) {
+export default function Sidebar({ onClose, orgName }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { role } = useRole()
@@ -105,7 +106,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
   }, [fetchUnreadCount])
 
   // Hide sidebar on all auth pages
-  const isAuthPage = pathname === '/login' || pathname === '/staff-login' || pathname === '/login/manager'
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/login/options' ||
+    pathname === '/register' ||
+    pathname === '/staff-login' ||
+    pathname === '/login/manager'
   if (isAuthPage) return null
 
   const handleLogout = async () => {
@@ -145,11 +151,13 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
             <RiStore2Line className="text-white text-lg" />
           </div>
-          <div>
-            <span className="text-slate-900 font-bold text-base leading-none block">Market OS</span>
+          <div className="min-w-0">
+            <span className="text-slate-900 font-bold text-base leading-none block truncate">
+              {orgName || 'Market OS'}
+            </span>
             <span className="text-slate-400 text-xs">Sistemi i Marketit</span>
           </div>
         </div>

@@ -1,6 +1,7 @@
 // Client-side only — all heavy imports are dynamic to prevent SSR bundling
 
 export interface ExportData {
+  orgName?: string | null
   periudhaLabel: string
   nga?: string | null
   deri?: string | null
@@ -113,7 +114,7 @@ export async function exportPDF(data: ExportData): Promise<void> {
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
-  doc.text('Market OSi', margin, 12)
+  doc.text(data.orgName || 'Market OS', margin, 12)
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.text('Raport Biznesi', margin, 20)
@@ -262,7 +263,7 @@ export async function exportPDF(data: ExportData): Promise<void> {
     doc.setTextColor(148, 163, 184)
     doc.setFont('helvetica', 'normal')
     doc.text(
-      'Market OSi  •  Faqe ' + i + ' / ' + pageCount + '  •  ' + genDate,
+      (data.orgName || 'Market OS') + '  •  Faqe ' + i + ' / ' + pageCount + '  •  ' + genDate,
       pageW / 2,
       pageH - 7,
       { align: 'center' }
