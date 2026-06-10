@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { RiMenuLine, RiStore2Line } from 'react-icons/ri'
 import Sidebar from './Sidebar'
@@ -9,6 +9,15 @@ import { RoleProvider } from '@/contexts/RoleContext'
 import { Role } from '@/lib/roles'
 
 const AUTH_PATHS = ['/login', '/login/options', '/register', '/staff-login']
+
+export interface ClientStaffSession {
+  staffId: number
+  staffName: string
+  staffRole: string
+  organizationId: number
+  organizationName?: string | null
+  expiresAt: string
+}
 
 export default function ClientLayout({
   children,
@@ -20,13 +29,25 @@ export default function ClientLayout({
   orgName?: string | null
 }) {
   const [open, setOpen] = useState(false)
+  const [staffSession, setStaffSession] = useState<ClientStaffSession | null>(null)
   const pathname = usePathname()
+
+  useEffect(() => {
+    if (role !== null) {
+      setStaffSession(null)
+      return
+    }
+    fetch('/api/staff-auth/session')
+      .then((r) => r.json())
+      .then((d) => setStaffSession(d.session ?? null))
+      .catch(() => setStaffSession(null))
+  }, [role, pathname])
 
   if (AUTH_PATHS.includes(pathname)) {
     return <RoleProvider role={role}>{children}</RoleProvider>
   }
 
-  const displayName = orgName || 'Market OS'
+  const displayName = orgName || staffSession?.organizationName || 'Market OS'
 
   return (
     <RoleProvider role={role}>
@@ -45,7 +66,7 @@ export default function ClientLayout({
             open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
-          <Sidebar onClose={() => setOpen(false)} orgName={orgName} />
+          <Sidebar onClose={() => setOpen(false)} orgName={orgName} staffSession={staffSession} />
         </div>
 
         {/* Right side: top bar + page content */}

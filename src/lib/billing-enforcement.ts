@@ -3,6 +3,9 @@ import { prisma } from './prisma'
 export interface SubscriptionAccessResult {
   allowed: boolean
   reason?: string
+  subStatus?: string | null
+  trialDaysLeft?: number | null
+  periodEndsAt?: string | null
 }
 
 export async function checkSubscriptionAccess(
@@ -23,17 +26,24 @@ export async function checkSubscriptionAccess(
   const { plan, status, trialEndsAt, currentPeriodEnd } = subscription
   const now = new Date()
 
-  if (plan === 'internal') return { allowed: true }
+  if (plan === 'internal') return { allowed: true, subStatus: 'active' }
 
   if (status === 'trialing') {
-    if (!trialEndsAt || trialEndsAt > now) return { allowed: true }
-    return { allowed: false, reason: 'Abonimi ka skaduar' }
+    const trialDaysLeft = trialEndsAt
+      ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+      : null
+    if (!trialEndsAt || trialEndsAt > now) {
+      return { allowed: true, subStatus: 'trialing', trialDaysLeft, periodEndsAt: trialEndsAt?.toISOString() ?? null }
+    }
+    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'trialing', trialDaysLeft: 0 }
   }
 
   if (status === 'active') {
-    if (!currentPeriodEnd || currentPeriodEnd > now) return { allowed: true }
-    return { allowed: false, reason: 'Abonimi ka skaduar' }
+    if (!currentPeriodEnd || currentPeriodEnd > now) {
+      return { allowed: true, subStatus: 'active', periodEndsAt: currentPeriodEnd?.toISOString() ?? null }
+    }
+    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'active' }
   }
 
-  return { allowed: false, reason: 'Abonimi ka skaduar' }
+  return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: status ?? null }
 }

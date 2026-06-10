@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/contexts/RoleContext'
 import { Role, ROLE_LABELS } from '@/lib/roles'
+import { useSubscriptionDetails } from '@/hooks/useSubscription'
+import type { ClientStaffSession } from './ClientLayout'
 import toast from 'react-hot-toast'
 import {
   RiDashboardLine,
@@ -51,42 +53,26 @@ const STAFF_NAV_ITEMS = [
   { href: '/historiku', label: 'Historiku', icon: RiHistoryLine },
 ]
 
-interface StaffSession {
-  staffId: number
-  staffName: string
-  staffRole: string
-  organizationId: number
-}
-
 interface SidebarProps {
   onClose?: () => void
   orgName?: string | null
+  staffSession?: ClientStaffSession | null
 }
 
-export default function Sidebar({ onClose, orgName }: SidebarProps) {
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+export default function Sidebar({ onClose, orgName, staffSession = null }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { role } = useRole()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [staffSession, setStaffSession] = useState<StaffSession | null>(null)
-  const [staffLoading, setStaffLoading] = useState(true)
 
   const canSeeNotifications = role === 'owner' || role === 'manager' || role === 'cashier'
-
-  // Detect PIN staff session when there's no Supabase role.
-  // Re-run on pathname so a new login immediately shows the correct name.
-  useEffect(() => {
-    if (role !== null) {
-      setStaffLoading(false)
-      return
-    }
-    setStaffLoading(true)
-    fetch('/api/staff-auth/session')
-      .then((r) => r.json())
-      .then((data) => setStaffSession(data.session ?? null))
-      .catch(() => setStaffSession(null))
-      .finally(() => setStaffLoading(false))
-  }, [role, pathname])
+  const showSubStatus = role === 'owner' || role === 'manager'
+  const subDetails = useSubscriptionDetails(showSubStatus)
 
   const fetchUnreadCount = useCallback(async () => {
     if (!canSeeNotifications) return
@@ -124,7 +110,6 @@ export default function Sidebar({ onClose, orgName }: SidebarProps) {
 
   const handleStaffLogout = async () => {
     await fetch('/api/staff-auth/logout', { method: 'POST' })
-    setStaffSession(null)
     toast.success('U largove me sukses')
     router.push('/staff-login')
     router.refresh()
@@ -146,6 +131,10 @@ export default function Sidebar({ onClose, orgName }: SidebarProps) {
         : 'Punonjës (PIN)'
       : null
 
+  const displayOrgName = isStaffMode
+    ? (staffSession?.organizationName || 'Market OS')
+    : (orgName || 'Market OS')
+
   return (
     <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
       {/* Logo */}
@@ -156,7 +145,7 @@ export default function Sidebar({ onClose, orgName }: SidebarProps) {
           </div>
           <div className="min-w-0">
             <span className="text-slate-900 font-bold text-base leading-none block truncate">
-              {orgName || 'Market OS'}
+              {displayOrgName}
             </span>
             <span className="text-slate-400 text-xs">Sistemi i Marketit</span>
           </div>
@@ -200,6 +189,19 @@ export default function Sidebar({ onClose, orgName }: SidebarProps) {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-slate-100 space-y-1">
+        {showSubStatus && !subDetails.loading && (subDetails.subStatus === 'trialing' || subDetails.subStatus === 'active') && (
+          <div className="px-3 py-1.5 mb-1">
+            {subDetails.subStatus === 'trialing' && subDetails.trialDaysLeft !== null ? (
+              <span className="text-xs text-amber-600 font-medium">
+                Trial: {subDetails.trialDaysLeft} ditë të mbetura
+              </span>
+            ) : subDetails.subStatus === 'active' && subDetails.periodEndsAt ? (
+              <span className="text-xs text-green-600 font-medium">
+                Abonimi aktiv deri më: {formatDate(subDetails.periodEndsAt)}
+              </span>
+            ) : null}
+          </div>
+        )}
         {displayRole && (
           <div className="flex items-center gap-2 px-3 py-2 mb-1">
             <RiShieldUserLine className="text-slate-400 text-base flex-shrink-0" />

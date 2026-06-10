@@ -16,3 +16,34 @@ export function useSubscription(): SubStatus {
 
   return status
 }
+
+export interface SubscriptionDetails {
+  loading: boolean
+  subStatus?: string | null
+  trialDaysLeft?: number | null
+  periodEndsAt?: string | null
+}
+
+export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
+  const [details, setDetails] = useState<SubscriptionDetails>({ loading: enabled })
+
+  useEffect(() => {
+    if (!enabled) {
+      setDetails({ loading: false })
+      return
+    }
+    fetch('/api/subscription-status')
+      .then((r) => r.json())
+      .then((d) =>
+        setDetails({
+          loading: false,
+          subStatus: d.subStatus ?? null,
+          trialDaysLeft: d.trialDaysLeft ?? null,
+          periodEndsAt: d.periodEndsAt ?? null,
+        })
+      )
+      .catch(() => setDetails({ loading: false }))
+  }, [enabled])
+
+  return details
+}

@@ -28,7 +28,12 @@ export async function GET(req: NextRequest) {
       }).catch(() => {})
     }
 
-    return NextResponse.json({ allowed: check.allowed })
+    return NextResponse.json({
+      allowed: check.allowed,
+      subStatus: check.subStatus ?? null,
+      trialDaysLeft: check.trialDaysLeft ?? null,
+      periodEndsAt: check.periodEndsAt ?? null,
+    })
   }
 
   // No Supabase session — check staff PIN session and enforce their org's subscription
