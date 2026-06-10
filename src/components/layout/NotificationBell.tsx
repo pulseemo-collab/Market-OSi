@@ -111,22 +111,30 @@ export default function NotificationBell() {
   }, [])
 
   const markAsRead = async (id: number) => {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
+    setUnreadCount((prev) => Math.max(0, prev - 1))
     try {
       await fetch(`/api/notifications/${id}`, { method: 'PATCH' })
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      )
-      setUnreadCount((prev) => Math.max(0, prev - 1))
-    } catch {}
+    } catch {
+      // Rollback
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)))
+      setUnreadCount((prev) => prev + 1)
+    }
   }
 
   const markAllRead = async () => {
     setMarkingAll(true)
+    const snapshot = { notifications, unreadCount }
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+    setUnreadCount(0)
     try {
       await fetch('/api/notifications/mark-all-read', { method: 'POST' })
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
-      setUnreadCount(0)
     } catch {
+      // Rollback
+      setNotifications(snapshot.notifications)
+      setUnreadCount(snapshot.unreadCount)
     } finally {
       setMarkingAll(false)
     }

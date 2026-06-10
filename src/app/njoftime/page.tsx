@@ -101,15 +101,17 @@ export default function NjoftimePage() {
   }, [fetchNotifications])
 
   const markAsRead = async (id: number) => {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
+    setUnreadCount((prev) => Math.max(0, prev - 1))
     setMarkingId(id)
     try {
       const res = await fetch(`/api/notifications/${id}`, { method: 'PATCH' })
       if (!res.ok) throw new Error()
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      )
-      setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch {
+      // Rollback
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)))
+      setUnreadCount((prev) => prev + 1)
       toast.error('Gabim gjatë shënimit')
     } finally {
       setMarkingId(null)
@@ -117,14 +119,19 @@ export default function NjoftimePage() {
   }
 
   const markAllAsRead = async () => {
+    const snapshot = { notifications, unreadCount }
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+    setUnreadCount(0)
     setMarkingAll(true)
     try {
       const res = await fetch('/api/notifications/mark-all-read', { method: 'POST' })
       if (!res.ok) throw new Error()
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
-      setUnreadCount(0)
       toast.success('Të gjitha njoftime u shënuan si të lexuara')
     } catch {
+      // Rollback
+      setNotifications(snapshot.notifications)
+      setUnreadCount(snapshot.unreadCount)
       toast.error('Gabim gjatë shënimit')
     } finally {
       setMarkingAll(false)
