@@ -20,6 +20,10 @@ import {
   RiDeleteBin6Line,
   RiInformationLine,
   RiAlertLine,
+  RiStore2Line,
+  RiPhoneLine,
+  RiCheckLine,
+  RiCloseLine,
 } from 'react-icons/ri'
 
 // ─── Email (Supabase) users ───────────────────────────────────────────────────
@@ -104,6 +108,15 @@ function PinInput({
 export default function PerdoruesitPage() {
   const { role } = useRole()
 
+  // Org profile state
+  const [orgTelefoni, setOrgTelefoni] = useState<string | null>(null)
+  const [orgName, setOrgName] = useState<string>('')
+  const [orgLoading, setOrgLoading] = useState(true)
+  const [editPhone, setEditPhone] = useState(false)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [phoneSaving, setPhoneSaving] = useState(false)
+
   // Email users state
   const [users, setUsers] = useState<UserEntry[]>([])
   const [usersLoading, setUsersLoading] = useState(true)
@@ -127,6 +140,21 @@ export default function PerdoruesitPage() {
   // Delete confirm modal
   const [deleteStaff, setDeleteStaff] = useState<StaffMember | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const fetchOrg = useCallback(async () => {
+    setOrgLoading(true)
+    try {
+      const res = await fetch('/api/organization')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setOrgName(data.name ?? '')
+      setOrgTelefoni(data.telefoni ?? null)
+    } catch {
+      // non-critical, fail silently
+    } finally {
+      setOrgLoading(false)
+    }
+  }, [])
 
   const fetchUsers = useCallback(async () => {
     setUsersLoading(true)
@@ -158,9 +186,10 @@ export default function PerdoruesitPage() {
   }, [])
 
   useEffect(() => {
+    fetchOrg()
     fetchUsers()
     fetchStaff()
-  }, [fetchUsers, fetchStaff])
+  }, [fetchOrg, fetchUsers, fetchStaff])
 
   const handleRoleChange = async (userId: number, newRole: Role) => {
     setSaving(userId)
@@ -254,6 +283,32 @@ export default function PerdoruesitPage() {
     }
   }
 
+  async function handlePhoneSave() {
+    const phone = phoneInput.trim().replace(/[\s\-]/g, '')
+    if (!/^(\+355\d{9}|0\d{9})$/.test(phone)) {
+      setPhoneError('Numri i telefonit nuk është valid (p.sh. 069 123 4567 ose +355691234567)')
+      return
+    }
+    setPhoneError('')
+    setPhoneSaving(true)
+    try {
+      const res = await fetch('/api/organization', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefoni: phone }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Gabim'); return }
+      setOrgTelefoni(data.telefoni)
+      setEditPhone(false)
+      toast.success('Numri i telefonit u ruajt')
+    } catch {
+      toast.error('Gabim i papritur')
+    } finally {
+      setPhoneSaving(false)
+    }
+  }
+
   if (!role || role !== 'owner') return <AccessDenied />
 
   return (
@@ -262,6 +317,85 @@ export default function PerdoruesitPage() {
         title="Përdoruesit"
         subtitle="Menaxho të gjithë përdoruesit dhe personalin e organizatës"
       />
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SECTION 0: Business profile
+          ═══════════════════════════════════════════════════════════════ */}
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-2">
+          <RiStore2Line className="text-blue-500 text-lg" />
+          <h2 className="text-base font-semibold text-slate-800">Profili i Biznesit</h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Informacioni bazë i organizatës — i përdorur për faturim, mbështetje dhe njoftime.
+        </p>
+        <div className="card p-5">
+          {orgLoading ? (
+            <div className="flex items-center gap-3 text-slate-400 text-sm">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              Duke ngarkuar...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Store name (read-only) */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Emri i Dyqanit</p>
+                <p className="text-slate-800 font-medium">{orgName || '—'}</p>
+              </div>
+
+              {/* Phone number (editable) */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Numri i Telefonit</p>
+                {editPhone ? (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="tel"
+                        value={phoneInput}
+                        onChange={(e) => { setPhoneInput(e.target.value); setPhoneError('') }}
+                        placeholder="p.sh. 069 123 4567"
+                        className="input py-1.5 text-sm flex-1"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handlePhoneSave}
+                        disabled={phoneSaving}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition-colors"
+                        title="Ruaj"
+                      >
+                        <RiCheckLine />
+                      </button>
+                      <button
+                        onClick={() => { setEditPhone(false); setPhoneError('') }}
+                        disabled={phoneSaving}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                        title="Anulo"
+                      >
+                        <RiCloseLine />
+                      </button>
+                    </div>
+                    {phoneError && <p className="text-red-500 text-xs">{phoneError}</p>}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <RiPhoneLine className="text-slate-400 text-sm flex-shrink-0" />
+                    <span className="text-slate-800 font-medium font-mono">
+                      {orgTelefoni || <span className="text-slate-400 font-sans font-normal">—</span>}
+                    </span>
+                    <button
+                      onClick={() => { setPhoneInput(orgTelefoni ?? ''); setEditPhone(true) }}
+                      className="ml-1 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                      title="Ndrysho numrin"
+                    >
+                      <RiEditLine className="text-xs" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ═══════════════════════════════════════════════════════════════
           SECTION A: Supabase / email users

@@ -13,13 +13,21 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [form, setForm] = useState({ dyqani: '', emri: '', email: '', password: '', confirm: '' })
+  const [form, setForm] = useState({ dyqani: '', emri: '', telefoni: '', email: '', password: '', confirm: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
     const e: Record<string, string> = {}
     if (!form.dyqani.trim()) e.dyqani = 'Emri i dyqanit është i detyrueshëm'
     if (!form.emri.trim()) e.emri = 'Emri i pronarit është i detyrueshëm'
+    if (!form.telefoni.trim()) {
+      e.telefoni = 'Numri i telefonit është i detyrueshëm'
+    } else {
+      const phone = form.telefoni.trim().replace(/[\s\-]/g, '')
+      if (!/^(\+355\d{9}|0\d{9})$/.test(phone)) {
+        e.telefoni = 'Numri i telefonit nuk është valid (p.sh. 069 123 4567 ose +355691234567)'
+      }
+    }
     if (!form.email.trim()) e.email = 'Email-i është i detyrueshëm'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email-i nuk është valid'
     if (!form.password) e.password = 'Fjalëkalimi është i detyrueshëm'
@@ -42,6 +50,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           dyqani: form.dyqani.trim(),
           emri: form.emri.trim(),
+          telefoni: form.telefoni.trim().replace(/[\s\-]/g, ''),
           email: form.email.trim(),
           password: form.password,
         }),
@@ -120,6 +129,19 @@ export default function RegisterPage() {
               className={`w-full px-4 py-3 bg-slate-800 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.emri ? 'border-red-500' : 'border-slate-700'}`}
             />
             {errors.emri && <p className="text-red-400 text-xs mt-1">{errors.emri}</p>}
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Numri i Telefonit</label>
+            <input
+              type="tel"
+              value={form.telefoni}
+              onChange={(e) => setForm((p) => ({ ...p, telefoni: e.target.value }))}
+              placeholder="p.sh. 069 123 4567"
+              className={`w-full px-4 py-3 bg-slate-800 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.telefoni ? 'border-red-500' : 'border-slate-700'}`}
+            />
+            {errors.telefoni && <p className="text-red-400 text-xs mt-1">{errors.telefoni}</p>}
           </div>
 
           {/* Email */}
