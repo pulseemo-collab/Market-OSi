@@ -36,6 +36,9 @@ export const PERMISSIONS: Record<string, Role[]> = {
   'backup:create':    ['owner'],
   'backup:restore':   ['owner'],
 
+  'settings:read':    ['owner', 'manager'],
+  'settings:write':   ['owner'],
+
   'notifications:read':   ['owner', 'manager', 'cashier'],
   'notifications:manage': ['owner', 'manager'],
 
@@ -63,6 +66,11 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/regjistri':               ['owner'],
   '/backup':                  ['owner'],
   '/njoftime':               ['owner', 'manager', 'cashier'],
+  '/cilesime':               ['owner', 'manager'],
+  '/cilesime/profili':       ['owner', 'manager'],
+  '/cilesime/abonimi':       ['owner', 'manager'],
+  '/cilesime/backup':        ['owner'],
+  '/cilesime/siguria':       ['owner', 'manager'],
   '/platforma':              ['platform_owner'],
 }
 

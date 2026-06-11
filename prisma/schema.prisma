@@ -12,6 +12,8 @@ model Organization {
   id            Int            @id @default(autoincrement())
   name          String
   telefoni      String?
+  adresa        String?
+  nipt          String?
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

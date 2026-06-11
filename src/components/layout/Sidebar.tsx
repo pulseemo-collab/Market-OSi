@@ -24,11 +24,10 @@ import {
   RiTeamLine,
   RiShieldUserLine,
   RiFileSearchLine,
-  RiSave3Line,
   RiBellLine,
   RiGlobalLine,
   RiFingerprint2Line,
-  RiBankCardLine,
+  RiSettings3Line,
 } from 'react-icons/ri'
 
 const navItems = [
@@ -43,9 +42,8 @@ const navItems = [
   { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['owner'] as Role[] },
   { href: '/personal', label: 'Personal PIN', icon: RiFingerprint2Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/regjistri', label: 'Regjistri Auditimit', icon: RiFileSearchLine, allowed: ['owner'] as Role[] },
-  { href: '/backup', label: 'Backup & Rikuperim', icon: RiSave3Line, allowed: ['owner'] as Role[] },
   { href: '/njoftime', label: 'Njoftime', icon: RiBellLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
-  { href: '/abonimi', label: 'Abonimi & Faturimi', icon: RiBankCardLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/cilesime', label: 'Cilësimet', icon: RiSettings3Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/platforma', label: 'Platforma', icon: RiGlobalLine, allowed: ['platform_owner'] as Role[] },
 ]
 
@@ -158,7 +156,9 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {visibleItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.href
+          const isActive = item.href === '/'
+            ? pathname === '/'
+            : pathname === item.href || pathname.startsWith(item.href + '/')
           const isNotifications = item.href === '/njoftime'
           return (
             <Link
