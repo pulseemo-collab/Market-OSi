@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/contexts/RoleContext'
@@ -16,6 +16,7 @@ import {
   RiBankLine,
   RiInformationLine,
   RiArrowLeftLine,
+  RiPhoneLine,
 } from 'react-icons/ri'
 
 interface SubDetails {
@@ -40,6 +41,8 @@ export default function CilesimiAbonimiFaturimiPage() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<'trial' | 'subscription' | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const paymentRef = useRef<HTMLDivElement>(null)
+  const [highlightPayment, setHighlightPayment] = useState(false)
 
   const isOwner = role === 'owner'
   const canView = role === 'owner' || role === 'manager'
@@ -88,6 +91,12 @@ export default function CilesimiAbonimiFaturimiPage() {
     }
   }
 
+  const handleActivateClick = () => {
+    paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightPayment(true)
+    setTimeout(() => setHighlightPayment(false), 2500)
+  }
+
   if (!canView) return null
 
   if (loading) {
@@ -98,13 +107,11 @@ export default function CilesimiAbonimiFaturimiPage() {
     )
   }
 
-  const isExpiredOrCancelled =
-    !details?.allowed &&
-    (details?.subStatus === 'trialing' || details?.subStatus === 'expired' || details?.subStatus === 'cancelled')
-
+  const isExpired = details?.subStatus === 'expired' || (!details?.allowed && details?.subStatus === 'trialing')
   const isTrialing = details?.subStatus === 'trialing' && details?.allowed
   const isActive = details?.subStatus === 'active' && details?.allowed
   const isCancelled = details?.subStatus === 'cancelled'
+  const isBlockedState = isCancelled || isExpired
 
   const planLabel = details?.plan
     ? details.plan === 'yearly' ? 'Vjetor' : details.plan === 'monthly' ? 'Mujor' : getPlanInfo(details.plan).label
@@ -141,29 +148,45 @@ export default function CilesimiAbonimiFaturimiPage() {
       </div>
 
       <div className="space-y-5">
-        {/* Trial expired banner */}
-        {isExpiredOrCancelled && details?.subStatus === 'trialing' && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-            <RiAlertLine className="text-red-500 text-xl flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-red-700">Trial-i juaj ka përfunduar</p>
-              <p className="text-sm text-red-600 mt-1">
-                Periudha e provës ka skaduar. Aktivizo abonimin për të vazhduar.
-              </p>
+        {/* Cancelled banner */}
+        {isCancelled && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <RiCloseCircleLine className="text-orange-500 text-xl flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-orange-800">Triali juaj është anuluar</p>
+                <p className="text-sm text-orange-700 mt-1">
+                  Për të vazhduar përdorimin e Market OS, aktivizoni abonimin tuaj.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={handleActivateClick}
+              className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Aktivizo Abonimin
+            </button>
           </div>
         )}
 
-        {/* Cancelled banner */}
-        {isCancelled && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-3">
-            <RiCloseCircleLine className="text-slate-500 text-xl flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-slate-700">Abonimi është anuluar</p>
-              <p className="text-sm text-slate-500 mt-1">
-                Kontaktoni platformën për të riaktivizuar aksesin tuaj.
-              </p>
+        {/* Expired banner */}
+        {isExpired && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <RiAlertLine className="text-red-500 text-xl flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-red-700">Trial-i juaj ka përfunduar</p>
+                <p className="text-sm text-red-600 mt-1">
+                  Periudha e provës ka skaduar. Aktivizoni abonimin tuaj për të vazhduar.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={handleActivateClick}
+              className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Aktivizo Abonimin
+            </button>
           </div>
         )}
 
@@ -245,65 +268,90 @@ export default function CilesimiAbonimiFaturimiPage() {
         </div>
 
         {/* Billing Details Card */}
-        {(planPrice || isTrialing || isActive || isExpiredOrCancelled) && (
-          <div className="card p-6 space-y-5">
+        {(isBlockedState || isTrialing || isActive) && (
+          <div
+            ref={paymentRef}
+            className={`card p-6 space-y-5 transition-all duration-500 ${
+              highlightPayment ? 'ring-2 ring-blue-400 ring-offset-2' : ''
+            }`}
+          >
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <RiBankLine className="text-blue-500" />
               Detajet e Faturimit
             </h2>
 
-            <div className="bg-slate-50 rounded-lg p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-700">Plani: {planLabel}</p>
-                {planPrice && (
-                  <p className="text-lg font-bold text-slate-900 mt-1">{planPrice}</p>
+            {(isTrialing || isActive) && (
+              <div className="bg-slate-50 rounded-lg p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Plani: {planLabel}</p>
+                  {planPrice && (
+                    <p className="text-lg font-bold text-slate-900 mt-1">{planPrice}</p>
+                  )}
+                </div>
+                {isActive && (
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Aktiv</span>
+                )}
+                {isTrialing && (
+                  <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Trial</span>
                 )}
               </div>
-              {isActive && (
-                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Aktiv</span>
-              )}
-              {isTrialing && (
-                <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Trial</span>
-              )}
-            </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg">
                 <RiInformationLine className="text-blue-500 text-base flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700 leading-relaxed">
-                  Për të aktivizuar ose rinovuar abonimin, kryeni pagesën me transfertë bankare dhe
-                  kontaktoni administratorin e platformës me konfirmimin e pagesës.
+                  Kryeni pagesën me transfertë bankare dhe kontaktoni administratorin e platformës
+                  me konfirmimin e pagesës për aktivizim brenda 24 orësh.
                 </p>
               </div>
 
-              <div className="border border-slate-200 rounded-lg p-4 space-y-2">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Transfertë Bankare</p>
-                <div className="space-y-1.5 text-sm text-slate-700">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Banka:</span>
-                    <span className="font-medium">— të komunikohet —</span>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Transfertë Bankare</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Plani i zgjedhur</span>
+                    <span className="text-sm font-semibold text-slate-800">{planLabel}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">IBAN:</span>
-                    <span className="font-medium">— të komunikohet —</span>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Shuma për pagesë</span>
+                    <span className="text-sm font-bold text-blue-700">
+                      {planPrice ?? '— zgjidhni planin —'}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Përfituesi:</span>
-                    <span className="font-medium">Market OS</span>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Përfituesi</span>
+                    <span className="text-sm font-medium text-slate-800">Market OS</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Shuma:</span>
-                    <span className="font-medium">{planPrice ?? '—'}</span>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">IBAN</span>
+                    <span className="text-sm text-slate-400 italic">— të komunikohet —</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Arsyeja:</span>
-                    <span className="font-medium">Abonim {planLabel}</span>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Arsyeja e pagesës</span>
+                    <span className="text-sm font-medium text-slate-800">Abonim {planLabel}</span>
                   </div>
                 </div>
               </div>
 
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <RiPhoneLine className="text-slate-400 text-base flex-shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-slate-600">Kontakt & Mbështetje</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Pas kryerjes së pagesës, dërgoni konfirmimin te administratori i platformës
+                    për aktivizimin e abonimit tuaj.
+                  </p>
+                  <p className="text-xs text-slate-400 italic mt-1">
+                    — detajet e kontaktit komunikohen nga platforma —
+                  </p>
+                </div>
+              </div>
+
               <p className="text-xs text-slate-400 text-center">
-                Pas pagesës, administratori do të aktivizojë abonimin brenda 24 orësh.
+                Abonimi aktivizohet brenda 24 orësh nga konfirmimi i pagesës.
               </p>
             </div>
           </div>
