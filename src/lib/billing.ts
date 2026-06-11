@@ -1,8 +1,16 @@
+// Configurable pricing (change these values to update prices everywhere)
+export const PLAN_PRICES = {
+  monthly: 2990, // ALL/month
+  yearly:  24900, // ALL/year
+} as const
+
 export const BILLING_PLANS = {
   trial:    { label: 'Provë',    color: 'bg-yellow-100 text-yellow-700', order: 0 },
-  basic:    { label: 'Basic',    color: 'bg-blue-100 text-blue-700',     order: 1 },
-  pro:      { label: 'Pro',      color: 'bg-violet-100 text-violet-700', order: 2 },
-  internal: { label: 'Internal', color: 'bg-slate-100 text-slate-600',   order: 3 },
+  monthly:  { label: 'Mujor',   color: 'bg-blue-100 text-blue-700',     order: 1 },
+  yearly:   { label: 'Vjetor',  color: 'bg-emerald-100 text-emerald-700', order: 2 },
+  basic:    { label: 'Basic',    color: 'bg-blue-100 text-blue-700',     order: 3 },
+  pro:      { label: 'Pro',      color: 'bg-violet-100 text-violet-700', order: 4 },
+  internal: { label: 'Internal', color: 'bg-slate-100 text-slate-600',   order: 5 },
 } as const
 
 export type BillingPlan = keyof typeof BILLING_PLANS

@@ -190,13 +190,18 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
       {/* Footer */}
       <div className="px-3 py-4 border-t border-slate-100 space-y-1">
         {showSubStatus && !subDetails.loading && (subDetails.subStatus === 'trialing' || subDetails.subStatus === 'active') && (
-          <div className="px-3 py-1.5 mb-1">
+          <div className="px-3 py-1.5 mb-1 space-y-0.5">
+            {subDetails.plan && (
+              <span className="text-xs text-slate-500 block">
+                Plan: {subDetails.plan === 'yearly' ? 'Vjetor' : subDetails.plan === 'monthly' ? 'Mujor' : subDetails.plan}
+              </span>
+            )}
             {subDetails.subStatus === 'trialing' && subDetails.trialDaysLeft !== null ? (
-              <span className="text-xs text-amber-600 font-medium">
+              <span className="text-xs text-amber-600 font-medium block">
                 Trial: {subDetails.trialDaysLeft} ditë të mbetura
               </span>
             ) : subDetails.subStatus === 'active' && subDetails.periodEndsAt ? (
-              <span className="text-xs text-green-600 font-medium">
+              <span className="text-xs text-green-600 font-medium block">
                 Abonimi aktiv deri më: {formatDate(subDetails.periodEndsAt)}
               </span>
             ) : null}

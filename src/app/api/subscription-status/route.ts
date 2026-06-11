@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       subStatus: check.subStatus ?? null,
       trialDaysLeft: check.trialDaysLeft ?? null,
       periodEndsAt: check.periodEndsAt ?? null,
+      plan: check.plan ?? null,
     })
   }
 

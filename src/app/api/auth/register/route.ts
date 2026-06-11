@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   let authUserId: string | null = null
 
   try {
-    const { dyqani, emri, telefoni, email, password } = await req.json()
+    const { dyqani, emri, telefoni, email, password, plan } = await req.json()
 
     if (!dyqani?.trim() || !emri?.trim() || !telefoni?.trim() || !email?.trim() || !password) {
       return NextResponse.json({ error: 'Të gjitha fushat janë të detyrueshme' }, { status: 400 })
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     if (!/^(\+355\d{9}|0\d{9})$/.test(phone)) {
       return NextResponse.json({ error: 'Numri i telefonit nuk është valid' }, { status: 400 })
     }
+    const selectedPlan = plan === 'yearly' ? 'yearly' : 'monthly'
 
     // Step 1: Create Supabase Auth user
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
       await prisma.subscription.create({
         data: {
           organizationId: orgId,
-          plan: 'trial',
+          plan: selectedPlan,
           status: 'trialing',
           trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         },

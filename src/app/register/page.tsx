@@ -4,15 +4,19 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { RiStore2Line, RiArrowLeftLine, RiEyeLine, RiEyeOffLine } from 'react-icons/ri'
+import { RiStore2Line, RiArrowLeftLine, RiEyeLine, RiEyeOffLine, RiCheckLine } from 'react-icons/ri'
 import { createClient } from '@/lib/supabase/client'
+import { PLAN_PRICES } from '@/lib/billing'
 import toast from 'react-hot-toast'
+
+type Plan = 'monthly' | 'yearly'
 
 export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [form, setForm] = useState({ dyqani: '', emri: '', telefoni: '', email: '', password: '', confirm: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -33,6 +37,7 @@ export default function RegisterPage() {
     if (!form.password) e.password = 'Fjalëkalimi është i detyrueshëm'
     else if (form.password.length < 6) e.password = 'Fjalëkalimi duhet të ketë të paktën 6 karaktere'
     if (form.password !== form.confirm) e.confirm = 'Fjalëkalimet nuk përputhen'
+    if (!selectedPlan) e.plan = 'Ju lutem zgjidhni një plan'
     return e
   }
 
@@ -53,6 +58,7 @@ export default function RegisterPage() {
           telefoni: form.telefoni.trim().replace(/[\s\-]/g, ''),
           email: form.email.trim(),
           password: form.password,
+          plan: selectedPlan,
         }),
       })
       const data = await res.json()
@@ -72,8 +78,7 @@ export default function RegisterPage() {
         return
       }
 
-      toast.success('Mirë se vini! Llogaria juaj u krijua me sukses.')
-      router.push('/')
+      router.push('/trial-welcome')
       router.refresh()
     } catch {
       toast.error('Gabim i papritur. Provo sërish.')
@@ -199,6 +204,56 @@ export default function RegisterPage() {
               </button>
             </div>
             {errors.confirm && <p className="text-red-400 text-xs mt-1">{errors.confirm}</p>}
+          </div>
+
+          {/* Plan selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Zgjidhni planin</label>
+            <div className="grid grid-cols-2 gap-3">
+              {(['monthly', 'yearly'] as Plan[]).map((plan) => {
+                const isSelected = selectedPlan === plan
+                const label = plan === 'monthly' ? 'Mujor' : 'Vjetor'
+                const price = PLAN_PRICES[plan].toLocaleString('sq-AL')
+                const period = plan === 'monthly' ? '/muaj' : '/vit'
+                const saving = plan === 'yearly' ? 'Kurseni 30%' : null
+                return (
+                  <button
+                    key={plan}
+                    type="button"
+                    onClick={() => { setSelectedPlan(plan); setErrors((p) => { const n = { ...p }; delete n.plan; return n }) }}
+                    className={`relative flex flex-col items-center gap-1 px-3 py-4 rounded-xl border-2 transition-all text-center ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-600/20'
+                        : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                    }`}
+                  >
+                    {saving && (
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {saving}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="absolute top-2 right-2 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                        <RiCheckLine className="text-white text-[10px]" />
+                      </span>
+                    )}
+                    <span className={`text-sm font-semibold ${isSelected ? 'text-blue-300' : 'text-slate-300'}`}>
+                      {label}
+                    </span>
+                    <span className={`text-base font-bold ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                      {price} L
+                    </span>
+                    <span className={`text-xs ${isSelected ? 'text-blue-300' : 'text-slate-500'}`}>
+                      {period}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            {errors.plan && <p className="text-red-400 text-xs mt-1">{errors.plan}</p>}
+            <p className="text-xs text-slate-500 mt-2 text-center">
+              Pagesa fillon pas 14 ditë provë — pa kartë krediti tani
+            </p>
           </div>
 
           <button

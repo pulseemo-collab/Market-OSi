@@ -6,6 +6,7 @@ export interface SubscriptionAccessResult {
   subStatus?: string | null
   trialDaysLeft?: number | null
   periodEndsAt?: string | null
+  plan?: string | null
 }
 
 export async function checkSubscriptionAccess(
@@ -25,25 +26,27 @@ export async function checkSubscriptionAccess(
 
   const { plan, status, trialEndsAt, currentPeriodEnd } = subscription
   const now = new Date()
+  // Fallback: old orgs registered before plan selection was added
+  const effectivePlan = plan === 'trial' ? 'monthly' : plan
 
-  if (plan === 'internal') return { allowed: true, subStatus: 'active' }
+  if (plan === 'internal') return { allowed: true, subStatus: 'active', plan }
 
   if (status === 'trialing') {
     const trialDaysLeft = trialEndsAt
       ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
       : null
     if (!trialEndsAt || trialEndsAt > now) {
-      return { allowed: true, subStatus: 'trialing', trialDaysLeft, periodEndsAt: trialEndsAt?.toISOString() ?? null }
+      return { allowed: true, subStatus: 'trialing', trialDaysLeft, periodEndsAt: trialEndsAt?.toISOString() ?? null, plan: effectivePlan }
     }
-    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'trialing', trialDaysLeft: 0 }
+    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'trialing', trialDaysLeft: 0, plan: effectivePlan }
   }
 
   if (status === 'active') {
     if (!currentPeriodEnd || currentPeriodEnd > now) {
-      return { allowed: true, subStatus: 'active', periodEndsAt: currentPeriodEnd?.toISOString() ?? null }
+      return { allowed: true, subStatus: 'active', periodEndsAt: currentPeriodEnd?.toISOString() ?? null, plan: effectivePlan }
     }
-    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'active' }
+    return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: 'active', plan: effectivePlan }
   }
 
-  return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: status ?? null }
+  return { allowed: false, reason: 'Abonimi ka skaduar', subStatus: status ?? null, plan: effectivePlan }
 }

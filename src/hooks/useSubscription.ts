@@ -22,6 +22,7 @@ export interface SubscriptionDetails {
   subStatus?: string | null
   trialDaysLeft?: number | null
   periodEndsAt?: string | null
+  plan?: string | null
 }
 
 export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
@@ -40,6 +41,7 @@ export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
           subStatus: d.subStatus ?? null,
           trialDaysLeft: d.trialDaysLeft ?? null,
           periodEndsAt: d.periodEndsAt ?? null,
+          plan: d.plan ?? null,
         })
       )
       .catch(() => setDetails({ loading: false }))
