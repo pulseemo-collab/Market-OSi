@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       trialDaysLeft: check.trialDaysLeft ?? null,
       periodEndsAt: check.periodEndsAt ?? null,
       plan: check.plan ?? null,
+      nextPlan: check.nextPlan ?? null,
     })
   }
 

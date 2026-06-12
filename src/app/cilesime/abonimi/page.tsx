@@ -17,10 +17,13 @@ import {
   RiInformationLine,
   RiArrowLeftLine,
   RiPhoneLine,
+  RiArrowRightLine,
+  RiRefreshLine,
 } from 'react-icons/ri'
 
 interface SubDetails {
   plan: string | null
+  nextPlan: string | null
   subStatus: string | null
   trialDaysLeft: number | null
   periodEndsAt: string | null
@@ -33,14 +36,35 @@ function formatDate(iso: string): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
+function planLabel(plan: string | null | undefined): string {
+  if (!plan) return 'N/A'
+  if (plan === 'yearly') return 'Vjetor'
+  if (plan === 'monthly') return 'Mujor'
+  return getPlanInfo(plan).label
+}
+
+function planPrice(plan: string | null | undefined): string | null {
+  if (plan === 'yearly') return `${PLAN_PRICES.yearly.toLocaleString('sq-AL')} ALL / vit`
+  if (plan === 'monthly') return `${PLAN_PRICES.monthly.toLocaleString('sq-AL')} ALL / muaj`
+  return null
+}
+
 export default function CilesimiAbonimiFaturimiPage() {
   const router = useRouter()
   const { role } = useRole()
   const [details, setDetails] = useState<SubDetails | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Cancel modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<'trial' | 'subscription' | null>(null)
   const [cancelling, setCancelling] = useState(false)
+
+  // Plan change modal
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const [planTarget, setPlanTarget] = useState<'monthly' | 'yearly' | null>(null)
+  const [changingPlan, setChangingPlan] = useState(false)
+
   const paymentRef = useRef<HTMLDivElement>(null)
   const [highlightPayment, setHighlightPayment] = useState(false)
 
@@ -57,6 +81,7 @@ export default function CilesimiAbonimiFaturimiPage() {
       .then((d) => {
         setDetails({
           plan: d.plan ?? null,
+          nextPlan: d.nextPlan ?? null,
           subStatus: d.subStatus ?? null,
           trialDaysLeft: d.trialDaysLeft ?? null,
           periodEndsAt: d.periodEndsAt ?? null,
@@ -91,6 +116,43 @@ export default function CilesimiAbonimiFaturimiPage() {
     }
   }
 
+  const handlePlanChangeClick = (target: 'monthly' | 'yearly') => {
+    setPlanTarget(target)
+    setShowPlanModal(true)
+  }
+
+  const handleClearNextPlan = () => {
+    setPlanTarget(null)
+    setShowPlanModal(true)
+  }
+
+  const handleConfirmPlanChange = async () => {
+    setChangingPlan(true)
+    try {
+      const res = await fetch('/api/subscription/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planTarget }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? 'Gabim gjatë ndryshimit të planit')
+        return
+      }
+      if (planTarget !== null) {
+        toast.success(`Plani i ardhshëm u caktua: ${planLabel(planTarget)}`)
+      } else {
+        toast.success('Plani i ardhshëm u hoq')
+      }
+      setShowPlanModal(false)
+      setDetails((prev) => prev ? { ...prev, nextPlan: planTarget } : prev)
+    } catch {
+      toast.error('Gabim gjatë ndryshimit të planit')
+    } finally {
+      setChangingPlan(false)
+    }
+  }
+
   const handleActivateClick = () => {
     paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setHighlightPayment(true)
@@ -113,17 +175,20 @@ export default function CilesimiAbonimiFaturimiPage() {
   const isCancelled = details?.subStatus === 'cancelled'
   const isBlockedState = isCancelled || isExpired
 
-  const planLabel = details?.plan
-    ? details.plan === 'yearly' ? 'Vjetor' : details.plan === 'monthly' ? 'Mujor' : getPlanInfo(details.plan).label
-    : 'N/A'
+  const currentPlanLabel = planLabel(details?.plan)
+  const currentPlanPrice = planPrice(details?.plan)
 
-  const planPrice = details?.plan === 'yearly'
-    ? `${PLAN_PRICES.yearly.toLocaleString('sq-AL')} ALL / vit`
-    : details?.plan === 'monthly'
-    ? `${PLAN_PRICES.monthly.toLocaleString('sq-AL')} ALL / muaj`
-    : null
+  // For payment instructions: use nextPlan if set, otherwise current plan
+  const paymentPlan = details?.nextPlan ?? details?.plan
+  const paymentPlanLabel = planLabel(paymentPlan)
+  const paymentPlanPrice = planPrice(paymentPlan)
 
   const statusInfo = details?.subStatus ? getStatusInfo(details.subStatus) : null
+
+  // Plan switching: only show for monthly/yearly plans
+  const canSwitchPlan = isOwner && (details?.plan === 'monthly' || details?.plan === 'yearly')
+  const switchTarget = details?.plan === 'monthly' ? 'yearly' : details?.plan === 'yearly' ? 'monthly' : null
+  const nextPlanAlreadySet = details?.nextPlan === switchTarget
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
@@ -196,8 +261,8 @@ export default function CilesimiAbonimiFaturimiPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 uppercase tracking-wide">Plani</span>
-              <p className="text-sm font-semibold text-slate-900">{planLabel}</p>
+              <span className="text-xs text-slate-500 uppercase tracking-wide">Plani Aktual</span>
+              <p className="text-sm font-semibold text-slate-900">{currentPlanLabel}</p>
             </div>
 
             <div className="space-y-1">
@@ -245,8 +310,46 @@ export default function CilesimiAbonimiFaturimiPage() {
             )}
           </div>
 
+          {/* Next plan info */}
+          {details?.nextPlan && (
+            <div className="pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between bg-blue-50 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <RiRefreshLine className="text-blue-500 text-base flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-blue-800">Plani i Ardhshëm</p>
+                    <p className="text-sm font-bold text-blue-900">{planLabel(details.nextPlan)}</p>
+                    {details.periodEndsAt && (
+                      <p className="text-xs text-blue-600 mt-0.5">
+                        Fillon pas {formatDate(details.periodEndsAt)} — pas konfirmimit të pagesës
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {isOwner && (
+                  <button
+                    onClick={handleClearNextPlan}
+                    className="text-xs text-slate-500 hover:text-red-600 transition-colors whitespace-nowrap ml-3"
+                  >
+                    Hiq
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {isOwner && (
             <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+              {/* Plan switch button */}
+              {canSwitchPlan && switchTarget && !nextPlanAlreadySet && (
+                <button
+                  onClick={() => handlePlanChangeClick(switchTarget)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  <RiArrowRightLine className="text-base" />
+                  Kalo në {planLabel(switchTarget)}
+                </button>
+              )}
               {isTrialing && (
                 <button
                   onClick={() => handleCancelClick('trial')}
@@ -283,9 +386,16 @@ export default function CilesimiAbonimiFaturimiPage() {
             {(isTrialing || isActive) && (
               <div className="bg-slate-50 rounded-lg p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-700">Plani: {planLabel}</p>
-                  {planPrice && (
-                    <p className="text-lg font-bold text-slate-900 mt-1">{planPrice}</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    Plani: {currentPlanLabel}
+                    {details?.nextPlan && (
+                      <span className="ml-2 text-xs text-blue-600 font-medium">
+                        → {planLabel(details.nextPlan)} (i ardhshëm)
+                      </span>
+                    )}
+                  </p>
+                  {currentPlanPrice && (
+                    <p className="text-lg font-bold text-slate-900 mt-1">{currentPlanPrice}</p>
                   )}
                 </div>
                 {isActive && (
@@ -313,12 +423,12 @@ export default function CilesimiAbonimiFaturimiPage() {
                 <div className="divide-y divide-slate-100">
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-slate-500">Plani i zgjedhur</span>
-                    <span className="text-sm font-semibold text-slate-800">{planLabel}</span>
+                    <span className="text-sm font-semibold text-slate-800">{paymentPlanLabel}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-slate-500">Shuma për pagesë</span>
                     <span className="text-sm font-bold text-blue-700">
-                      {planPrice ?? '— zgjidhni planin —'}
+                      {paymentPlanPrice ?? '— zgjidhni planin —'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
@@ -331,7 +441,7 @@ export default function CilesimiAbonimiFaturimiPage() {
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-slate-500">Arsyeja e pagesës</span>
-                    <span className="text-sm font-medium text-slate-800">Abonim {planLabel}</span>
+                    <span className="text-sm font-medium text-slate-800">Abonim {paymentPlanLabel}</span>
                   </div>
                 </div>
               </div>
@@ -392,6 +502,62 @@ export default function CilesimiAbonimiFaturimiPage() {
                 className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
               >
                 {cancelling ? 'Duke anuluar...' : 'Konfirmo Anulimin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Change Modal */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                <RiRefreshLine className="text-blue-500 text-xl" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">
+                  {planTarget === null ? 'Hiq Planin e Ardhshëm?' : `Kalo në ${planLabel(planTarget)}?`}
+                </h3>
+                <p className="text-xs text-slate-500">Ndryshimi hyn në fuqi pas periudhës aktuale</p>
+              </div>
+            </div>
+            {planTarget !== null ? (
+              <div className="space-y-2 text-sm text-slate-600 leading-relaxed">
+                <p>
+                  Plani aktual <strong>{currentPlanLabel}</strong> do të vazhdojë deri në fund të periudhës aktuale.
+                </p>
+                {details?.periodEndsAt && (
+                  <p>
+                    Pas <strong>{formatDate(details.periodEndsAt)}</strong>, plani do të ndryshojë në{' '}
+                    <strong>{planLabel(planTarget)}</strong> ({planPrice(planTarget)}) pasi të konfirmohet pagesa.
+                  </p>
+                )}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                  Ditët e mbetura të planit aktual nuk humbasin. Pagesa e re kryhet vetëm pas skadimit të periudhës aktuale.
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Plani i ardhshëm i zgjedhur do të hiqet. Do të vazhdoni me planin aktual{' '}
+                <strong>{currentPlanLabel}</strong>.
+              </p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowPlanModal(false)}
+                disabled={changingPlan}
+                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Mbyll
+              </button>
+              <button
+                onClick={handleConfirmPlanChange}
+                disabled={changingPlan}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+              >
+                {changingPlan ? 'Duke ndryshuar...' : planTarget === null ? 'Konfirmo' : `Zgjidh ${planLabel(planTarget)}`}
               </button>
             </div>
           </div>

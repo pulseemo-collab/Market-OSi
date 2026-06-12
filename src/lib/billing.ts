@@ -1,7 +1,7 @@
 // Configurable pricing (change these values to update prices everywhere)
 export const PLAN_PRICES = {
   monthly: 2990, // ALL/month
-  yearly:  24900, // ALL/year
+  yearly:  29900, // ALL/year
 } as const
 
 export const BILLING_PLANS = {

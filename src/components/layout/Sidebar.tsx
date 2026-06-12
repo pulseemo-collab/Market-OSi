@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/contexts/RoleContext'
@@ -21,16 +20,20 @@ import {
   RiBox3Line,
   RiLogoutBoxRLine,
   RiFileListLine,
-  RiTeamLine,
   RiShieldUserLine,
-  RiFileSearchLine,
-  RiBellLine,
   RiGlobalLine,
-  RiFingerprint2Line,
   RiSettings3Line,
+  RiAdminLine,
 } from 'react-icons/ri'
 
-const navItems = [
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  allowed: Role[]
+}
+
+const mainNavItems: NavItem[] = [
   { href: '/', label: 'Paneli Kryesor', icon: RiDashboardLine, allowed: ['owner', 'manager'] as Role[] },
   { href: '/produktet', label: 'Produktet', icon: RiShoppingBasketLine, allowed: ['owner', 'manager', 'employee'] as Role[] },
   { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine, allowed: ['owner', 'cashier'] as Role[] },
@@ -39,10 +42,10 @@ const navItems = [
   { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine, allowed: ['owner', 'manager'] as Role[] },
   { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/perdoruesit', label: 'Përdoruesit', icon: RiTeamLine, allowed: ['owner'] as Role[] },
-  { href: '/personal', label: 'Personal PIN', icon: RiFingerprint2Line, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/regjistri', label: 'Regjistri Auditimit', icon: RiFileSearchLine, allowed: ['owner'] as Role[] },
-  { href: '/njoftime', label: 'Njoftime', icon: RiBellLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
+]
+
+const bottomNavItems: NavItem[] = [
+  { href: '/administrim', label: 'Administrim', icon: RiAdminLine, allowed: ['owner', 'manager'] as Role[] },
   { href: '/cilesime', label: 'Cilësimet', icon: RiSettings3Line, allowed: ['owner', 'manager'] as Role[] },
   { href: '/platforma', label: 'Platforma', icon: RiGlobalLine, allowed: ['platform_owner'] as Role[] },
 ]
@@ -64,32 +67,56 @@ function formatDate(iso: string): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
+function NavLink({
+  item,
+  pathname,
+  onClose,
+  badge,
+}: {
+  item: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }
+  pathname: string
+  onClose?: () => void
+  badge?: number
+}) {
+  const Icon = item.icon
+  const isActive = item.href === '/'
+    ? pathname === '/'
+    : pathname === item.href || pathname.startsWith(item.href + '/')
+  return (
+    <Link
+      key={item.href}
+      href={item.href}
+      onClick={onClose}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+        isActive
+          ? 'bg-blue-50 text-blue-700'
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+      )}
+    >
+      <Icon
+        className={cn(
+          'text-lg flex-shrink-0',
+          isActive ? 'text-blue-600' : 'text-slate-400'
+        )}
+      />
+      <span className="flex-1">{item.label}</span>
+      {badge != null && badge > 0 && (
+        <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </Link>
+  )
+}
+
 export default function Sidebar({ onClose, orgName, staffSession = null }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { role } = useRole()
-  const [unreadCount, setUnreadCount] = useState(0)
 
-  const canSeeNotifications = role === 'owner' || role === 'manager' || role === 'cashier'
   const showSubStatus = role === 'owner' || role === 'manager'
   const subDetails = useSubscriptionDetails(showSubStatus)
-
-  const fetchUnreadCount = useCallback(async () => {
-    if (!canSeeNotifications) return
-    try {
-      const res = await fetch('/api/notifications?countOnly=true')
-      if (res.ok) {
-        const data = await res.json()
-        setUnreadCount(data.unreadCount ?? 0)
-      }
-    } catch {}
-  }, [canSeeNotifications])
-
-  useEffect(() => {
-    fetchUnreadCount()
-    const interval = setInterval(fetchUnreadCount, 30000)
-    return () => clearInterval(interval)
-  }, [fetchUnreadCount])
 
   // Hide sidebar on all auth pages
   const isAuthPage =
@@ -117,11 +144,9 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
 
   const isStaffMode = role === null && staffSession !== null
 
-  const visibleItems = role !== null
-    ? navItems.filter((item) => item.allowed.includes(role))
-    : isStaffMode
-      ? STAFF_NAV_ITEMS
-      : []
+  const visibleMain = role !== null ? mainNavItems.filter((item) => item.allowed.includes(role)) : []
+  const visibleBottom = role !== null ? bottomNavItems.filter((item) => item.allowed.includes(role)) : []
+  const staffItems = isStaffMode ? STAFF_NAV_ITEMS : []
 
   const displayRole = role
     ? ROLE_LABELS[role]
@@ -153,40 +178,25 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {visibleItems.map((item) => {
-          const Icon = item.icon
-          const isActive = item.href === '/'
-            ? pathname === '/'
-            : pathname === item.href || pathname.startsWith(item.href + '/')
-          const isNotifications = item.href === '/njoftime'
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              )}
-            >
-              <Icon
-                className={cn(
-                  'text-lg flex-shrink-0',
-                  isActive ? 'text-blue-600' : 'text-slate-400'
-                )}
-              />
-              <span className="flex-1">{item.label}</span>
-              {isNotifications && unreadCount > 0 && (
-                <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5">
+        {/* PIN staff */}
+        {isStaffMode && staffItems.map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} onClose={onClose} />
+        ))}
+
+        {/* Main operations */}
+        {visibleMain.map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} onClose={onClose} />
+        ))}
+
+        {/* Bottom items (Administrim, Cilësimet, Platforma) */}
+        {visibleBottom.length > 0 && (
+          <div className="pt-3 space-y-0.5">
+            {visibleBottom.map((item) => (
+              <NavLink key={item.href} item={item} pathname={pathname} onClose={onClose} />
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Footer */}
