@@ -163,22 +163,31 @@ export async function POST(
       auditNotes = `Pagesa shënuar. Plan: ${plan}. Perioda: ${base.toLocaleDateString('sq-AL')} – ${end.toLocaleDateString('sq-AL')}`
 
     } else if (action === 'extend') {
-      const { months } = body
-      if (![1, 3, 6, 12].includes(months)) {
-        return NextResponse.json({ error: 'Numër muajsh i pavlefshëm' }, { status: 400 })
+      const years  = Math.floor(Number(body.years)  || 0)
+      const months = Math.floor(Number(body.months) || 0)
+      if (years < 0 || months < 0) {
+        return NextResponse.json({ error: 'Vlerat duhet të jenë pozitive' }, { status: 400 })
       }
+      if (years === 0 && months === 0) {
+        return NextResponse.json({ error: 'Të paktën një fushë duhet të jetë më e madhe se 0' }, { status: 400 })
+      }
+
       const base = (existing.currentPeriodEnd && existing.currentPeriodEnd > now)
         ? new Date(existing.currentPeriodEnd)
         : new Date(now)
       const newEnd = new Date(base)
-      newEnd.setMonth(newEnd.getMonth() + months)
+      if (years  > 0) newEnd.setFullYear(newEnd.getFullYear() + years)
+      if (months > 0) newEnd.setMonth(newEnd.getMonth() + months)
 
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
         data: { currentPeriodEnd: newEnd, status: 'active' },
       })
       statusChanged = existing.status !== 'active'
-      auditNotes = `Abonimi u zgjat me ${months} muaj. Skadon: ${newEnd.toLocaleDateString('sq-AL')}`
+      const parts: string[] = []
+      if (years  > 0) parts.push(`${years} ${years === 1 ? 'vit' : 'vite'}`)
+      if (months > 0) parts.push(`${months} muaj`)
+      auditNotes = `Abonimi u zgjat me ${parts.join(' dhe ')}. Skadon: ${newEnd.toLocaleDateString('sq-AL')}`
 
     } else if (action === 'cancel') {
       updated = await prisma.subscription.update({

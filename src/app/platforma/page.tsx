@@ -193,6 +193,7 @@ export default function PlatformaPage() {
   const [billingOwnerEmail, setBillingOwnerEmail] = useState<string | null>(null)
   const [billingActionLoading, setBillingActionLoading] = useState(false)
   const [activatePlan, setActivatePlan] = useState<'monthly' | 'yearly'>('monthly')
+  const [extendYears, setExtendYears]   = useState(0)
   const [extendMonths, setExtendMonths] = useState(1)
   const [nextPlanChoice, setNextPlanChoice] = useState<'monthly' | 'yearly'>('monthly')
   const [reactivatePlan, setReactivatePlan] = useState<'monthly' | 'yearly'>('monthly')
@@ -320,6 +321,7 @@ export default function PlatformaPage() {
     setBillingLoading(true)
     setShowCancelConfirm(false)
     setActivatePlan('monthly')
+    setExtendYears(0)
     setExtendMonths(1)
     setNextPlanChoice('monthly')
     setReactivatePlan('monthly')
@@ -837,21 +839,34 @@ export default function PlatformaPage() {
             {/* ── B: Extend ── */}
             <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
               <p className="text-sm font-semibold text-blue-800 mb-2">Zgjat Abonimi</p>
-              <div className="flex gap-2">
-                <select
-                  value={extendMonths}
-                  onChange={(e) => setExtendMonths(Number(e.target.value))}
-                  className="input text-sm flex-1"
-                  disabled={billingActionLoading}
-                >
-                  <option value={1}>+1 muaj</option>
-                  <option value={3}>+3 muaj</option>
-                  <option value={6}>+6 muaj</option>
-                  <option value={12}>+1 vit (12 muaj)</option>
-                </select>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs text-blue-700 mb-1">Vitet</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={extendYears}
+                    onChange={(e) => setExtendYears(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                    className="input text-sm w-full"
+                    disabled={billingActionLoading}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-blue-700 mb-1">Muajt</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={extendMonths}
+                    onChange={(e) => setExtendMonths(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                    className="input text-sm w-full"
+                    disabled={billingActionLoading}
+                    placeholder="0"
+                  />
+                </div>
                 <button
-                  onClick={() => doBillingAction('extend', { months: extendMonths })}
-                  disabled={billingActionLoading}
+                  onClick={() => doBillingAction('extend', { years: extendYears, months: extendMonths })}
+                  disabled={billingActionLoading || (extendYears === 0 && extendMonths === 0)}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-4 whitespace-nowrap"
                 >
                   {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiAddLine />}
@@ -859,7 +874,7 @@ export default function PlatformaPage() {
                 </button>
               </div>
               <p className="text-xs text-blue-700 mt-1.5">
-                Zgjasin nga periudha aktuale (ose tani nëse ka skaduar). Vendos statusin aktiv.
+                Zgjasin nga periudha aktuale (ose tani nëse ka skaduar). Të paktën një fushë duhet të jetë &gt; 0.
               </p>
             </div>
 
