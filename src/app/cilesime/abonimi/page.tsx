@@ -169,7 +169,9 @@ export default function CilesimiAbonimiFaturimiPage() {
     )
   }
 
-  const isExpired = details?.subStatus === 'expired' || (!details?.allowed && details?.subStatus === 'trialing')
+  const isExpired = details?.subStatus === 'expired'
+    || (!details?.allowed && details?.subStatus === 'trialing')
+    || (!details?.allowed && details?.subStatus === 'active')
   const isTrialing = details?.subStatus === 'trialing' && details?.allowed
   const isActive = details?.subStatus === 'active' && details?.allowed
   const isCancelled = details?.subStatus === 'cancelled'
@@ -219,7 +221,7 @@ export default function CilesimiAbonimiFaturimiPage() {
             <div className="flex items-start gap-3 mb-4">
               <RiCloseCircleLine className="text-orange-500 text-xl flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-orange-800">Triali juaj është anuluar</p>
+                <p className="font-semibold text-orange-800">Abonimi juaj është anuluar</p>
                 <p className="text-sm text-orange-700 mt-1">
                   Për të vazhduar përdorimin e Market OS, aktivizoni abonimin tuaj.
                 </p>
@@ -240,9 +242,11 @@ export default function CilesimiAbonimiFaturimiPage() {
             <div className="flex items-start gap-3 mb-4">
               <RiAlertLine className="text-red-500 text-xl flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-red-700">Trial-i juaj ka përfunduar</p>
+                <p className="font-semibold text-red-700">
+                  {details?.subStatus === 'trialing' ? 'Periudha e provës ka skaduar' : 'Perioda e abonimit ka skaduar'}
+                </p>
                 <p className="text-sm text-red-600 mt-1">
-                  Periudha e provës ka skaduar. Aktivizoni abonimin tuaj për të vazhduar.
+                  Aktivizoni abonimin tuaj për të vazhduar përdorimin e Market OS.
                 </p>
               </div>
             </div>

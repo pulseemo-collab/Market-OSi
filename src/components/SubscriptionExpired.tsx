@@ -24,10 +24,10 @@ export default function SubscriptionExpired() {
 
   const title =
     subStatus === 'cancelled'
-      ? 'Triali juaj është anuluar'
-      : subStatus === 'expired'
-      ? 'Trial-i juaj ka përfunduar'
-      : 'Abonimi ka skaduar'
+      ? 'Abonimi juaj është anuluar'
+      : subStatus === 'trialing'
+      ? 'Periudha e provës ka skaduar'
+      : 'Perioda e abonimit ka skaduar'
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-8">
