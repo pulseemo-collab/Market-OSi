@@ -8,7 +8,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import Modal from '@/components/ui/Modal'
 import { formatDateTime } from '@/lib/utils'
 import { ROLE_LABELS } from '@/lib/roles'
-import { getPlanInfo, getStatusInfo, BILLING_PLANS, BILLING_STATUSES } from '@/lib/billing'
+import { getPlanInfo, getStatusInfo, BILLING_STATUSES } from '@/lib/billing'
 import toast from 'react-hot-toast'
 import {
   RiGlobalLine,
@@ -28,7 +28,6 @@ import {
   RiUserLine,
   RiUserAddLine,
   RiLoader4Line,
-  RiSaveLine,
   RiHistoryLine,
   RiCalendarLine,
 } from 'react-icons/ri'
@@ -40,6 +39,7 @@ interface OrgSubscription {
   status: string
   trialEndsAt: string | null
   currentPeriodEnd: string | null
+  nextPlan: string | null
 }
 
 interface OrgRow {
@@ -81,6 +81,7 @@ interface SubscriptionDetail {
   trialEndsAt: string | null
   currentPeriodStart: string | null
   currentPeriodEnd: string | null
+  nextPlan: string | null
   notes: string | null
   createdAt: string
   updatedAt: string
@@ -139,9 +140,13 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function toInputDate(iso: string | null | undefined): string {
-  if (!iso) return ''
-  return new Date(iso).toISOString().slice(0, 10)
+function InfoLine({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-1.5">
+      <span className="text-xs text-slate-500 w-32 flex-shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm text-slate-800">{value}</span>
+    </div>
+  )
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -185,10 +190,13 @@ export default function PlatformaPage() {
   const [billingDetail, setBillingDetail] = useState<SubscriptionDetail | null>(null)
   const [billingLogs, setBillingLogs] = useState<AuditEntry[]>([])
   const [billingLoading, setBillingLoading] = useState(false)
-  const [billingSaving, setBillingSaving] = useState(false)
-  const [billingForm, setBillingForm] = useState({
-    plan: '', status: '', trialEndsAt: '', currentPeriodStart: '', currentPeriodEnd: '', notes: '',
-  })
+  const [billingOwnerEmail, setBillingOwnerEmail] = useState<string | null>(null)
+  const [billingActionLoading, setBillingActionLoading] = useState(false)
+  const [activatePlan, setActivatePlan] = useState<'monthly' | 'yearly'>('monthly')
+  const [extendMonths, setExtendMonths] = useState(1)
+  const [nextPlanChoice, setNextPlanChoice] = useState<'monthly' | 'yearly'>('monthly')
+  const [reactivatePlan, setReactivatePlan] = useState<'monthly' | 'yearly'>('monthly')
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   // ─── Fetch stats ──────────────────────────────────────────────────────────
 
@@ -308,22 +316,20 @@ export default function PlatformaPage() {
     setBillingOrg(org)
     setBillingDetail(null)
     setBillingLogs([])
+    setBillingOwnerEmail(null)
     setBillingLoading(true)
+    setShowCancelConfirm(false)
+    setActivatePlan('monthly')
+    setExtendMonths(1)
+    setNextPlanChoice('monthly')
+    setReactivatePlan('monthly')
     try {
       const res = await fetch(`/api/platform/subscriptions/${org.id}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gabim')
-      const sub: SubscriptionDetail = data.subscription
-      setBillingDetail(sub)
+      setBillingDetail(data.subscription)
       setBillingLogs(data.auditLogs ?? [])
-      setBillingForm({
-        plan:               sub.plan,
-        status:             sub.status,
-        trialEndsAt:        toInputDate(sub.trialEndsAt),
-        currentPeriodStart: toInputDate(sub.currentPeriodStart),
-        currentPeriodEnd:   toInputDate(sub.currentPeriodEnd),
-        notes:              sub.notes ?? '',
-      })
+      setBillingOwnerEmail(data.ownerEmail ?? null)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Gabim gjatë ngarkimit')
       setBillingOrg(null)
@@ -332,35 +338,28 @@ export default function PlatformaPage() {
     }
   }
 
-  async function saveBilling() {
+  async function doBillingAction(action: string, extra?: Record<string, unknown>) {
     if (!billingOrg) return
-    setBillingSaving(true)
+    setBillingActionLoading(true)
     try {
       const res = await fetch(`/api/platform/subscriptions/${billingOrg.id}`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan:               billingForm.plan,
-          status:             billingForm.status,
-          trialEndsAt:        billingForm.trialEndsAt || null,
-          currentPeriodStart: billingForm.currentPeriodStart || null,
-          currentPeriodEnd:   billingForm.currentPeriodEnd || null,
-          notes:              billingForm.notes || null,
-        }),
+        body: JSON.stringify({ action, ...extra }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gabim')
       setBillingDetail(data.subscription)
-      toast.success('Abonimi u ruajt')
+      toast.success(data.message || 'Veprimi u krye')
+      setShowCancelConfirm(false)
       fetchStats()
-      // Refresh audit logs
       const logsRes = await fetch(`/api/platform/subscriptions/${billingOrg.id}`)
       const logsData = await logsRes.json()
       if (logsRes.ok) setBillingLogs(logsData.auditLogs ?? [])
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Gabim gjatë ruajtjes')
+      toast.error(e instanceof Error ? e.message : 'Gabim gjatë veprimit')
     } finally {
-      setBillingSaving(false)
+      setBillingActionLoading(false)
     }
   }
 
@@ -538,8 +537,26 @@ export default function PlatformaPage() {
                             <td className="table-td">
                               {org.subscription ? (
                                 <div className="flex flex-col gap-1">
-                                  <PlanBadge plan={org.subscription.plan} />
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <PlanBadge plan={org.subscription.plan} />
+                                    {org.subscription.nextPlan && (
+                                      <>
+                                        <span className="text-xs text-slate-400">→</span>
+                                        <PlanBadge plan={org.subscription.nextPlan} />
+                                      </>
+                                    )}
+                                  </div>
                                   <StatusBadge status={org.subscription.status} />
+                                  {org.subscription.trialEndsAt && (
+                                    <span className="text-xs text-slate-400">
+                                      Provë: {new Date(org.subscription.trialEndsAt).toLocaleDateString('sq-AL')}
+                                    </span>
+                                  )}
+                                  {org.subscription.currentPeriodEnd && (
+                                    <span className="text-xs text-slate-400">
+                                      Deri: {new Date(org.subscription.currentPeriodEnd).toLocaleDateString('sq-AL')}
+                                    </span>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="text-xs text-slate-300 italic">—</span>
@@ -740,7 +757,7 @@ export default function PlatformaPage() {
       {/* ── Billing Modal ────────────────────────────────────────────────────── */}
       <Modal
         isOpen={billingOrg !== null}
-        onClose={() => { setBillingOrg(null); setBillingDetail(null); setBillingLogs([]) }}
+        onClose={() => { setBillingOrg(null); setBillingDetail(null); setBillingLogs([]); setShowCancelConfirm(false) }}
         title={`Abonimi — ${billingOrg?.name ?? ''}`}
         size="lg"
       >
@@ -754,94 +771,185 @@ export default function PlatformaPage() {
             <p className="text-slate-400 text-sm">Nuk ka abonim për këtë organizatë</p>
           </div>
         ) : (
-          <div className="space-y-5">
-            {/* Current state badges */}
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
-              <PlanBadge plan={billingDetail.plan} />
-              <StatusBadge status={billingDetail.status} />
+          <div className="space-y-4">
+
+            {/* ── Read-only info ── */}
+            <div className="rounded-xl bg-slate-50 p-4 divide-y divide-slate-100">
+              <div className="pb-2 mb-1">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Informacion Abonimi</span>
+              </div>
+              <InfoLine label="Organizata" value={billingOrg?.name} />
+              <InfoLine label="Email pronarit" value={billingOwnerEmail ?? <span className="text-slate-400 italic">—</span>} />
+              <InfoLine
+                label="Plan aktual"
+                value={
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <PlanBadge plan={billingDetail.plan} />
+                    {billingDetail.nextPlan && (
+                      <>
+                        <span className="text-xs text-slate-400">→</span>
+                        <PlanBadge plan={billingDetail.nextPlan} />
+                        <span className="text-xs text-slate-400">(i ardhshëm)</span>
+                      </>
+                    )}
+                  </div>
+                }
+              />
+              <InfoLine label="Statusi" value={<StatusBadge status={billingDetail.status} />} />
               {billingDetail.trialEndsAt && (
-                <span className="text-xs text-slate-500 flex items-center gap-1">
-                  <RiCalendarLine />
-                  Provë deri: {new Date(billingDetail.trialEndsAt).toLocaleDateString('sq-AL')}
-                </span>
+                <InfoLine label="Provë deri" value={new Date(billingDetail.trialEndsAt).toLocaleDateString('sq-AL')} />
+              )}
+              {billingDetail.currentPeriodStart && (
+                <InfoLine label="Perioda fillon" value={new Date(billingDetail.currentPeriodStart).toLocaleDateString('sq-AL')} />
+              )}
+              {billingDetail.currentPeriodEnd && (
+                <InfoLine label="Aktiv deri" value={new Date(billingDetail.currentPeriodEnd).toLocaleDateString('sq-AL')} />
               )}
             </div>
 
-            {/* Edit form */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Plan</label>
+            {/* ── A: Mark Payment / Activate ── */}
+            <div className="rounded-xl border border-green-100 bg-green-50 p-4">
+              <p className="text-sm font-semibold text-green-800 mb-2">Shëno Pagesën / Aktivizo</p>
+              <div className="flex gap-2">
                 <select
-                  value={billingForm.plan}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, plan: e.target.value }))}
-                  className="input w-full text-sm"
+                  value={activatePlan}
+                  onChange={(e) => setActivatePlan(e.target.value as 'monthly' | 'yearly')}
+                  className="input text-sm flex-1"
+                  disabled={billingActionLoading}
                 >
-                  {Object.entries(BILLING_PLANS).map(([key, info]) => (
-                    <option key={key} value={key}>{info.label}</option>
-                  ))}
+                  <option value="monthly">Mujor (+1 muaj)</option>
+                  <option value="yearly">Vjetor (+1 vit)</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Status</label>
-                <select
-                  value={billingForm.status}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, status: e.target.value }))}
-                  className="input w-full text-sm"
+                <button
+                  onClick={() => doBillingAction('activate', { plan: activatePlan })}
+                  disabled={billingActionLoading}
+                  className="btn-primary flex items-center gap-1.5 text-sm px-4 whitespace-nowrap"
                 >
-                  {Object.entries(BILLING_STATUSES).map(([key, info]) => (
-                    <option key={key} value={key}>{info.label}</option>
-                  ))}
-                </select>
+                  {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiCoinLine />}
+                  Aktivizo
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Provë deri më</label>
-                <input
-                  type="date"
-                  value={billingForm.trialEndsAt}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, trialEndsAt: e.target.value }))}
-                  className="input w-full text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Perioda fillon</label>
-                <input
-                  type="date"
-                  value={billingForm.currentPeriodStart}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, currentPeriodStart: e.target.value }))}
-                  className="input w-full text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Perioda mbaron</label>
-                <input
-                  type="date"
-                  value={billingForm.currentPeriodEnd}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, currentPeriodEnd: e.target.value }))}
-                  className="input w-full text-sm"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Shënime</label>
-                <textarea
-                  value={billingForm.notes}
-                  onChange={(e) => setBillingForm((f) => ({ ...f, notes: e.target.value }))}
-                  rows={2}
-                  placeholder="Shënime opsionale..."
-                  className="input w-full text-sm resize-none"
-                />
-              </div>
+              <p className="text-xs text-green-700 mt-1.5">
+                Nëse perioda mbaron në të ardhmen, zgjasin nga aty. Ndryshe fillon tani.
+              </p>
             </div>
 
-            <button
-              onClick={saveBilling}
-              disabled={billingSaving}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              {billingSaving ? <RiLoader4Line className="animate-spin" /> : <RiSaveLine />}
-              Ruaj Ndryshimet
-            </button>
+            {/* ── B: Extend ── */}
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-blue-800 mb-2">Zgjat Abonimi</p>
+              <div className="flex gap-2">
+                <select
+                  value={extendMonths}
+                  onChange={(e) => setExtendMonths(Number(e.target.value))}
+                  className="input text-sm flex-1"
+                  disabled={billingActionLoading}
+                >
+                  <option value={1}>+1 muaj</option>
+                  <option value={3}>+3 muaj</option>
+                  <option value={6}>+6 muaj</option>
+                  <option value={12}>+1 vit (12 muaj)</option>
+                </select>
+                <button
+                  onClick={() => doBillingAction('extend', { months: extendMonths })}
+                  disabled={billingActionLoading}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-4 whitespace-nowrap"
+                >
+                  {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiAddLine />}
+                  Zgjat
+                </button>
+              </div>
+              <p className="text-xs text-blue-700 mt-1.5">
+                Zgjasin nga periudha aktuale (ose tani nëse ka skaduar). Vendos statusin aktiv.
+              </p>
+            </div>
 
-            {/* Audit log */}
+            {/* ── C: Set Next Plan ── */}
+            <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
+              <p className="text-sm font-semibold text-violet-800 mb-2">Cakto Plan të Ardhshëm</p>
+              <div className="flex gap-2">
+                <select
+                  value={nextPlanChoice}
+                  onChange={(e) => setNextPlanChoice(e.target.value as 'monthly' | 'yearly')}
+                  className="input text-sm flex-1"
+                  disabled={billingActionLoading}
+                >
+                  <option value="monthly">Mujor</option>
+                  <option value="yearly">Vjetor</option>
+                </select>
+                <button
+                  onClick={() => doBillingAction('setNextPlan', { nextPlan: nextPlanChoice })}
+                  disabled={billingActionLoading}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-4 whitespace-nowrap"
+                >
+                  {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiCalendarLine />}
+                  Cakto
+                </button>
+              </div>
+              <p className="text-xs text-violet-700 mt-1.5">
+                Plani aktual vazhdon deri në fund të periudhës. Plani i ri aktivizohet me pagesën e ardhshme.
+              </p>
+            </div>
+
+            {/* ── D: Reactivate — only if cancelled or expired ── */}
+            {(billingDetail.status === 'cancelled' || billingDetail.status === 'expired') && (
+              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-800 mb-2">Riaktivizo Abonimi</p>
+                <div className="flex gap-2">
+                  <select
+                    value={reactivatePlan}
+                    onChange={(e) => setReactivatePlan(e.target.value as 'monthly' | 'yearly')}
+                    className="input text-sm flex-1"
+                    disabled={billingActionLoading}
+                  >
+                    <option value="monthly">Mujor (+1 muaj)</option>
+                    <option value="yearly">Vjetor (+1 vit)</option>
+                  </select>
+                  <button
+                    onClick={() => doBillingAction('reactivate', { plan: reactivatePlan })}
+                    disabled={billingActionLoading}
+                    className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 whitespace-nowrap font-medium transition-colors"
+                  >
+                    {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiRefreshLine />}
+                    Riaktivizo
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── E: Cancel ── */}
+            {!showCancelConfirm ? (
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={billingActionLoading || billingDetail.status === 'cancelled'}
+                  className="text-sm text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anulo Abonimi
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm font-semibold text-red-700 mb-1">Konfirmo anulimin e abonimit</p>
+                <p className="text-xs text-red-500 mb-3">
+                  Kjo vendos statusin si &quot;Anuluar&quot;. Perioda aktuale ruhet për historik.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => doBillingAction('cancel')}
+                    disabled={billingActionLoading}
+                    className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    {billingActionLoading && <RiLoader4Line className="animate-spin" />}
+                    Po, Anulo
+                  </button>
+                  <button onClick={() => setShowCancelConfirm(false)} className="btn-secondary text-sm">
+                    Mbyll
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Audit log ── */}
             {billingLogs.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -871,6 +979,7 @@ export default function PlatformaPage() {
                 </div>
               </div>
             )}
+
           </div>
         )}
       </Modal>

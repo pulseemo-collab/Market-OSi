@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
           isActive: true,
           createdAt: true,
           subscription: {
-            select: { plan: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+            select: { plan: true, status: true, trialEndsAt: true, currentPeriodEnd: true, nextPlan: true },
           },
           _count: { select: { userRoles: true, products: true, sales: true } },
           sales: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
             status: org.subscription.status,
             trialEndsAt: org.subscription.trialEndsAt,
             currentPeriodEnd: org.subscription.currentPeriodEnd,
+            nextPlan: org.subscription.nextPlan,
           }
         : null,
     }))
