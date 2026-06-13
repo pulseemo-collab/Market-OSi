@@ -156,7 +156,7 @@ export async function POST(
 
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
-        data: { plan, status: 'active', currentPeriodStart: base, currentPeriodEnd: end, nextPlan: null },
+        data: { plan, status: 'active', currentPeriodStart: base, currentPeriodEnd: end, nextPlan: null, cancelAtPeriodEnd: false, cancelledAt: null },
       })
       planChanged = existing.plan !== plan
       statusChanged = existing.status !== 'active'
@@ -181,7 +181,7 @@ export async function POST(
 
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
-        data: { currentPeriodEnd: newEnd, status: 'active' },
+        data: { currentPeriodEnd: newEnd, status: 'active', cancelAtPeriodEnd: false, cancelledAt: null },
       })
       statusChanged = existing.status !== 'active'
       const parts: string[] = []
@@ -192,10 +192,20 @@ export async function POST(
     } else if (action === 'cancel') {
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
-        data: { status: 'cancelled' },
+        data: { status: 'cancelled', cancelledAt: now, cancelAtPeriodEnd: false },
       })
       statusChanged = existing.status !== 'cancelled'
-      auditNotes = 'Abonimi u anulua'
+      auditNotes = 'Abonimi u anulua (nga platforma)'
+
+    } else if (action === 'undoCancel') {
+      if (!existing.cancelAtPeriodEnd) {
+        return NextResponse.json({ error: 'Nuk ka anulim të planifikuar' }, { status: 400 })
+      }
+      updated = await prisma.subscription.update({
+        where: { organizationId: orgId },
+        data: { cancelAtPeriodEnd: false, cancelledAt: null },
+      })
+      auditNotes = 'Anulimi i planifikuar u hoq (nga platforma)'
 
     } else if (action === 'reactivate') {
       const { plan } = body
@@ -214,7 +224,7 @@ export async function POST(
 
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
-        data: { plan, status: 'active', currentPeriodStart: base, currentPeriodEnd: end },
+        data: { plan, status: 'active', currentPeriodStart: base, currentPeriodEnd: end, cancelAtPeriodEnd: false, cancelledAt: null },
       })
       planChanged = existing.plan !== plan
       statusChanged = true

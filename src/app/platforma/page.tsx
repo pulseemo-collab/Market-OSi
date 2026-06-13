@@ -82,6 +82,8 @@ interface SubscriptionDetail {
   currentPeriodStart: string | null
   currentPeriodEnd: string | null
   nextPlan: string | null
+  cancelAtPeriodEnd: boolean
+  cancelledAt: string | null
   notes: string | null
   createdAt: string
   updatedAt: string
@@ -807,6 +809,16 @@ export default function PlatformaPage() {
               {billingDetail.currentPeriodEnd && (
                 <InfoLine label="Aktiv deri" value={new Date(billingDetail.currentPeriodEnd).toLocaleDateString('sq-AL')} />
               )}
+              {billingDetail.cancelAtPeriodEnd && (
+                <InfoLine
+                  label="Anulim"
+                  value={
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                      Planifikuar në {billingDetail.currentPeriodEnd ? new Date(billingDetail.currentPeriodEnd).toLocaleDateString('sq-AL') : '—'}
+                    </span>
+                  }
+                />
+              )}
             </div>
 
             {/* ── A: Mark Payment / Activate ── */}
@@ -904,6 +916,28 @@ export default function PlatformaPage() {
                 Plani aktual vazhdon deri në fund të periudhës. Plani i ri aktivizohet me pagesën e ardhshme.
               </p>
             </div>
+
+            {/* ── D1: Undo scheduled cancel ── */}
+            {billingDetail.cancelAtPeriodEnd && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                <p className="text-sm font-semibold text-orange-800 mb-1">Anulim i Planifikuar</p>
+                <p className="text-xs text-orange-600 mb-3">
+                  Abonimi do të anulohet automatikisht më{' '}
+                  {billingDetail.currentPeriodEnd
+                    ? new Date(billingDetail.currentPeriodEnd).toLocaleDateString('sq-AL')
+                    : '—'}
+                  . Klienti ka akses deri atëherë.
+                </p>
+                <button
+                  onClick={() => doBillingAction('undoCancel')}
+                  disabled={billingActionLoading}
+                  className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 font-medium transition-colors"
+                >
+                  {billingActionLoading ? <RiLoader4Line className="animate-spin" /> : <RiRefreshLine />}
+                  Anullo Anulimin
+                </button>
+              </div>
+            )}
 
             {/* ── D: Reactivate — only if cancelled or expired ── */}
             {(billingDetail.status === 'cancelled' || billingDetail.status === 'expired') && (

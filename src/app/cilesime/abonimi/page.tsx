@@ -39,6 +39,8 @@ interface SubDetails {
   trialDaysLeft: number | null
   periodEndsAt: string | null
   allowed: boolean
+  cancelAtPeriodEnd: boolean
+  cancelledAt: string | null
 }
 
 interface BillingRecord {
@@ -148,6 +150,7 @@ export default function AbonimiFaturimiPage() {
   // Cancel modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelling, setCancelling]           = useState(false)
+  const [undoing, setUndoing]                 = useState(false)
 
   // Plan change modal
   const [showPlanModal, setShowPlanModal] = useState(false)
@@ -177,6 +180,8 @@ export default function AbonimiFaturimiPage() {
           trialDaysLeft: d.trialDaysLeft ?? null,
           periodEndsAt: d.periodEndsAt ?? null,
           allowed: d.allowed !== false,
+          cancelAtPeriodEnd: d.cancelAtPeriodEnd ?? false,
+          cancelledAt: d.cancelledAt ?? null,
         })
       })
       .catch(() => {})
@@ -196,12 +201,13 @@ export default function AbonimiFaturimiPage() {
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
-  const isExpired   = details?.subStatus === 'expired'
+  const isExpired        = details?.subStatus === 'expired'
     || (!details?.allowed && (details?.subStatus === 'trialing' || details?.subStatus === 'active'))
-  const isTrialing  = details?.subStatus === 'trialing' && !!details?.allowed
-  const isActive    = details?.subStatus === 'active' && !!details?.allowed
-  const isCancelled = details?.subStatus === 'cancelled'
-  const isBlocked   = isCancelled || isExpired
+  const isTrialing       = details?.subStatus === 'trialing' && !!details?.allowed
+  const isActive         = details?.subStatus === 'active' && !!details?.allowed
+  const isCancelled      = details?.subStatus === 'cancelled'
+  const isCancelScheduled = !!details?.cancelAtPeriodEnd && isActive
+  const isBlocked        = isCancelled || isExpired
 
   const currentPlan = details?.plan
   const topUpAmount = computeTopUpAmount(currentPlan, topUpDays)
@@ -222,13 +228,37 @@ export default function AbonimiFaturimiPage() {
       const res  = await fetch('/api/subscription/cancel', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë anulimit'); return }
-      toast.success('Abonimi u anulua me sukses')
       setShowCancelModal(false)
-      setDetails((prev) => prev ? { ...prev, subStatus: 'cancelled', allowed: false } : prev)
+      if (data.scheduledCancel) {
+        toast.success('Rinovimi u anulua. Aksesi vazhdon deri në datën e skadimit.')
+        setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: true, cancelledAt: new Date().toISOString() } : prev)
+      } else {
+        toast.success('Abonimi u anulua me sukses')
+        setDetails((prev) => prev ? { ...prev, subStatus: 'cancelled', allowed: false, cancelAtPeriodEnd: false } : prev)
+      }
     } catch {
       toast.error('Gabim gjatë anulimit')
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const handleUndoCancel = async () => {
+    setUndoing(true)
+    try {
+      const res  = await fetch('/api/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'undo' }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë anulimit'); return }
+      toast.success('Anulimi u hoq. Rinovimi vazhdon normalisht.')
+      setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: false, cancelledAt: null } : prev)
+    } catch {
+      toast.error('Gabim gjatë anulimit')
+    } finally {
+      setUndoing(false)
     }
   }
 
@@ -291,6 +321,25 @@ export default function AbonimiFaturimiPage() {
       </div>
 
       {/* Status banners */}
+      {isCancelScheduled && (
+        <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3">
+          <RiAlertLine className="text-amber-500 text-xl flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-800">
+              Abonimi do të anulohet më {details?.periodEndsAt ? formatDate(details.periodEndsAt) : '—'}
+            </p>
+            <p className="text-sm text-amber-700 mt-1">Aksesi vazhdon deri në fund të periudhës së paguar.</p>
+          </div>
+          <button
+            onClick={handleUndoCancel}
+            disabled={undoing}
+            className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors flex-shrink-0 disabled:opacity-60"
+          >
+            {undoing ? 'Duke riaktivizuar...' : 'Anullo Anulimin'}
+          </button>
+        </div>
+      )}
+
       {isCancelled && (
         <div className="mb-5 bg-orange-50 border border-orange-200 rounded-xl p-5 flex items-start gap-3">
           <RiCloseCircleLine className="text-orange-500 text-xl flex-shrink-0 mt-0.5" />
@@ -613,18 +662,41 @@ export default function AbonimiFaturimiPage() {
                 </span>
               </div>
 
-              <div className="pt-2">
-                <button
-                  onClick={() => setShowCancelModal(true)}
-                  disabled={isCancelled}
-                  className="px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isCancelled ? 'Abonimi është anuluar' : 'Anulo Abonimin'}
-                </button>
-                {!isCancelled && (
-                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                    Pas anulimit, aksesi mbetet aktiv deri në datën e skadimit.
-                  </p>
+              <div className="pt-2 flex flex-col gap-2">
+                {isCancelScheduled ? (
+                  <>
+                    <button
+                      onClick={handleUndoCancel}
+                      disabled={undoing}
+                      className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-amber-700 border border-amber-300 rounded-xl hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {undoing ? 'Duke riaktivizuar...' : 'Anullo Anulimin'}
+                    </button>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Abonimi do të anulohet automatikisht më {details?.periodEndsAt ? formatDate(details.periodEndsAt) : '—'}.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      disabled={isCancelled || isBlocked}
+                      className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isCancelled
+                        ? 'Abonimi është anuluar'
+                        : isTrialing
+                          ? 'Anulo Trial'
+                          : 'Anulo rinovimin'}
+                    </button>
+                    {!isCancelled && !isBlocked && (
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {isTrialing
+                          ? 'Anulimi i trial-it është i menjëhershëm.'
+                          : 'Aksesi mbetet aktiv deri në datën e skadimit.'}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -644,13 +716,16 @@ export default function AbonimiFaturimiPage() {
                 <RiAlertLine className="text-red-500 text-xl" />
               </div>
               <div>
-                <h3 className="font-semibold text-slate-900">Anulo Abonimin?</h3>
-                <p className="text-xs text-slate-500">Ky veprim nuk mund të kthehet prapa</p>
+                <h3 className="font-semibold text-slate-900">
+                  {isTrialing ? 'Anulo Trial?' : 'Anulo rinovimin?'}
+                </h3>
+                <p className="text-xs text-slate-500">Konfirmo veprimin</p>
               </div>
             </div>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Aksesi do të mbetet aktiv deri në datën e skadimit. Pas kësaj, llogaria do të bllokohej.
-              Për të riaktivizuar, kryeni pagesën e re.
+              {isTrialing
+                ? 'Periudha e provës do të anulohet menjëherë dhe aksesi do të bllokohej.'
+                : `Rinovimi automatik do të anulohet. Aksesi vazhdon deri më ${details?.periodEndsAt ? formatDate(details.periodEndsAt) : '—'}, pas kësaj llogaria bllokohej.`}
             </p>
             <div className="flex gap-3 pt-1">
               <button

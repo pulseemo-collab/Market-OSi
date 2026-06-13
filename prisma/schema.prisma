@@ -169,18 +169,20 @@ model Notification {
 }
 
 model Subscription {
-  id                 Int      @id @default(autoincrement())
-  organizationId     Int      @unique
+  id                 Int       @id @default(autoincrement())
+  organizationId     Int       @unique
   organization       Organization @relation(fields: [organizationId], references: [id])
-  plan               String   @default("trial")
-  status             String   @default("trialing")
+  plan               String    @default("trial")
+  status             String    @default("trialing")
   trialEndsAt        DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
   nextPlan           String?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  cancelledAt        DateTime?
   notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model BillingAuditLog {

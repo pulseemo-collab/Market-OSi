@@ -35,6 +35,8 @@ export async function GET(req: NextRequest) {
       periodEndsAt: check.periodEndsAt ?? null,
       plan: check.plan ?? null,
       nextPlan: check.nextPlan ?? null,
+      cancelAtPeriodEnd: check.cancelAtPeriodEnd ?? false,
+      cancelledAt: check.cancelledAt ?? null,
     })
   }
 
