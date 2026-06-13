@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/contexts/RoleContext'
-import { PLAN_PRICES, getPlanInfo, getStatusInfo } from '@/lib/billing'
+import { PLAN_PRICES, getStatusInfo } from '@/lib/billing'
 import toast from 'react-hot-toast'
 import {
   RiBankCardLine,
@@ -14,12 +14,23 @@ import {
   RiCloseCircleLine,
   RiAlertLine,
   RiBankLine,
-  RiInformationLine,
   RiArrowLeftLine,
-  RiPhoneLine,
+  RiEditLine,
+  RiCheckLine,
   RiArrowRightLine,
   RiRefreshLine,
+  RiShoppingCartLine,
+  RiBarChartLine,
+  RiGroupLine,
+  RiDatabase2Line,
+  RiShieldCheckLine,
+  RiHistoryLine,
+  RiStarLine,
 } from 'react-icons/ri'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface SubDetails {
   plan: string | null
@@ -27,9 +38,44 @@ interface SubDetails {
   subStatus: string | null
   trialDaysLeft: number | null
   periodEndsAt: string | null
-  trialEndsAt?: string | null
   allowed: boolean
 }
+
+interface BillingRecord {
+  id: number
+  date: string
+  description: string
+  amount: number | null
+  paymentMethod: string
+  status: string
+}
+
+// ---------------------------------------------------------------------------
+// Mock card placeholder — replace with real provider data later
+// ---------------------------------------------------------------------------
+const MOCK_PAYMENT_CARD = {
+  brand: 'Mastercard',
+  last4: '2514',
+  expiry: '09/30',
+}
+
+// ---------------------------------------------------------------------------
+// Plan config
+// ---------------------------------------------------------------------------
+const PLAN_FEATURES = [
+  { icon: RiShoppingCartLine, text: 'POS dhe menaxhim shitjesh' },
+  { icon: RiDatabase2Line,    text: 'Kontroll stoku' },
+  { icon: RiBarChartLine,     text: 'Raporte dhe statistika' },
+  { icon: RiGroupLine,        text: 'Menaxhim stafi' },
+  { icon: RiShieldCheckLine,  text: 'Backup automatik' },
+]
+
+const MONTHLY_DAILY_RATE = PLAN_PRICES.monthly / 30
+const YEARLY_DAILY_RATE  = PLAN_PRICES.yearly / 365
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -37,45 +83,90 @@ function formatDate(iso: string): string {
 }
 
 function planLabel(plan: string | null | undefined): string {
-  if (!plan) return 'N/A'
   if (plan === 'yearly') return 'Vjetor'
   if (plan === 'monthly') return 'Mujor'
-  return getPlanInfo(plan).label
+  return plan ?? 'N/A'
 }
 
-function planPrice(plan: string | null | undefined): string | null {
-  if (plan === 'yearly') return `${PLAN_PRICES.yearly.toLocaleString('sq-AL')} ALL / vit`
-  if (plan === 'monthly') return `${PLAN_PRICES.monthly.toLocaleString('sq-AL')} ALL / muaj`
-  return null
+function dailyRate(plan: string | null | undefined): number {
+  if (plan === 'yearly') return YEARLY_DAILY_RATE
+  return MONTHLY_DAILY_RATE
 }
 
-export default function CilesimiAbonimiFaturimiPage() {
+function computeTopUpAmount(plan: string | null | undefined, days: number): number {
+  return Math.round(dailyRate(plan) * days)
+}
+
+function addDays(isoDate: string | null | undefined, days: number): Date {
+  const base = isoDate ? new Date(isoDate) : new Date()
+  const result = new Date(base)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function StatusBadge({ status }: { status: string }) {
+  const info = getStatusInfo(status)
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${info.color}`}>
+      {info.label}
+    </span>
+  )
+}
+
+function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-base font-semibold text-slate-900 mb-4">{children}</h2>
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function AbonimiFaturimiPage() {
   const router = useRouter()
   const { role } = useRole()
-  const [details, setDetails] = useState<SubDetails | null>(null)
-  const [loading, setLoading] = useState(true)
+
+  const [details, setDetails]       = useState<SubDetails | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [history, setHistory]       = useState<BillingRecord[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  // Top-up state
+  const [topUpDays, setTopUpDays]   = useState(30)
 
   // Cancel modal
   const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancelTarget, setCancelTarget] = useState<'trial' | 'subscription' | null>(null)
-  const [cancelling, setCancelling] = useState(false)
+  const [cancelling, setCancelling]           = useState(false)
 
   // Plan change modal
   const [showPlanModal, setShowPlanModal] = useState(false)
-  const [planTarget, setPlanTarget] = useState<'monthly' | 'yearly' | null>(null)
-  const [changingPlan, setChangingPlan] = useState(false)
+  const [planTarget, setPlanTarget]       = useState<'monthly' | 'yearly' | null>(null)
+  const [changingPlan, setChangingPlan]   = useState(false)
 
-  const paymentRef = useRef<HTMLDivElement>(null)
-  const [highlightPayment, setHighlightPayment] = useState(false)
+  // Top-up payment modal
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
-  const isOwner = role === 'owner'
-  const canView = role === 'owner' || role === 'manager'
+  const topUpRef  = useRef<HTMLDivElement>(null)
+  const [highlightTopUp, setHighlightTopUp] = useState(false)
 
-  useEffect(() => {
-    if (!canView) {
-      router.replace('/')
-      return
-    }
+  const isOwner  = role === 'owner'
+  const canView  = role === 'owner' || role === 'manager'
+
+  // ---------------------------------------------------------------------------
+  // Fetch data
+  // ---------------------------------------------------------------------------
+  const fetchStatus = useCallback(() => {
     fetch('/api/subscription-status')
       .then((r) => r.json())
       .then((d) => {
@@ -87,25 +178,50 @@ export default function CilesimiAbonimiFaturimiPage() {
           periodEndsAt: d.periodEndsAt ?? null,
           allowed: d.allowed !== false,
         })
-        setLoading(false)
       })
-      .catch(() => setLoading(false))
-  }, [canView, router])
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
-  const handleCancelClick = (type: 'trial' | 'subscription') => {
-    setCancelTarget(type)
-    setShowCancelModal(true)
+  useEffect(() => {
+    if (!canView) { router.replace('/'); return }
+    fetchStatus()
+    fetch('/api/subscription/billing-history')
+      .then((r) => r.json())
+      .then((d) => setHistory(d.records ?? []))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false))
+  }, [canView, router, fetchStatus])
+
+  // ---------------------------------------------------------------------------
+  // Derived state
+  // ---------------------------------------------------------------------------
+  const isExpired   = details?.subStatus === 'expired'
+    || (!details?.allowed && (details?.subStatus === 'trialing' || details?.subStatus === 'active'))
+  const isTrialing  = details?.subStatus === 'trialing' && !!details?.allowed
+  const isActive    = details?.subStatus === 'active' && !!details?.allowed
+  const isCancelled = details?.subStatus === 'cancelled'
+  const isBlocked   = isCancelled || isExpired
+
+  const currentPlan = details?.plan
+  const topUpAmount = computeTopUpAmount(currentPlan, topUpDays)
+  const newExpiryDate = addDays(details?.periodEndsAt, topUpDays)
+
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+  const scrollToTopUp = () => {
+    topUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightTopUp(true)
+    setTimeout(() => setHighlightTopUp(false), 2500)
   }
 
   const handleConfirmCancel = async () => {
     setCancelling(true)
     try {
-      const res = await fetch('/api/subscription/cancel', { method: 'POST' })
+      const res  = await fetch('/api/subscription/cancel', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error ?? 'Gabim gjatë anulimit')
-        return
-      }
+      if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë anulimit'); return }
       toast.success('Abonimi u anulua me sukses')
       setShowCancelModal(false)
       setDetails((prev) => prev ? { ...prev, subStatus: 'cancelled', allowed: false } : prev)
@@ -116,34 +232,17 @@ export default function CilesimiAbonimiFaturimiPage() {
     }
   }
 
-  const handlePlanChangeClick = (target: 'monthly' | 'yearly') => {
-    setPlanTarget(target)
-    setShowPlanModal(true)
-  }
-
-  const handleClearNextPlan = () => {
-    setPlanTarget(null)
-    setShowPlanModal(true)
-  }
-
   const handleConfirmPlanChange = async () => {
     setChangingPlan(true)
     try {
-      const res = await fetch('/api/subscription/change-plan', {
+      const res  = await fetch('/api/subscription/change-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planTarget }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error ?? 'Gabim gjatë ndryshimit të planit')
-        return
-      }
-      if (planTarget !== null) {
-        toast.success(`Plani i ardhshëm u caktua: ${planLabel(planTarget)}`)
-      } else {
-        toast.success('Plani i ardhshëm u hoq')
-      }
+      if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë ndryshimit të planit'); return }
+      toast.success(`Plani i ardhshëm u caktua: ${planLabel(planTarget)}`)
       setShowPlanModal(false)
       setDetails((prev) => prev ? { ...prev, nextPlan: planTarget } : prev)
     } catch {
@@ -153,12 +252,9 @@ export default function CilesimiAbonimiFaturimiPage() {
     }
   }
 
-  const handleActivateClick = () => {
-    paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setHighlightPayment(true)
-    setTimeout(() => setHighlightPayment(false), 2500)
-  }
-
+  // ---------------------------------------------------------------------------
+  // Guards
+  // ---------------------------------------------------------------------------
   if (!canView) return null
 
   if (loading) {
@@ -169,31 +265,11 @@ export default function CilesimiAbonimiFaturimiPage() {
     )
   }
 
-  const isExpired = details?.subStatus === 'expired'
-    || (!details?.allowed && details?.subStatus === 'trialing')
-    || (!details?.allowed && details?.subStatus === 'active')
-  const isTrialing = details?.subStatus === 'trialing' && details?.allowed
-  const isActive = details?.subStatus === 'active' && details?.allowed
-  const isCancelled = details?.subStatus === 'cancelled'
-  const isBlockedState = isCancelled || isExpired
-
-  const currentPlanLabel = planLabel(details?.plan)
-  const currentPlanPrice = planPrice(details?.plan)
-
-  // For payment instructions: use nextPlan if set, otherwise current plan
-  const paymentPlan = details?.nextPlan ?? details?.plan
-  const paymentPlanLabel = planLabel(paymentPlan)
-  const paymentPlanPrice = planPrice(paymentPlan)
-
-  const statusInfo = details?.subStatus ? getStatusInfo(details.subStatus) : null
-
-  // Plan switching: only show for monthly/yearly plans
-  const canSwitchPlan = isOwner && (details?.plan === 'monthly' || details?.plan === 'yearly')
-  const switchTarget = details?.plan === 'monthly' ? 'yearly' : details?.plan === 'yearly' ? 'monthly' : null
-  const nextPlanAlreadySet = details?.nextPlan === switchTarget
-
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl">
       {/* Back link */}
       <Link
         href="/cilesime"
@@ -204,318 +280,404 @@ export default function CilesimiAbonimiFaturimiPage() {
       </Link>
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-7">
         <div className="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center">
           <RiBankCardLine className="text-violet-600 text-xl" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900">Abonimi & Faturimi</h1>
-          <p className="text-sm text-slate-500">Menaxho abonimin dhe shiko detajet e faturimit</p>
+          <p className="text-sm text-slate-500">Menaxho abonimin dhe detajet e faturimit</p>
         </div>
       </div>
 
-      <div className="space-y-5">
-        {/* Cancelled banner */}
-        {isCancelled && (
-          <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-            <div className="flex items-start gap-3 mb-4">
-              <RiCloseCircleLine className="text-orange-500 text-xl flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-orange-800">Abonimi juaj është anuluar</p>
-                <p className="text-sm text-orange-700 mt-1">
-                  Për të vazhduar përdorimin e Market OS, aktivizoni abonimin tuaj.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleActivateClick}
-              className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Aktivizo Abonimin
-            </button>
+      {/* Status banners */}
+      {isCancelled && (
+        <div className="mb-5 bg-orange-50 border border-orange-200 rounded-xl p-5 flex items-start gap-3">
+          <RiCloseCircleLine className="text-orange-500 text-xl flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-orange-800">Abonimi juaj është anuluar</p>
+            <p className="text-sm text-orange-700 mt-1">Për të vazhduar, zgjidhni një plan dhe kryeni pagesën.</p>
           </div>
-        )}
-
-        {/* Expired banner */}
-        {isExpired && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-            <div className="flex items-start gap-3 mb-4">
-              <RiAlertLine className="text-red-500 text-xl flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-700">
-                  {details?.subStatus === 'trialing' ? 'Periudha e provës ka skaduar' : 'Perioda e abonimit ka skaduar'}
-                </p>
-                <p className="text-sm text-red-600 mt-1">
-                  Aktivizoni abonimin tuaj për të vazhduar përdorimin e Market OS.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleActivateClick}
-              className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Aktivizo Abonimin
-            </button>
-          </div>
-        )}
-
-        {/* Subscription Status Card */}
-        <div className="card p-6 space-y-4">
-          <h2 className="text-base font-semibold text-slate-800">Gjendja e Abonimit</h2>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <span className="text-xs text-slate-500 uppercase tracking-wide">Plani Aktual</span>
-              <p className="text-sm font-semibold text-slate-900">{currentPlanLabel}</p>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-xs text-slate-500 uppercase tracking-wide">Statusi</span>
-              {statusInfo ? (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                  {statusInfo.label}
-                </span>
-              ) : (
-                <p className="text-sm text-slate-500">—</p>
-              )}
-            </div>
-
-            {isTrialing && (
-              <>
-                <div className="space-y-1">
-                  <span className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                    <RiTimeLine className="text-sm" /> Ditë të Mbetura
-                  </span>
-                  <p className={`text-sm font-semibold ${(details?.trialDaysLeft ?? 0) <= 3 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {details?.trialDaysLeft ?? 0} ditë
-                  </p>
-                </div>
-                {details?.periodEndsAt && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                      <RiCalendarLine className="text-sm" /> Skadon më
-                    </span>
-                    <p className="text-sm font-medium text-slate-700">{formatDate(details.periodEndsAt)}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {isActive && details?.periodEndsAt && (
-              <div className="space-y-1 col-span-2">
-                <span className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <RiCalendarLine className="text-sm" /> Aktiv deri më
-                </span>
-                <p className="text-sm font-medium text-green-700 flex items-center gap-1">
-                  <RiCheckboxCircleLine className="text-base" />
-                  {formatDate(details.periodEndsAt)}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Next plan info */}
-          {details?.nextPlan && (
-            <div className="pt-3 border-t border-slate-100">
-              <div className="flex items-center justify-between bg-blue-50 rounded-lg px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <RiRefreshLine className="text-blue-500 text-base flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold text-blue-800">Plani i Ardhshëm</p>
-                    <p className="text-sm font-bold text-blue-900">{planLabel(details.nextPlan)}</p>
-                    {details.periodEndsAt && (
-                      <p className="text-xs text-blue-600 mt-0.5">
-                        Fillon pas {formatDate(details.periodEndsAt)} — pas konfirmimit të pagesës
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {isOwner && (
-                  <button
-                    onClick={handleClearNextPlan}
-                    className="text-xs text-slate-500 hover:text-red-600 transition-colors whitespace-nowrap ml-3"
-                  >
-                    Hiq
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {isOwner && (
-            <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2">
-              {/* Plan switch button */}
-              {canSwitchPlan && switchTarget && !nextPlanAlreadySet && (
-                <button
-                  onClick={() => handlePlanChangeClick(switchTarget)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-                >
-                  <RiArrowRightLine className="text-base" />
-                  Kalo në {planLabel(switchTarget)}
-                </button>
-              )}
-              {isTrialing && (
-                <button
-                  onClick={() => handleCancelClick('trial')}
-                  className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Anulo Trial
-                </button>
-              )}
-              {isActive && (
-                <button
-                  onClick={() => handleCancelClick('subscription')}
-                  className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Anulo Abonim
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Billing Details Card */}
-        {(isBlockedState || isTrialing || isActive) && (
-          <div
-            ref={paymentRef}
-            className={`card p-6 space-y-5 transition-all duration-500 ${
-              highlightPayment ? 'ring-2 ring-blue-400 ring-offset-2' : ''
-            }`}
+          <button
+            onClick={scrollToTopUp}
+            className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
           >
-            <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <RiBankLine className="text-blue-500" />
-              Detajet e Faturimit
-            </h2>
+            Aktivizo
+          </button>
+        </div>
+      )}
 
-            {(isTrialing || isActive) && (
-              <div className="bg-slate-50 rounded-lg p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-700">
-                    Plani: {currentPlanLabel}
-                    {details?.nextPlan && (
-                      <span className="ml-2 text-xs text-blue-600 font-medium">
-                        → {planLabel(details.nextPlan)} (i ardhshëm)
-                      </span>
-                    )}
-                  </p>
-                  {currentPlanPrice && (
-                    <p className="text-lg font-bold text-slate-900 mt-1">{currentPlanPrice}</p>
-                  )}
-                </div>
-                {isActive && (
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Aktiv</span>
-                )}
-                {isTrialing && (
-                  <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Trial</span>
-                )}
-              </div>
-            )}
+      {isExpired && (
+        <div className="mb-5 bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+          <RiAlertLine className="text-red-500 text-xl flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-700">
+              {details?.subStatus === 'trialing' ? 'Periudha e provës ka skaduar' : 'Abonimi ka skaduar'}
+            </p>
+            <p className="text-sm text-red-600 mt-1">Zgjatni abonimin për të rifituar aksesin.</p>
+          </div>
+          <button
+            onClick={scrollToTopUp}
+            className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+          >
+            Zgjat
+          </button>
+        </div>
+      )}
 
+      <div className="space-y-6">
+
+        {/* ================================================================
+            Section 1: Statusi i Abonimit
+        ================================================================ */}
+        <SectionCard className="p-6">
+          <SectionTitle>Statusi i Abonimit</SectionTitle>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Status column */}
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg">
-                <RiInformationLine className="text-blue-500 text-base flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  Kryeni pagesën me transfertë bankare dhe kontaktoni administratorin e platformës
-                  me konfirmimin e pagesës për aktivizim brenda 24 orësh.
-                </p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Statusi</p>
+              <div className="flex items-center gap-2">
+                {details?.subStatus ? (
+                  <StatusBadge status={details.subStatus} />
+                ) : (
+                  <span className="text-sm text-slate-400">—</span>
+                )}
               </div>
+            </div>
 
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Transfertë Bankare</p>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-slate-500">Plani i zgjedhur</span>
-                    <span className="text-sm font-semibold text-slate-800">{paymentPlanLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-slate-500">Shuma për pagesë</span>
-                    <span className="text-sm font-bold text-blue-700">
-                      {paymentPlanPrice ?? '— zgjidhni planin —'}
+            {/* Payment method column */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Metoda e Pagesës</p>
+
+              <div className="relative rounded-xl overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%)' }}>
+                <div className="p-4">
+                  {/* Card logo area */}
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-white/60 text-xs font-semibold tracking-widest uppercase">
+                      {MOCK_PAYMENT_CARD.brand}
                     </span>
+                    <div className="flex gap-1">
+                      <div className="w-7 h-5 rounded-full bg-red-500/80" />
+                      <div className="w-7 h-5 rounded-full bg-yellow-400/80 -ml-3" />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-slate-500">Përfituesi</span>
-                    <span className="text-sm font-medium text-slate-800">Market OS</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-slate-500">IBAN</span>
-                    <span className="text-sm text-slate-400 italic">— të komunikohet —</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-slate-500">Arsyeja e pagesës</span>
-                    <span className="text-sm font-medium text-slate-800">Abonim {paymentPlanLabel}</span>
+                  {/* Card number */}
+                  <p className="text-white font-mono text-sm tracking-widest mb-3">
+                    •••• •••• •••• {MOCK_PAYMENT_CARD.last4}
+                  </p>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-white/50 text-[10px] uppercase tracking-wider">Skadon</p>
+                      <p className="text-white text-sm font-medium">{MOCK_PAYMENT_CARD.expiry}</p>
+                    </div>
+                    <button
+                      className="flex items-center gap-1 text-white/70 hover:text-white transition-colors text-xs"
+                      onClick={() => toast('Ndryshimi i kartës do të aktivizohet së shpejti', { icon: '💳' })}
+                    >
+                      <RiEditLine className="text-sm" />
+                      Ndrysho
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <RiPhoneLine className="text-slate-400 text-base flex-shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="text-xs font-semibold text-slate-600">Kontakt & Mbështetje</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Pas kryerjes së pagesës, dërgoni konfirmimin te administratori i platformës
-                    për aktivizimin e abonimit tuaj.
-                  </p>
-                  <p className="text-xs text-slate-400 italic mt-1">
-                    — detajet e kontaktit komunikohen nga platforma —
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-400 text-center">
-                Abonimi aktivizohet brenda 24 orësh nga konfirmimi i pagesës.
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Karta ruhet me siguri. Numri i plotë nuk ruhet kurrë në sisteme tona.
               </p>
             </div>
           </div>
+        </SectionCard>
+
+        {/* ================================================================
+            Section 2: Planet Aktive
+        ================================================================ */}
+        <SectionCard className="p-6">
+          <SectionTitle>Planet Aktive</SectionTitle>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Monthly plan card */}
+            <PlanCard
+              planKey="monthly"
+              label="Mujor"
+              price="2,990"
+              unit="muaj"
+              isCurrentPlan={currentPlan === 'monthly' || (isTrialing && !currentPlan)}
+              nextPlan={details?.nextPlan}
+              isOwner={isOwner}
+              onSwitch={() => { setPlanTarget('monthly'); setShowPlanModal(true) }}
+            />
+
+            {/* Yearly plan card */}
+            <PlanCard
+              planKey="yearly"
+              label="Vjetor"
+              price="29,900"
+              unit="vit"
+              isCurrentPlan={currentPlan === 'yearly'}
+              nextPlan={details?.nextPlan}
+              isOwner={isOwner}
+              savingsBadge="Kurseni 17%"
+              onSwitch={() => { setPlanTarget('yearly'); setShowPlanModal(true) }}
+            />
+          </div>
+        </SectionCard>
+
+        {/* ================================================================
+            Section 3: Zgjat Abonimin (Top-Up)
+        ================================================================ */}
+        <div
+          ref={topUpRef}
+          className={`transition-all duration-500 ${highlightTopUp ? 'ring-2 ring-blue-400 ring-offset-2 rounded-2xl' : ''}`}
+        >
+          <SectionCard className="p-6">
+            <SectionTitle>Zgjat Abonimin</SectionTitle>
+
+            {/* Days / Amount fields */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Ditë</label>
+                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                  <input
+                    type="number"
+                    min={1}
+                    max={1095}
+                    value={topUpDays}
+                    onChange={(e) => {
+                      const v = Math.min(1095, Math.max(1, Number(e.target.value)))
+                      setTopUpDays(v)
+                    }}
+                    className="flex-1 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none"
+                  />
+                  <span className="px-3 text-sm text-slate-400 border-l border-slate-200 bg-slate-50">ditë</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Shuma</label>
+                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                  <span className="flex-1 px-3 py-2.5 text-sm font-bold text-blue-700 tabular-nums">
+                    {topUpAmount.toLocaleString('sq-AL')}
+                  </span>
+                  <span className="px-3 text-sm text-slate-400 border-l border-slate-200">ALL</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick buttons */}
+            <div className="flex flex-wrap gap-2 mb-5">
+              {[
+                { label: '+7 ditë', days: 7 },
+                { label: '+30 ditë', days: 30 },
+                { label: '+3 muaj', days: 90 },
+                { label: '+1 vit', days: 365 },
+              ].map(({ label, days }) => (
+                <button
+                  key={days}
+                  onClick={() => setTopUpDays((prev) => Math.min(1095, prev + days))}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:text-blue-700"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Slider */}
+            <div className="mb-5">
+              <input
+                type="range"
+                min={1}
+                max={1095}
+                value={topUpDays}
+                onChange={(e) => setTopUpDays(Number(e.target.value))}
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <span>1 ditë</span>
+                <span>3 vjet</span>
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
+              <p className="text-sm font-medium text-blue-900">
+                Po zgjat abonimin me <strong>{topUpDays} ditë</strong> për{' '}
+                <strong>{topUpAmount.toLocaleString('sq-AL')} ALL</strong>
+              </p>
+              <p className="text-sm text-blue-700 mt-1 flex items-center gap-1.5">
+                <RiCalendarLine className="flex-shrink-0" />
+                Data e re e skadimit:{' '}
+                <span className="font-semibold">{formatDate(newExpiryDate.toISOString())}</span>
+              </p>
+              {currentPlan && (
+                <p className="text-xs text-blue-500 mt-1">
+                  Bazuar në planin {planLabel(currentPlan)} ({currentPlan === 'yearly'
+                    ? `${Math.round(YEARLY_DAILY_RATE).toLocaleString('sq-AL')} ALL/ditë`
+                    : `${Math.round(MONTHLY_DAILY_RATE).toLocaleString('sq-AL')} ALL/ditë`})
+                </p>
+              )}
+            </div>
+
+            {/* CTA */}
+            {isOwner && (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors text-sm"
+              >
+                Vazhdo te Pagesa
+              </button>
+            )}
+          </SectionCard>
+        </div>
+
+        {/* ================================================================
+            Section 4: Historia e Pagesave
+        ================================================================ */}
+        <SectionCard className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <RiHistoryLine className="text-slate-400 text-lg" />
+            <SectionTitle>Historia e Pagesave</SectionTitle>
+          </div>
+
+          {historyLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-10 text-slate-400">
+              <RiHistoryLine className="text-3xl mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Nuk ka transaksione të regjistruara</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Data</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Përshkrimi</th>
+                    <th className="text-right py-2.5 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Shuma</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Metoda</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Statusi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {history.map((rec) => (
+                    <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">{formatDate(rec.date)}</td>
+                      <td className="py-3 px-3 text-slate-700">{rec.description}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-slate-800 tabular-nums whitespace-nowrap">
+                        {rec.amount != null ? `${rec.amount.toLocaleString('sq-AL')} ALL` : '—'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 hidden sm:table-cell whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <RiBankLine className="text-slate-400 text-base" />
+                          {rec.paymentMethod}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <RecordStatusBadge status={rec.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        {/* ================================================================
+            Section 5: Menaxho Abonimin
+        ================================================================ */}
+        {isOwner && (
+          <SectionCard className="p-6">
+            <SectionTitle>Menaxho Abonimin</SectionTitle>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <RiCalendarLine className="text-slate-400" />
+                  <span className="text-sm">Abonimi skadon më</span>
+                </div>
+                <span className="text-sm font-semibold text-slate-800">
+                  {details?.periodEndsAt ? formatDate(details.periodEndsAt) : '—'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <RiRefreshLine className="text-slate-400" />
+                  <span className="text-sm">Rinovim automatik</span>
+                </div>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                  Jo aktiv
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  disabled={isCancelled}
+                  className="px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isCancelled ? 'Abonimi është anuluar' : 'Anulo Abonimin'}
+                </button>
+                {!isCancelled && (
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    Pas anulimit, aksesi mbetet aktiv deri në datën e skadimit.
+                  </p>
+                )}
+              </div>
+            </div>
+          </SectionCard>
         )}
+
       </div>
 
-      {/* Cancellation Modal */}
+      {/* ================================================================
+          Cancel Modal
+      ================================================================ */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center flex-shrink-0">
                 <RiAlertLine className="text-red-500 text-xl" />
               </div>
               <div>
-                <h3 className="font-semibold text-slate-900">
-                  {cancelTarget === 'trial' ? 'Anulo Trial?' : 'Anulo Abonimin?'}
-                </h3>
-                <p className="text-xs text-slate-500">Kjo veprim nuk mund të kthehet prapa</p>
+                <h3 className="font-semibold text-slate-900">Anulo Abonimin?</h3>
+                <p className="text-xs text-slate-500">Ky veprim nuk mund të kthehet prapa</p>
               </div>
             </div>
             <p className="text-sm text-slate-600 leading-relaxed">
-              {cancelTarget === 'trial'
-                ? 'Nëse anuloni trial-in, do të humbni aksesin menjëherë. Për të ristartuar, kontaktoni platformën.'
-                : 'Nëse anuloni abonimin, do të humbni aksesin pas skadimit të periudhës aktuale. Për të rinovuar, kontaktoni platformën.'}
+              Aksesi do të mbetet aktiv deri në datën e skadimit. Pas kësaj, llogaria do të bllokohej.
+              Për të riaktivizuar, kryeni pagesën e re.
             </p>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowCancelModal(false)}
                 disabled={cancelling}
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
               >
                 Mbyll
               </button>
               <button
                 onClick={handleConfirmCancel}
                 disabled={cancelling}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
               >
-                {cancelling ? 'Duke anuluar...' : 'Konfirmo Anulimin'}
+                {cancelling ? 'Duke anuluar...' : 'Konfirmo'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Plan Change Modal */}
+      {/* ================================================================
+          Plan Change Modal
+      ================================================================ */}
       {showPlanModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
                 <RiRefreshLine className="text-blue-500 text-xl" />
@@ -527,39 +689,41 @@ export default function CilesimiAbonimiFaturimiPage() {
                 <p className="text-xs text-slate-500">Ndryshimi hyn në fuqi pas periudhës aktuale</p>
               </div>
             </div>
+
             {planTarget !== null ? (
               <div className="space-y-2 text-sm text-slate-600 leading-relaxed">
                 <p>
-                  Plani aktual <strong>{currentPlanLabel}</strong> do të vazhdojë deri në fund të periudhës aktuale.
+                  Plani aktual <strong>{planLabel(currentPlan)}</strong> vazhdon deri në fund të periudhës aktuale.
                 </p>
                 {details?.periodEndsAt && (
                   <p>
-                    Pas <strong>{formatDate(details.periodEndsAt)}</strong>, plani do të ndryshojë në{' '}
-                    <strong>{planLabel(planTarget)}</strong> ({planPrice(planTarget)}) pasi të konfirmohet pagesa.
+                    Pas <strong>{formatDate(details.periodEndsAt)}</strong>, plani ndryshon në{' '}
+                    <strong>{planLabel(planTarget)}</strong> pas konfirmimit të pagesës.
                   </p>
                 )}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-                  Ditët e mbetura të planit aktual nuk humbasin. Pagesa e re kryhet vetëm pas skadimit të periudhës aktuale.
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                  Ditët e mbetura nuk humbasin. Pagesa e re kryhet vetëm pas skadimit.
                 </div>
               </div>
             ) : (
               <p className="text-sm text-slate-600 leading-relaxed">
-                Plani i ardhshëm i zgjedhur do të hiqet. Do të vazhdoni me planin aktual{' '}
-                <strong>{currentPlanLabel}</strong>.
+                Plani i ardhshëm do të hiqet. Do të vazhdoni me planin aktual{' '}
+                <strong>{planLabel(currentPlan)}</strong>.
               </p>
             )}
-            <div className="flex gap-3 pt-2">
+
+            <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowPlanModal(false)}
                 disabled={changingPlan}
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
               >
                 Mbyll
               </button>
               <button
                 onClick={handleConfirmPlanChange}
                 disabled={changingPlan}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-60"
               >
                 {changingPlan ? 'Duke ndryshuar...' : planTarget === null ? 'Konfirmo' : `Zgjidh ${planLabel(planTarget)}`}
               </button>
@@ -567,6 +731,182 @@ export default function CilesimiAbonimiFaturimiPage() {
           </div>
         </div>
       )}
+
+      {/* ================================================================
+          Top-Up Payment Modal
+      ================================================================ */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                <RiBankLine className="text-blue-500 text-xl" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">Detajet e Pagesës</h3>
+                <p className="text-xs text-slate-500">Transfertë bankare</p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Detajet</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">Zgjatje</span>
+                  <span className="text-sm font-semibold text-slate-800">{topUpDays} ditë</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">Plan</span>
+                  <span className="text-sm font-semibold text-slate-800">{planLabel(currentPlan)}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">Shuma</span>
+                  <span className="text-sm font-bold text-blue-700">
+                    {topUpAmount.toLocaleString('sq-AL')} ALL
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">Përfituesi</span>
+                  <span className="text-sm font-medium text-slate-800">Market OS</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">IBAN</span>
+                  <span className="text-sm text-slate-400 italic">— të komunikohet —</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm text-slate-500">Referenca</span>
+                  <span className="text-sm font-medium text-slate-800">Zgjatje {topUpDays} ditë</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
+              <RiCheckboxCircleLine className="text-blue-500 text-base flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                Pas kryerjes së pagesës, dërgoni konfirmimin tek administratori i platformës.
+                Abonimi aktivizohet brenda 24 orësh.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Mbyll
+              </button>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false)
+                  toast.success('Kërkesa u regjistrua. Prisni konfirmimin.')
+                }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Konfirmo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PlanCard component
+// ---------------------------------------------------------------------------
+
+interface PlanCardProps {
+  planKey: 'monthly' | 'yearly'
+  label: string
+  price: string
+  unit: string
+  isCurrentPlan: boolean
+  nextPlan: string | null | undefined
+  isOwner: boolean
+  savingsBadge?: string
+  onSwitch: () => void
+}
+
+function PlanCard({ planKey, label, price, unit, isCurrentPlan, nextPlan, isOwner, savingsBadge, onSwitch }: PlanCardProps) {
+  const isNextPlan = nextPlan === planKey
+
+  return (
+    <div className={`relative rounded-xl border-2 p-5 flex flex-col gap-4 transition-colors ${
+      isCurrentPlan
+        ? 'border-blue-500 bg-blue-50/50'
+        : 'border-slate-200 bg-white hover:border-slate-300'
+    }`}>
+      {savingsBadge && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white text-xs font-semibold rounded-full shadow-sm">
+            <RiStarLine className="text-xs" />
+            {savingsBadge}
+          </span>
+        </div>
+      )}
+
+      <div>
+        <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
+        <div className="flex items-baseline gap-1">
+          <span className="text-2xl font-bold text-slate-900">{price}</span>
+          <span className="text-sm text-slate-500">ALL / {unit}</span>
+        </div>
+        {planKey === 'yearly' && (
+          <p className="text-xs text-emerald-600 font-medium mt-0.5">
+            Ekuivalent me 2,492 ALL / muaj
+          </p>
+        )}
+      </div>
+
+      <ul className="space-y-2 flex-1">
+        {PLAN_FEATURES.map(({ icon: Icon, text }) => (
+          <li key={text} className="flex items-center gap-2 text-sm text-slate-600">
+            <RiCheckLine className="text-emerald-500 flex-shrink-0 text-base" />
+            {text}
+          </li>
+        ))}
+      </ul>
+
+      {isCurrentPlan ? (
+        <div className="flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg">
+          <RiCheckLine className="text-base" />
+          Plani aktual
+        </div>
+      ) : isNextPlan ? (
+        <div className="flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg border border-blue-200">
+          <RiRefreshLine className="text-base" />
+          Plani i ardhshëm
+        </div>
+      ) : isOwner ? (
+        <button
+          onClick={onSwitch}
+          className="flex items-center justify-center gap-1.5 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:border-blue-300 hover:text-blue-700 transition-colors"
+        >
+          <RiArrowRightLine className="text-base" />
+          Kalo në {label}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RecordStatusBadge
+// ---------------------------------------------------------------------------
+
+function RecordStatusBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    'Konfirmuar': 'bg-green-100 text-green-700',
+    'Anuluar':    'bg-red-100 text-red-700',
+    'Në pritje':  'bg-amber-100 text-amber-700',
+  }
+  const cls = colors[status] ?? 'bg-slate-100 text-slate-500'
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+      {status}
+    </span>
   )
 }
