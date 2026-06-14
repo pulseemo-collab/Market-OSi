@@ -61,7 +61,7 @@ export default function NotificationBell() {
   const [markingAll, setMarkingAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const canSee = role === 'owner' || role === 'manager' || role === 'cashier'
+  const canSee = role === 'Administrator' || role === 'Manager' || role === 'Cashier'
 
   const fetchCount = useCallback(async () => {
     if (!canSee) return

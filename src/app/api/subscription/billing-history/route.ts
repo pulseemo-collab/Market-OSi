@@ -23,7 +23,7 @@ function statusLabel(status: string | null | undefined): string {
 }
 
 export async function GET() {
-  const { organizationId, error } = await requireRole(['owner', 'manager'])
+  const { organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   if (!organizationId) {
@@ -48,8 +48,14 @@ export async function GET() {
       description = 'Abonimi u anulua'
       status = 'Anuluar'
     } else if (log.newStatus === 'active') {
-      description = `Aktivizim abonimi ${planLabel(log.newPlan ?? log.oldPlan)}`
-      amount = PLAN_AMOUNTS[log.newPlan ?? log.oldPlan ?? ''] ?? null
+      if (log.amount !== null) {
+        // Top-up (extension) — use exact stored amount and description
+        description = log.notes ?? `Zgjatje abonimi`
+        amount = log.amount
+      } else {
+        description = `Aktivizim abonimi ${planLabel(log.newPlan ?? log.oldPlan)}`
+        amount = PLAN_AMOUNTS[log.newPlan ?? log.oldPlan ?? ''] ?? null
+      }
     } else if (log.newStatus) {
       description = `${statusLabel(log.oldStatus)} → ${statusLabel(log.newStatus)}`
     }

@@ -11,7 +11,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const { userId, userEmail, role, organizationId, error } = await requireRole(['owner', 'manager'])
+  const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const rl = rateLimit(req, 'staff', userId, organizationId)

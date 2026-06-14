@@ -28,8 +28,8 @@ interface OrgProfile {
 export default function ProfiliBiznesitPage() {
   const { role } = useRole()
   const subscription = useSubscription()
-  const isOwner = role === 'owner'
-  const canView = role === 'owner' || role === 'manager'
+  const isOwner = role === 'Administrator'
+  const canView = role === 'Administrator' || role === 'Manager'
 
   const [profile, setProfile] = useState<OrgProfile | null>(null)
   const [loading, setLoading] = useState(true)

@@ -21,7 +21,7 @@ import {
 export default function SiguriaPage() {
   const { role } = useRole()
   const subscription = useSubscription()
-  const canView = role === 'owner' || role === 'manager'
+  const canView = role === 'Administrator' || role === 'Manager'
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

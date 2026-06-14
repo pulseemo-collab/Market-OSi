@@ -10,7 +10,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const { userId, userEmail, role, organizationId, error } = await requireRole(['owner', 'manager'])
+  const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const rl = rateLimit(req, 'staff', userId, organizationId)
@@ -31,7 +31,7 @@ export async function PATCH(
     const body = await req.json()
     const { emri, roli, isActive, kodi } = body
 
-    if (roli !== undefined && !['cashier', 'employee'].includes(roli)) {
+    if (roli !== undefined && !['Cashier'].includes(roli)) {
       return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
     }
 
@@ -115,7 +115,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const { userId, userEmail, role, organizationId, error } = await requireRole(['owner', 'manager'])
+  const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const staffId = parseInt(params.id)

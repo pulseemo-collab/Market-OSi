@@ -27,7 +27,7 @@ export async function PATCH(
     }
 
     // Cashier can only mark their own notifications
-    if (role === 'cashier' && notification.userId !== userId) {
+    if (role === 'Cashier' && notification.userId !== userId) {
       return NextResponse.json({ error: 'Nuk ke akses' }, { status: 403 })
     }
 

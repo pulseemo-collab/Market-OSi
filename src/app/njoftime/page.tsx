@@ -76,7 +76,7 @@ export default function NjoftimePage() {
   const [markingAll, setMarkingAll] = useState(false)
   const [markingId, setMarkingId] = useState<number | null>(null)
 
-  const canAccess = role === 'owner' || role === 'manager' || role === 'cashier'
+  const canAccess = role === 'Administrator' || role === 'Manager' || role === 'Cashier'
 
   const fetchNotifications = useCallback(async () => {
     if (!canAccess) return

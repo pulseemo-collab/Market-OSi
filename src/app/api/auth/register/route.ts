@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId: authUserId,
           email: email.trim(),
-          roli: 'owner',
+          roli: 'Administrator',
           organizationId: orgId,
         },
       })

@@ -176,10 +176,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (role === 'platform_owner') router.replace('/platforma')
+    if (role === 'Cashier') router.replace('/shitjet')
   }, [role, router])
 
   if (role === 'platform_owner') return null
-  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (role === 'Cashier') return null
+
+  if (!role || !['Administrator', 'Manager'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   if (loading) {

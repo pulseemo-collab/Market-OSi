@@ -17,7 +17,7 @@ export default function StaffLoginPage() {
       .then((r) => r.json())
       .then((data) => {
         console.log('[StaffLoginPage] existing session check:', data)
-        if (data.session?.staffRole === 'cashier') {
+        if (data.session?.staffRole === 'Cashier') {
           console.log('[StaffLoginPage] already authenticated → /shitjet')
           window.location.href = '/shitjet'
         }

@@ -34,19 +34,19 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { href: '/', label: 'Paneli Kryesor', icon: RiDashboardLine, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/produktet', label: 'Produktet', icon: RiShoppingBasketLine, allowed: ['owner', 'manager', 'employee'] as Role[] },
-  { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine, allowed: ['owner', 'cashier'] as Role[] },
-  { href: '/historiku', label: 'Historiku', icon: RiHistoryLine, allowed: ['owner', 'manager', 'cashier'] as Role[] },
-  { href: '/stok-i-ulet', label: 'Stok i Ulët', icon: RiAlertLine, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/', label: 'Paneli Kryesor', icon: RiDashboardLine, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/produktet', label: 'Produktet', icon: RiShoppingBasketLine, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/shitjet', label: 'Shitjet (POS)', icon: RiShoppingCartLine, allowed: ['Administrator', 'Manager', 'Cashier'] as Role[] },
+  { href: '/historiku', label: 'Historiku', icon: RiHistoryLine, allowed: ['Administrator', 'Manager', 'Cashier'] as Role[] },
+  { href: '/stok-i-ulet', label: 'Stok i Ulët', icon: RiAlertLine, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/porositje-te-sugjeruara', label: 'Porositje Sugjeruara', icon: RiFileListLine, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/furnizime', label: 'Furnizime', icon: RiBox3Line, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/furnitoret', label: 'Furnitorët', icon: RiTruckLine, allowed: ['Administrator', 'Manager'] as Role[] },
 ]
 
 const bottomNavItems: NavItem[] = [
-  { href: '/administrim', label: 'Administrim', icon: RiAdminLine, allowed: ['owner', 'manager'] as Role[] },
-  { href: '/cilesime', label: 'Cilësimet', icon: RiSettings3Line, allowed: ['owner', 'manager'] as Role[] },
+  { href: '/administrim', label: 'Administrim', icon: RiAdminLine, allowed: ['Administrator', 'Manager'] as Role[] },
+  { href: '/cilesime', label: 'Cilësimet', icon: RiSettings3Line, allowed: ['Administrator', 'Manager'] as Role[] },
   { href: '/platforma', label: 'Platforma', icon: RiGlobalLine, allowed: ['platform_owner'] as Role[] },
 ]
 
@@ -115,7 +115,7 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
   const router = useRouter()
   const { role } = useRole()
 
-  const showSubStatus = role === 'owner' || role === 'manager'
+  const showSubStatus = role === 'Administrator' || role === 'Manager'
   const subDetails = useSubscriptionDetails(showSubStatus)
 
   // Hide sidebar on all auth pages
@@ -151,9 +151,9 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
   const displayRole = role
     ? ROLE_LABELS[role]
     : staffSession
-      ? staffSession.staffRole === 'cashier'
+      ? staffSession.staffRole === 'Cashier'
         ? 'Kasijer (PIN)'
-        : 'Punonjës (PIN)'
+        : 'Staff (PIN)'
       : null
 
   const displayOrgName = isStaffMode

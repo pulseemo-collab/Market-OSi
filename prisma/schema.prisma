@@ -195,6 +195,7 @@ model BillingAuditLog {
   oldStatus       String?
   newStatus       String?
   notes           String?
+  amount          Int?
   createdAt       DateTime @default(now())
 }
 

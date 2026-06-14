@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
 export async function POST(req: NextRequest) {
-  const { userId, userEmail, role, organizationId, error } = await requireRole(['owner'])
+  const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator'])
   if (error) return error
 
   if (!organizationId) {

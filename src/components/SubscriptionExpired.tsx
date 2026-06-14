@@ -10,7 +10,7 @@ export default function SubscriptionExpired() {
   const router = useRouter()
   const { role } = useRole()
   const { subStatus } = useSubscriptionDetails()
-  const isOwnerOrManager = role === 'owner' || role === 'manager'
+  const isOwnerOrManager = role === 'Administrator' || role === 'Manager'
 
   useEffect(() => {
     if (isOwnerOrManager) {

@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
+import { PLAN_PRICES } from '@/lib/billing'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 
-const PLAN_LABELS: Record<string, string> = { monthly: 'Mujor', yearly: 'Vjetor' }
-const PLAN_DAYS: Record<string, number> = { monthly: 30, yearly: 365 }
+const PLAN_DAILY_RATES: Record<string, number> = {
+  monthly: PLAN_PRICES.monthly / 30,
+  yearly:  PLAN_PRICES.yearly / 365,
+}
 
 export async function POST(req: Request) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator'])
@@ -15,10 +18,10 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json()
-  const { plan } = body as { plan: string | null }
+  const { days } = body as { days: number }
 
-  if (plan !== null && plan !== 'monthly' && plan !== 'yearly') {
-    return NextResponse.json({ error: 'Plan i pavlefshëm' }, { status: 400 })
+  if (!days || !Number.isInteger(days) || days < 1 || days > 1095) {
+    return NextResponse.json({ error: 'Numri i ditëve është i pavlefshëm' }, { status: 400 })
   }
 
   const existing = await prisma.subscription.findUnique({ where: { organizationId } })
@@ -26,22 +29,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
   }
 
-  if (plan !== null && existing.plan === plan) {
-    return NextResponse.json({ error: 'Plani i zgjedhur është i njëjtë me planin aktual' }, { status: 400 })
-  }
+  const plan = existing.plan ?? 'monthly'
+  const dailyRate = PLAN_DAILY_RATES[plan] ?? PLAN_DAILY_RATES.monthly
+  const amount = Math.round(dailyRate * days)
 
-  // Clearing next plan
-  if (plan === null) {
-    await prisma.subscription.update({
-      where: { organizationId },
-      data: { nextPlan: null },
-    })
-    return NextResponse.json({ success: true, nextPlan: null })
-  }
-
-  // Compute new period end: max(now, currentPeriodEnd, trialEndsAt) + plan days
   const now = new Date()
-  const daysToAdd = PLAN_DAYS[plan] ?? 30
   const baseDate = new Date(
     Math.max(
       now.getTime(),
@@ -50,12 +42,11 @@ export async function POST(req: Request) {
     ),
   )
   const newPeriodEnd = new Date(baseDate)
-  newPeriodEnd.setDate(newPeriodEnd.getDate() + daysToAdd)
+  newPeriodEnd.setDate(newPeriodEnd.getDate() + days)
 
   await prisma.subscription.update({
     where: { organizationId },
     data: {
-      nextPlan: plan,
       status: 'active',
       currentPeriodEnd: newPeriodEnd,
       currentPeriodStart: now,
@@ -64,18 +55,16 @@ export async function POST(req: Request) {
     },
   })
 
-  const oldLabel = PLAN_LABELS[existing.plan] ?? existing.plan
-  const newLabel = PLAN_LABELS[plan] ?? plan
-
-  // newPlan set + no newStatus → billing-history renders "Ndryshim plani: X → Y"
   await prisma.billingAuditLog.create({
     data: {
       organizationId,
       changedByUserId: userId!,
       changedByEmail: userEmail!,
       oldPlan: existing.plan,
-      newPlan: plan,
-      notes: `Ndryshim plani: ${oldLabel} → ${newLabel}`,
+      newPlan: existing.plan,
+      newStatus: 'active',
+      notes: `Zgjatje abonimi: ${days} ditë`,
+      amount,
     },
   })
 
@@ -84,10 +73,10 @@ export async function POST(req: Request) {
     userEmail: userEmail!,
     userRole: role!,
     organizationId,
-    action: AUDIT_ACTIONS.BILLING_PLAN_CHANGED,
+    action: AUDIT_ACTIONS.BILLING_STATUS_CHANGED,
     entityType: AUDIT_ENTITY_TYPES.SUBSCRIPTION,
-    description: `Plani u ndryshua nga ${oldLabel} në ${newLabel}. Pagesa u simulua (${daysToAdd} ditë).`,
+    description: `Abonimi u zgjat me ${days} ditë. Skadon: ${newPeriodEnd.toLocaleDateString('sq-AL')}`,
   }).catch(() => {})
 
-  return NextResponse.json({ success: true, nextPlan: plan, newPeriodEnd: newPeriodEnd.toISOString() })
+  return NextResponse.json({ success: true, newPeriodEnd: newPeriodEnd.toISOString() })
 }

@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     const skip = parseInt(searchParams.get('skip') || '0')
 
     // Cashiers only see notifications assigned to them
-    const userFilter = role === 'cashier' ? { userId: userId! } : {}
+    const userFilter = role === 'Cashier' ? { userId: userId! } : {}
 
     const baseWhere = { organizationId: organizationId!, ...userFilter }
     const unreadWhere = { ...baseWhere, isRead: false }

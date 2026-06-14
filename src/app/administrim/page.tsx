@@ -24,7 +24,7 @@ const sections = [
     iconColor: 'text-blue-600',
     title: 'Përdoruesit',
     description: 'Menaxho llogaritë e përdoruesve dhe rolet e tyre',
-    allowed: ['owner'],
+    allowed: ['Administrator'],
   },
   {
     href: '/personal',
@@ -33,7 +33,7 @@ const sections = [
     iconColor: 'text-violet-600',
     title: 'Personal PIN',
     description: 'Menaxho stafin lokal dhe kodet PIN të tyre',
-    allowed: ['owner', 'manager'],
+    allowed: ['Administrator', 'Manager'],
   },
   {
     href: '/njoftime',
@@ -42,7 +42,7 @@ const sections = [
     iconColor: 'text-amber-600',
     title: 'Njoftime',
     description: 'Shikoni dhe menaxhoni njoftimet e sistemit',
-    allowed: ['owner', 'manager'],
+    allowed: ['Administrator', 'Manager'],
   },
   {
     href: '/regjistri',
@@ -51,7 +51,7 @@ const sections = [
     iconColor: 'text-rose-600',
     title: 'Regjistri Auditimit',
     description: 'Historia e ndryshimeve dhe veprimeve në sistem',
-    allowed: ['owner'],
+    allowed: ['Administrator'],
   },
 ]
 
@@ -61,12 +61,12 @@ export default function AdministrimPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (role !== null && role !== 'owner' && role !== 'manager') {
+    if (role !== null && role !== 'Administrator' && role !== 'Manager') {
       router.replace('/')
     }
   }, [role, router])
 
-  if (!role || (role !== 'owner' && role !== 'manager')) return <AccessDenied />
+  if (!role || (role !== 'Administrator' && role !== 'Manager')) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const visibleSections = sections.filter((s) => s.allowed.includes(role))

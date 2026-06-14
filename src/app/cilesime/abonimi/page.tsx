@@ -159,12 +159,13 @@ export default function AbonimiFaturimiPage() {
 
   // Top-up payment modal
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [topping, setTopping]                   = useState(false)
 
   const topUpRef  = useRef<HTMLDivElement>(null)
   const [highlightTopUp, setHighlightTopUp] = useState(false)
 
-  const isOwner  = role === 'owner'
-  const canView  = role === 'owner' || role === 'manager'
+  const isOwner  = role === 'Administrator'
+  const canView  = role === 'Administrator' || role === 'Manager'
 
   // ---------------------------------------------------------------------------
   // Fetch data
@@ -230,7 +231,12 @@ export default function AbonimiFaturimiPage() {
       if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë anulimit'); return }
       setShowCancelModal(false)
       if (data.scheduledCancel) {
-        toast.success('Rinovimi u anulua. Aksesi vazhdon deri në datën e skadimit.')
+        const dateStr = data.cancelAt
+          ? formatDate(data.cancelAt)
+          : details?.periodEndsAt
+            ? formatDate(details.periodEndsAt)
+            : '—'
+        toast.success(`Rinovimi është anuluar. Aksesi vazhdon deri më ${dateStr}.`)
         setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: true, cancelledAt: new Date().toISOString() } : prev)
       } else {
         toast.success('Abonimi u anulua me sukses')
@@ -272,13 +278,56 @@ export default function AbonimiFaturimiPage() {
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë ndryshimit të planit'); return }
-      toast.success(`Plani i ardhshëm u caktua: ${planLabel(planTarget)}`)
+      toast.success(`Pagesa u simulua. Plani i ardhshëm: ${planLabel(planTarget)}`)
       setShowPlanModal(false)
-      setDetails((prev) => prev ? { ...prev, nextPlan: planTarget } : prev)
+      setDetails((prev) => prev ? {
+        ...prev,
+        nextPlan: planTarget,
+        subStatus: 'active',
+        allowed: true,
+        cancelAtPeriodEnd: false,
+        cancelledAt: null,
+        periodEndsAt: data.newPeriodEnd ?? prev.periodEndsAt,
+      } : prev)
+      fetch('/api/subscription/billing-history')
+        .then((r) => r.json())
+        .then((d) => setHistory(d.records ?? []))
+        .catch(() => {})
     } catch {
       toast.error('Gabim gjatë ndryshimit të planit')
     } finally {
       setChangingPlan(false)
+    }
+  }
+
+  const handleTopUp = async () => {
+    setTopping(true)
+    try {
+      const res  = await fetch('/api/subscription/topup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: topUpDays }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë zgjatjes'); return }
+      setShowPaymentModal(false)
+      toast.success('Pagesa u simulua me sukses. Abonimi u zgjat.')
+      setDetails((prev) => prev ? {
+        ...prev,
+        subStatus: 'active',
+        allowed: true,
+        cancelAtPeriodEnd: false,
+        cancelledAt: null,
+        periodEndsAt: data.newPeriodEnd ?? prev.periodEndsAt,
+      } : prev)
+      fetch('/api/subscription/billing-history')
+        .then((r) => r.json())
+        .then((d) => setHistory(d.records ?? []))
+        .catch(() => {})
+    } catch {
+      toast.error('Gabim gjatë zgjatjes')
+    } finally {
+      setTopping(false)
     }
   }
 
@@ -768,16 +817,15 @@ export default function AbonimiFaturimiPage() {
             {planTarget !== null ? (
               <div className="space-y-2 text-sm text-slate-600 leading-relaxed">
                 <p>
-                  Plani aktual <strong>{planLabel(currentPlan)}</strong> vazhdon deri në fund të periudhës aktuale.
+                  Po kalon nga <strong>{planLabel(currentPlan)}</strong> në{' '}
+                  <strong>{planLabel(planTarget)}</strong>.
                 </p>
-                {details?.periodEndsAt && (
-                  <p>
-                    Pas <strong>{formatDate(details.periodEndsAt)}</strong>, plani ndryshon në{' '}
-                    <strong>{planLabel(planTarget)}</strong> pas konfirmimit të pagesës.
-                  </p>
-                )}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-                  Ditët e mbetura nuk humbasin. Pagesa e re kryhet vetëm pas skadimit.
+                <p>
+                  Pagesa do të simulohet menjëherë. Abonimi zgjat me{' '}
+                  <strong>{planTarget === 'yearly' ? '365' : '30'} ditë</strong> nga data aktuale e skadimit.
+                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+                  Plani i ardhshëm shfaqet si «Plani i ardhshëm» derisa periudha aktuale të mbarojë.
                 </div>
               </div>
             ) : (
@@ -818,8 +866,8 @@ export default function AbonimiFaturimiPage() {
                 <RiBankLine className="text-blue-500 text-xl" />
               </div>
               <div>
-                <h3 className="font-semibold text-slate-900">Detajet e Pagesës</h3>
-                <p className="text-xs text-slate-500">Transfertë bankare</p>
+                <h3 className="font-semibold text-slate-900">Konfirmo Zgjatjen</h3>
+                <p className="text-xs text-slate-500">Simulim pagese</p>
               </div>
             </div>
 
@@ -843,16 +891,8 @@ export default function AbonimiFaturimiPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm text-slate-500">Përfituesi</span>
-                  <span className="text-sm font-medium text-slate-800">Market OS</span>
-                </div>
-                <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm text-slate-500">IBAN</span>
-                  <span className="text-sm text-slate-400 italic">— të komunikohet —</span>
-                </div>
-                <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm text-slate-500">Referenca</span>
-                  <span className="text-sm font-medium text-slate-800">Zgjatje {topUpDays} ditë</span>
+                  <span className="text-sm text-slate-500">Data e re e skadimit</span>
+                  <span className="text-sm font-medium text-slate-800">{formatDate(newExpiryDate.toISOString())}</span>
                 </div>
               </div>
             </div>
@@ -860,26 +900,24 @@ export default function AbonimiFaturimiPage() {
             <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
               <RiCheckboxCircleLine className="text-blue-500 text-base flex-shrink-0 mt-0.5" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                Pas kryerjes së pagesës, dërgoni konfirmimin tek administratori i platformës.
-                Abonimi aktivizohet brenda 24 orësh.
+                Pagesa simulohet menjëherë dhe abonimi zgjatet automatikisht.
               </p>
             </div>
 
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowPaymentModal(false)}
+                disabled={topping}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
               >
                 Mbyll
               </button>
               <button
-                onClick={() => {
-                  setShowPaymentModal(false)
-                  toast.success('Kërkesa u regjistrua. Prisni konfirmimin.')
-                }}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                onClick={handleTopUp}
+                disabled={topping}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-60"
               >
-                Konfirmo
+                {topping ? 'Duke procesuar...' : 'Konfirmo'}
               </button>
             </div>
           </div>

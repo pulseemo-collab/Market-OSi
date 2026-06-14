@@ -31,7 +31,7 @@ export async function GET(
         take: 30,
       }),
       prisma.userRole.findFirst({
-        where: { organizationId: orgId, roli: 'owner' },
+        where: { organizationId: orgId, roli: 'Administrator' },
         select: { email: true },
       }),
     ])

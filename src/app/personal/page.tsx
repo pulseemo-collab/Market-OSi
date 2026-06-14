@@ -33,13 +33,11 @@ interface StaffMember {
 }
 
 const ROLE_OPTIONS = [
-  { value: 'cashier', label: 'Kasijer' },
-  { value: 'employee', label: 'Punonjës' },
+  { value: 'Cashier', label: 'Kasijer' },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
-  cashier: 'Kasijer',
-  employee: 'Punonjës',
+  Cashier: 'Kasijer',
 }
 
 function PinInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
@@ -73,12 +71,12 @@ export default function PersonalPage() {
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ emri: '', kodi: '', roli: 'cashier', pin: '', pinConfirm: '' })
+  const [createForm, setCreateForm] = useState({ emri: '', kodi: '', roli: 'Cashier', pin: '', pinConfirm: '' })
   const [createLoading, setCreateLoading] = useState(false)
 
   // Edit modal
   const [editStaff, setEditStaff] = useState<StaffMember | null>(null)
-  const [editForm, setEditForm] = useState({ emri: '', kodi: '', roli: 'cashier' })
+  const [editForm, setEditForm] = useState({ emri: '', kodi: '', roli: 'Cashier' })
   const [editLoading, setEditLoading] = useState(false)
 
   // PIN change modal
@@ -122,7 +120,7 @@ export default function PersonalPage() {
       if (!res.ok) { toast.error(data.error || 'Gabim'); return }
       toast.success(`Stafi "${data.emri}" u shtua`)
       setShowCreate(false)
-      setCreateForm({ emri: '', kodi: '', roli: 'cashier', pin: '', pinConfirm: '' })
+      setCreateForm({ emri: '', kodi: '', roli: 'Cashier', pin: '', pinConfirm: '' })
       fetchStaff()
     } finally {
       setCreateLoading(false)
@@ -199,7 +197,7 @@ export default function PersonalPage() {
     }
   }
 
-  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (!role || !['Administrator', 'Manager'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const activeStaff = staff.filter((s) => s.isActive)
@@ -265,7 +263,7 @@ export default function PersonalPage() {
                     onEdit={() => { setEditStaff(s); setEditForm({ emri: s.emri, kodi: s.kodi ?? '', roli: s.roli }) }}
                     onPin={() => { setPinStaff(s); setPinForm({ pin: '', pinConfirm: '' }) }}
                     onToggle={() => handleToggleActive(s)}
-                    canEdit={role === 'owner' || role === 'manager'}
+                    canEdit={role === 'Administrator' || role === 'Manager'}
                   />
                 ))}
               </div>
@@ -286,7 +284,7 @@ export default function PersonalPage() {
                     onEdit={() => { setEditStaff(s); setEditForm({ emri: s.emri, kodi: s.kodi ?? '', roli: s.roli }) }}
                     onPin={() => { setPinStaff(s); setPinForm({ pin: '', pinConfirm: '' }) }}
                     onToggle={() => handleToggleActive(s)}
-                    canEdit={role === 'owner'}
+                    canEdit={role === 'Administrator'}
                   />
                 ))}
               </div>

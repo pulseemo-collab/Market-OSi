@@ -351,7 +351,7 @@ export default function FurnizimePage() {
   const totalCost = filteredSupplies.reduce((sum, s) => sum + s.totali, 0)
   const totalItems = filteredSupplies.reduce((sum, s) => sum + s.items.length, 0)
 
-  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (!role || !['Administrator', 'Manager'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (

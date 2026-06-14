@@ -36,13 +36,12 @@ interface UserEntry {
   createdAt: string
 }
 
-const EMAIL_ROLES: Role[] = ['owner', 'manager', 'cashier', 'employee']
+const EMAIL_ROLES: Role[] = ['Administrator', 'Manager', 'Cashier']
 
 const roleBadgeClass: Record<string, string> = {
-  owner:          'bg-blue-100 text-blue-700',
-  manager:        'bg-violet-100 text-violet-700',
-  cashier:        'bg-emerald-100 text-emerald-700',
-  employee:       'bg-slate-100 text-slate-600',
+  Administrator:  'bg-blue-100 text-blue-700',
+  Manager:        'bg-violet-100 text-violet-700',
+  Cashier:        'bg-emerald-100 text-emerald-700',
   platform_owner: 'bg-orange-100 text-orange-700',
 }
 
@@ -60,18 +59,15 @@ interface StaffMember {
 }
 
 const STAFF_ROLE_OPTIONS = [
-  { value: 'cashier', label: 'Kasijer' },
-  { value: 'employee', label: 'Punonjës' },
+  { value: 'Cashier', label: 'Kasijer' },
 ]
 
 const STAFF_ROLE_LABELS: Record<string, string> = {
-  cashier: 'Kasijer',
-  employee: 'Punonjës',
+  Cashier: 'Kasijer',
 }
 
 const staffRoleBadge: Record<string, string> = {
-  cashier: 'bg-emerald-100 text-emerald-700',
-  employee: 'bg-slate-100 text-slate-600',
+  Cashier: 'bg-emerald-100 text-emerald-700',
 }
 
 function PinInput({
@@ -129,7 +125,7 @@ export default function PerdoruesitPage() {
 
   // Edit staff modal
   const [editStaff, setEditStaff] = useState<StaffMember | null>(null)
-  const [editForm, setEditForm] = useState({ emri: '', kodi: '', roli: 'cashier' })
+  const [editForm, setEditForm] = useState({ emri: '', kodi: '', roli: 'Cashier' })
   const [editLoading, setEditLoading] = useState(false)
 
   // PIN change modal
@@ -309,7 +305,7 @@ export default function PerdoruesitPage() {
     }
   }
 
-  if (!role || role !== 'owner') return <AccessDenied />
+  if (!role || role !== 'Administrator') return <AccessDenied />
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

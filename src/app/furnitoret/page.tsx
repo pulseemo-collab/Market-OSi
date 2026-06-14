@@ -143,7 +143,7 @@ export default function FurnitoretPage() {
     }
   }
 
-  if (!role || !['owner', 'manager'].includes(role)) return <AccessDenied />
+  if (!role || !['Administrator', 'Manager'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   return (

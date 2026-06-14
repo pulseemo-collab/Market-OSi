@@ -42,7 +42,6 @@ export interface StaffSessionData {
 export async function getStaffSession(req: NextRequest): Promise<StaffSessionData | null> {
   try {
     const token = req.cookies.get(STAFF_SESSION_COOKIE)?.value
-    console.log(`[getStaffSession] cookie found=${!!token}`)
     if (!token) return null
 
     const session = await prisma.staffSession.findUnique({
@@ -50,29 +49,26 @@ export async function getStaffSession(req: NextRequest): Promise<StaffSessionDat
       include: { staff: true },
     })
 
-    console.log(`[getStaffSession] session found=${!!session} staffId=${session?.staffId} orgId=${session?.organizationId}`)
     if (!session) return null
     if (session.expiresAt < new Date()) {
-      console.log(`[getStaffSession] session expired at ${session.expiresAt}`)
       await prisma.staffSession.delete({ where: { id: session.id } }).catch(() => {})
       return null
     }
-    if (!session.staff.isActive) {
-      console.log(`[getStaffSession] staff isActive=false`)
-      return null
-    }
+    if (!session.staff.isActive) return null
 
-    console.log(`[getStaffSession] valid session — staffRole=${session.staff.roli} orgId=${session.organizationId}`)
+    // roli may be null on older rows created before the NOT NULL constraint was enforced;
+    // fall back to the schema default so sessions remain usable.
+    const staffRole = session.staff.roli ?? 'Cashier'
+
     return {
       sessionId: session.id,
       staffId: session.staffId,
       staffName: session.staff.emri,
-      staffRole: session.staff.roli,
+      staffRole,
       organizationId: session.organizationId,
       expiresAt: session.expiresAt,
     }
-  } catch (err) {
-    console.error('[getStaffSession] unexpected error:', err)
+  } catch {
     return null
   }
 }
@@ -134,7 +130,7 @@ export function setTerminalOrgCookie(res: NextResponse, orgId: number): void {
 /** Dual-auth helper: tries staff session after a failed Supabase permission check. */
 export async function resolveStaffAuth(
   req: NextRequest,
-  allowedRoles: string[] = ['cashier'],
+  allowedRoles: string[] = ['Cashier'],
 ): Promise<{
   isStaffAuth: boolean
   userId: string

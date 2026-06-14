@@ -3,11 +3,9 @@ import { getStaffSession } from '@/lib/staff-auth'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
-  console.log('[/api/staff-auth/session] GET — cookie header:', req.headers.get('cookie')?.substring(0, 80))
   const session = await getStaffSession(req)
 
   if (!session) {
-    console.log('[/api/staff-auth/session] no valid session — returning null')
     return NextResponse.json({ session: null })
   }
 
@@ -16,7 +14,6 @@ export async function GET(req: NextRequest) {
     select: { name: true },
   })
 
-  console.log(`[/api/staff-auth/session] valid — staffRole=${session.staffRole} orgId=${session.organizationId} orgName=${organization?.name}`)
   return NextResponse.json({
     session: {
       staffId: session.staffId,

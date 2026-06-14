@@ -95,16 +95,10 @@ export default function ShitjetPage() {
 
   // Load staff session (PIN-based auth)
   useEffect(() => {
-    console.log('[ShitjetPage] fetching /api/staff-auth/session…')
     fetch('/api/staff-auth/session', { credentials: 'include' })
       .then((r) => r.json())
-      .then((data) => {
-        console.log('[ShitjetPage] session response:', data)
-        setStaffSession(data.session ?? null)
-      })
-      .catch((err) => {
-        console.error('[ShitjetPage] session fetch error:', err)
-      })
+      .then((data) => setStaffSession(data.session ?? null))
+      .catch(() => {})
       .finally(() => setStaffSessionLoading(false))
   }, [])
 
@@ -116,17 +110,17 @@ export default function ShitjetPage() {
       .catch(() => {})
   }, [])
 
-  // Redirect unauthorised staff to their login page (must be in useEffect, not during render)
+  // Redirect unauthorised users to the PIN login page.
+  // Must match the render gate below: access requires Supabase owner/cashier OR a PIN cashier session.
+  // Using OR semantics prevents a stale Supabase manager session (common on shared POS terminals)
+  // from overriding a valid PIN cashier session and triggering a spurious redirect.
   useEffect(() => {
     if (staffSessionLoading) return
-    const hasAccess = role
-      ? ['owner', 'cashier'].includes(role)
-      : staffSession?.staffRole === 'cashier'
-    console.log(`[ShitjetPage] auth check — role=${role} staffRole=${staffSession?.staffRole} hasAccess=${hasAccess}`)
-    if (!hasAccess) {
-      const dest = role ? '/login' : '/staff-login'
-      console.log(`[ShitjetPage] no access → redirecting to ${dest}`)
-      router.push(dest)
+    const supabaseOk = !!role && ['Administrator', 'Manager', 'Cashier'].includes(role)
+    const staffOk = staffSession?.staffRole === 'Cashier'
+    if (!supabaseOk && !staffOk) {
+      // Supabase user with wrong role → back to dashboard; truly unauthenticated → PIN login
+      router.push(role ? '/' : '/staff-login')
     }
   }, [staffSessionLoading, role, staffSession, router])
 
@@ -169,16 +163,14 @@ export default function ShitjetPage() {
     if (staffSessionLoading) return  // not ready yet
 
     const hasAccess = role
-      ? ['owner', 'cashier'].includes(role)
-      : staffSession?.staffRole === 'cashier'
+      ? ['Administrator', 'Manager', 'Cashier'].includes(role)
+      : staffSession?.staffRole === 'Cashier'
     if (!hasAccess) return  // redirect effect handles this case
 
     setProductsError(false)
     setProductsLoading(true)
-    console.log('[ShitjetPage] fetching /api/products…')
     fetch('/api/products', { credentials: 'include' })
       .then((r) => {
-        console.log('[ShitjetPage] products response status:', r.status)
         if (!r.ok) {
           setProductsError(true)
           return null
@@ -511,17 +503,15 @@ export default function ShitjetPage() {
     window.print()
   }
 
-  // Access: Supabase owner/cashier OR staff PIN cashier session
-  const hasSupabaseAccess = role && ['owner', 'cashier'].includes(role)
-  const hasStaffAccess = staffSession?.staffRole === 'cashier'
+  // Access: Supabase Administrator/Manager/Cashier OR staff PIN Cashier session
+  const hasSupabaseAccess = role && ['Administrator', 'Manager', 'Cashier'].includes(role)
+  const hasStaffAccess = staffSession?.staffRole === 'Cashier'
 
   // Wait until the staff session check completes before rendering anything
   if (staffSessionLoading) return null
 
   if (!hasSupabaseAccess && !hasStaffAccess) {
-    // Supabase user with insufficient role
-    if (role) return <AccessDenied />
-    // Staff with no valid session — the useEffect above handles the redirect
+    // Redirect is handled in the useEffect above — return null to avoid a flash
     return null
   }
 

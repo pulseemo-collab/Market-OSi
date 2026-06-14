@@ -286,12 +286,12 @@ export default function HistorikuPage() {
   const totaliPeriudhes = sales.reduce((sum, s) => sum + s.totali, 0)
   const fiitimiPeriudhes = sales.reduce((sum, s) => sum + s.fitimi, 0)
 
-  const hasStaffAccess = staffSession?.staffRole === 'cashier'
+  const hasStaffAccess = staffSession?.staffRole === 'Cashier'
   if (!staffSessionLoading && !role && !hasStaffAccess) return <AccessDenied />
-  if (role && !['owner', 'manager', 'cashier'].includes(role)) return <AccessDenied />
+  if (role && !['Administrator', 'Manager', 'Cashier'].includes(role)) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
-  const isAdmin = role === 'owner' || role === 'manager'
+  const isAdmin = role === 'Administrator' || role === 'Manager'
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

@@ -11,7 +11,7 @@ export async function POST(_req: NextRequest) {
   if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
 
   try {
-    const userFilter = role === 'cashier' ? { userId: userId! } : {}
+    const userFilter = role === 'Cashier' ? { userId: userId! } : {}
     const where = {
       organizationId: organizationId!,
       isRead: false,

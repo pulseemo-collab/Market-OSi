@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     role = supabase.role
     organizationId = supabase.organizationId
   } else {
-    const staff = await resolveStaffAuth(req, ['cashier'])
+    const staff = await resolveStaffAuth(req, ['Cashier'])
     if (staff.error) return staff.error
     userId = staff.userId
     role = staff.staffRole as Role
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     role = supabase.role
     organizationId = supabase.organizationId
   } else {
-    const staff = await resolveStaffAuth(req, ['cashier'])
+    const staff = await resolveStaffAuth(req, ['Cashier'])
     if (staff.error) return staff.error
     userId = staff.userId
     userEmail = staff.staffName

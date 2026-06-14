@@ -5,7 +5,7 @@ import { Role, ROLE_LABELS } from '@/lib/roles'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 
-const VALID_ROLES: Role[] = ['owner', 'manager', 'cashier', 'employee']
+const VALID_ROLES: Role[] = ['Administrator', 'Manager', 'Cashier']
 
 export async function PUT(
   req: NextRequest,
@@ -37,7 +37,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Përdoruesi nuk u gjet' }, { status: 404 })
     }
 
-    if (targetUser.userId === userId && roli !== 'owner') {
+    if (targetUser.userId === userId && roli !== 'Administrator') {
       return NextResponse.json(
         { error: 'Nuk mund të ndryshosh rolin tënd' },
         { status: 403 }

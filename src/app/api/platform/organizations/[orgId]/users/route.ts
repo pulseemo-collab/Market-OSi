@@ -8,7 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_ROLES = ['owner', 'manager', 'cashier', 'employee'] as const
+const VALID_ROLES = ['Administrator', 'Manager', 'Cashier'] as const
 
 async function resolveSupabaseUser(email: string): Promise<{ userId: string; method: string }> {
   const admin = createAdminClient()

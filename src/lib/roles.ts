@@ -1,46 +1,51 @@
-export type Role = 'owner' | 'manager' | 'cashier' | 'employee' | 'platform_owner'
+export type Role = 'Administrator' | 'Manager' | 'Cashier' | 'platform_owner'
 
-// Map old DB role strings to new roles for backward compatibility
+// Map old/legacy DB role strings to the new canonical names
 export const LEGACY_ROLE_MAP: Record<string, Role> = {
-  admin: 'owner',
-  staff: 'manager',
+  owner:         'Administrator',
+  admin:         'Administrator',
+  administrator: 'Administrator', // DB may store lowercase; normalize here
+  manager:       'Manager',
+  staff:         'Manager',
+  cashier:       'Cashier',
+  employee:      'Cashier',
 }
 
 export const PERMISSIONS: Record<string, Role[]> = {
   // Organization business permissions
-  'products:read':    ['owner', 'manager', 'cashier', 'employee'],
-  'products:write':   ['owner', 'manager'],
-  'products:delete':  ['owner'],
-  'products:prices':  ['owner', 'manager'],
+  'products:read':    ['Administrator', 'Manager', 'Cashier'],
+  'products:write':   ['Administrator', 'Manager'],
+  'products:delete':  ['Administrator'],
+  'products:prices':  ['Administrator', 'Manager'],
 
-  'suppliers:read':   ['owner', 'manager'],
-  'suppliers:write':  ['owner', 'manager'],
-  'suppliers:delete': ['owner'],
+  'suppliers:read':   ['Administrator', 'Manager'],
+  'suppliers:write':  ['Administrator', 'Manager'],
+  'suppliers:delete': ['Administrator'],
 
-  'supplies:read':    ['owner', 'manager'],
-  'supplies:write':   ['owner', 'manager'],
-  'supplies:delete':  ['owner'],
+  'supplies:read':    ['Administrator', 'Manager'],
+  'supplies:write':   ['Administrator', 'Manager'],
+  'supplies:delete':  ['Administrator'],
 
-  'sales:read':       ['owner', 'manager', 'cashier'],
-  'sales:create':     ['owner', 'cashier'],
-  'sales:manage':     ['owner'],
+  'sales:read':       ['Administrator', 'Manager', 'Cashier'],
+  'sales:create':     ['Administrator', 'Manager', 'Cashier'],
+  'sales:manage':     ['Administrator'],
 
-  'dashboard:read':   ['owner', 'manager'],
-  'export:read':      ['owner', 'manager'],
-  'reorder:read':     ['owner', 'manager'],
+  'dashboard:read':   ['Administrator', 'Manager'],
+  'export:read':      ['Administrator', 'Manager'],
+  'reorder:read':     ['Administrator', 'Manager'],
 
-  'users:manage':     ['owner'],
+  'users:manage':     ['Administrator'],
 
-  'audit:read':       ['owner'],
+  'audit:read':       ['Administrator'],
 
-  'backup:create':    ['owner'],
-  'backup:restore':   ['owner'],
+  'backup:create':    ['Administrator'],
+  'backup:restore':   ['Administrator'],
 
-  'settings:read':    ['owner', 'manager'],
-  'settings:write':   ['owner'],
+  'settings:read':    ['Administrator', 'Manager'],
+  'settings:write':   ['Administrator'],
 
-  'notifications:read':   ['owner', 'manager', 'cashier'],
-  'notifications:manage': ['owner', 'manager'],
+  'notifications:read':   ['Administrator', 'Manager', 'Cashier'],
+  'notifications:manage': ['Administrator', 'Manager'],
 
   // Platform-level permissions (platform_owner only)
   'platform:read':        ['platform_owner'],
@@ -53,32 +58,31 @@ export const PERMISSIONS: Record<string, Role[]> = {
 }
 
 export const ROUTE_ACCESS: Record<string, Role[]> = {
-  '/':                        ['owner', 'manager'],
-  '/produktet':               ['owner', 'manager', 'employee'],
-  '/shitjet':                 ['owner', 'cashier'],
-  '/historiku':               ['owner', 'manager', 'cashier'],
-  '/stok-i-ulet':             ['owner', 'manager'],
-  '/porositje-te-sugjeruara': ['owner', 'manager'],
-  '/furnizime':               ['owner', 'manager'],
-  '/furnitoret':              ['owner', 'manager'],
-  '/perdoruesit':             ['owner'],
-  '/personal':                ['owner', 'manager'],
-  '/regjistri':               ['owner'],
-  '/backup':                  ['owner'],
-  '/njoftime':               ['owner', 'manager', 'cashier'],
-  '/cilesime':               ['owner', 'manager'],
-  '/cilesime/profili':       ['owner', 'manager'],
-  '/cilesime/abonimi':       ['owner', 'manager'],
-  '/cilesime/backup':        ['owner'],
-  '/cilesime/siguria':       ['owner', 'manager'],
+  '/':                        ['Administrator', 'Manager'],
+  '/produktet':               ['Administrator', 'Manager'],
+  '/shitjet':                 ['Administrator', 'Manager', 'Cashier'],
+  '/historiku':               ['Administrator', 'Manager', 'Cashier'],
+  '/stok-i-ulet':             ['Administrator', 'Manager'],
+  '/porositje-te-sugjeruara': ['Administrator', 'Manager'],
+  '/furnizime':               ['Administrator', 'Manager'],
+  '/furnitoret':              ['Administrator', 'Manager'],
+  '/perdoruesit':             ['Administrator'],
+  '/personal':                ['Administrator', 'Manager'],
+  '/regjistri':               ['Administrator'],
+  '/backup':                  ['Administrator'],
+  '/njoftime':               ['Administrator', 'Manager', 'Cashier'],
+  '/cilesime':               ['Administrator', 'Manager'],
+  '/cilesime/profili':       ['Administrator', 'Manager'],
+  '/cilesime/abonimi':       ['Administrator', 'Manager'],
+  '/cilesime/backup':        ['Administrator'],
+  '/cilesime/siguria':       ['Administrator', 'Manager'],
   '/platforma':              ['platform_owner'],
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  owner:          'Pronar',
-  manager:        'Menaxher',
-  cashier:        'Kasijer',
-  employee:       'Punonjës',
+  Administrator:  'Administrator',
+  Manager:        'Menaxher',
+  Cashier:        'Kasijer',
   platform_owner: 'Pronar Platforme',
 }
 
@@ -97,7 +101,7 @@ export function canAccess(role: Role | null, path: string): boolean {
 }
 
 export function isOwner(role: Role | null): boolean {
-  return role === 'owner'
+  return role === 'Administrator'
 }
 
 export function isPlatformOwner(role: Role | null): boolean {

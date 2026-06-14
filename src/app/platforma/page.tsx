@@ -152,10 +152,9 @@ function InfoLine({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-blue-100 text-blue-700',
-  manager: 'bg-violet-100 text-violet-700',
-  cashier: 'bg-emerald-100 text-emerald-700',
-  employee: 'bg-slate-100 text-slate-600',
+  Administrator:  'bg-blue-100 text-blue-700',
+  Manager:        'bg-violet-100 text-violet-700',
+  Cashier:        'bg-emerald-100 text-emerald-700',
   platform_owner: 'bg-amber-100 text-amber-700',
 }
 
@@ -184,7 +183,7 @@ export default function PlatformaPage() {
 
   // Add-user form (inside users modal)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRoli, setInviteRoli] = useState('employee')
+  const [inviteRoli, setInviteRoli] = useState('Cashier')
   const [inviting, setInviting] = useState(false)
 
   // Billing modal
@@ -270,7 +269,7 @@ export default function PlatformaPage() {
     setUsersOrgName(org.name)
     setUsers([])
     setInviteEmail('')
-    setInviteRoli('employee')
+    setInviteRoli('Cashier')
     setUsersLoading(true)
     try {
       const res = await fetch(`/api/platform/organizations/${org.id}/users`)
@@ -300,7 +299,7 @@ export default function PlatformaPage() {
       if (!res.ok) throw new Error(data.error || 'Gabim')
       toast.success(data.message || 'Përdoruesi u shtua')
       setInviteEmail('')
-      setInviteRoli('employee')
+      setInviteRoli('Cashier')
       // Refresh user list
       const usersRes = await fetch(`/api/platform/organizations/${usersOrgId}/users`)
       const usersData = await usersRes.json()
@@ -706,10 +705,9 @@ export default function PlatformaPage() {
                 className="input flex-1 text-sm"
                 disabled={inviting}
               >
-                <option value="owner">Pronar</option>
-                <option value="manager">Menaxher</option>
-                <option value="cashier">Kasijer</option>
-                <option value="employee">Punonjës</option>
+                <option value="Administrator">Administrator</option>
+                <option value="Manager">Menaxher</option>
+                <option value="Cashier">Kasijer</option>
               </select>
               <button
                 onClick={addUserToOrg}

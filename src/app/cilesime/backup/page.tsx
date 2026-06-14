@@ -101,7 +101,7 @@ export default function CilesimiBackupPage() {
   const [restoring, setRestoring] = useState(false)
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null)
 
-  if (!role || role !== 'owner') return <AccessDenied />
+  if (!role || role !== 'Administrator') return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const handleDownload = async () => {

@@ -8,7 +8,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 
 export async function GET(req: NextRequest) {
-  const { userId, role, organizationId, error } = await requireRole(['owner', 'manager'])
+  const { userId, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const rl = rateLimit(req, 'staff', userId, organizationId)
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { userId, userEmail, role, organizationId, error } = await requireRole(['owner', 'manager'])
+  const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const rl = rateLimit(req, 'staff', userId, organizationId)
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Fushat e detyrueshme mungojnë' }, { status: 400 })
     }
 
-    if (!['cashier', 'employee'].includes(roli)) {
+    if (!['Cashier'].includes(roli)) {
       return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
     }
 

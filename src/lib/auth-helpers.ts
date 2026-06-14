@@ -35,7 +35,7 @@ export async function getAuthUserAndRole(): Promise<{
       }
     }
 
-    const rawRole = userRole.roli ?? 'employee'
+    const rawRole = userRole.roli ?? 'Cashier'
     const role = (LEGACY_ROLE_MAP[rawRole] ?? rawRole) as Role
 
     return { userId: user.id, userEmail: userRole.email, role, organizationId: userRole.organizationId, error: null }

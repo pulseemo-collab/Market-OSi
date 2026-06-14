@@ -24,7 +24,7 @@ const sections = [
     iconColor: 'text-blue-600',
     title: 'Profili i Biznesit',
     description: 'Emri i dyqanit, telefoni, adresa dhe numri i NIPT-it',
-    allowed: ['owner', 'manager'],
+    allowed: ['Administrator', 'Manager'],
   },
   {
     href: '/cilesime/abonimi',
@@ -33,7 +33,7 @@ const sections = [
     iconColor: 'text-violet-600',
     title: 'Abonimi & Faturimi',
     description: 'Plani aktual, statusi i trial-it dhe menaxhimi i abonimit',
-    allowed: ['owner', 'manager'],
+    allowed: ['Administrator', 'Manager'],
   },
   {
     href: '/cilesime/backup',
@@ -42,7 +42,7 @@ const sections = [
     iconColor: 'text-emerald-600',
     title: 'Backup & Rikuperim',
     description: 'Eksportoni dhe rikuperoni të dhënat e organizatës',
-    allowed: ['owner'],
+    allowed: ['Administrator'],
   },
   {
     href: '/cilesime/siguria',
@@ -51,7 +51,7 @@ const sections = [
     iconColor: 'text-amber-600',
     title: 'Siguria',
     description: 'Ndryshoni fjalëkalimin dhe shikoni informacionin e sigurisë',
-    allowed: ['owner', 'manager'],
+    allowed: ['Administrator', 'Manager'],
   },
 ]
 
@@ -61,12 +61,12 @@ export default function CilesimiPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (role !== null && role !== 'owner' && role !== 'manager') {
+    if (role !== null && role !== 'Administrator' && role !== 'Manager') {
       router.replace('/')
     }
   }, [role, router])
 
-  if (!role || (role !== 'owner' && role !== 'manager')) return <AccessDenied />
+  if (!role || (role !== 'Administrator' && role !== 'Manager')) return <AccessDenied />
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const visibleSections = sections.filter((s) => s.allowed.includes(role))
