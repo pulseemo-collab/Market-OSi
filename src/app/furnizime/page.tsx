@@ -78,10 +78,11 @@ function getTodayString() {
 }
 
 const PERIUDHAT = [
-  { value: 'te-gjitha', label: 'Të Gjitha' },
-  { value: 'muaj', label: 'Ky Muaj' },
-  { value: 'jave', label: 'Kjo Javë' },
-  { value: 'sot', label: 'Sot' },
+  { value: 'sot',       label: 'Sot' },
+  { value: 'dje',       label: 'Dje' },
+  { value: 'jave',      label: 'Këtë javë' },
+  { value: 'muaj',      label: 'Këtë muaj' },
+  { value: 'te-gjitha', label: 'Të gjitha' },
 ]
 
 export default function FurnizimePage() {
@@ -324,6 +325,15 @@ export default function FurnizimePage() {
         sDate.getFullYear() === now.getFullYear() &&
         sDate.getMonth() === now.getMonth() &&
         sDate.getDate() === now.getDate()
+      )
+    }
+    if (periudha === 'dje') {
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      return (
+        sDate.getFullYear() === yesterday.getFullYear() &&
+        sDate.getMonth() === yesterday.getMonth() &&
+        sDate.getDate() === yesterday.getDate()
       )
     }
     if (periudha === 'jave') {

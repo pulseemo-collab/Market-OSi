@@ -209,6 +209,7 @@ export default function AbonimiFaturimiPage() {
   const isCancelled      = details?.subStatus === 'cancelled'
   const isCancelScheduled = !!details?.cancelAtPeriodEnd && isActive
   const isBlocked        = isCancelled || isExpired
+  const isAutoRenewOn    = isActive && !isCancelScheduled
 
   const currentPlan = details?.plan
   const topUpAmount = computeTopUpAmount(currentPlan, topUpDays)
@@ -706,9 +707,26 @@ export default function AbonimiFaturimiPage() {
                   <RiRefreshLine className="text-slate-400" />
                   <span className="text-sm">Rinovim automatik</span>
                 </div>
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                  Jo aktiv
-                </span>
+                <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  isAutoRenewOn ? 'bg-green-500' : 'bg-slate-300'
+                }`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    isAutoRenewOn ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </div>
+              </div>
+
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                isAutoRenewOn
+                  ? 'bg-green-50 border border-green-200 text-green-700'
+                  : 'bg-amber-50 border border-amber-200 text-amber-700'
+              }`}>
+                {isAutoRenewOn ? (
+                  <RiCheckboxCircleLine className="text-green-500 flex-shrink-0 text-base" />
+                ) : (
+                  <RiAlertLine className="text-amber-500 flex-shrink-0 text-base" />
+                )}
+                {isAutoRenewOn ? 'Rinovimi automatik është aktiv' : 'Rinovimi automatik është çaktivizuar'}
               </div>
 
               <div className="pt-2 flex flex-col gap-2">
@@ -736,13 +754,13 @@ export default function AbonimiFaturimiPage() {
                         ? 'Abonimi është anuluar'
                         : isTrialing
                           ? 'Anulo Trial'
-                          : 'Anulo rinovimin'}
+                          : 'Ndalo Rinovimin Automatik'}
                     </button>
                     {!isCancelled && !isBlocked && (
                       <p className="text-xs text-slate-400 leading-relaxed">
                         {isTrialing
                           ? 'Anulimi i trial-it është i menjëhershëm.'
-                          : 'Aksesi mbetet aktiv deri në datën e skadimit.'}
+                          : 'Abonimi do të mbetet aktiv deri në datën e skadimit dhe nuk do të rinovohet automatikisht.'}
                       </p>
                     )}
                   </>

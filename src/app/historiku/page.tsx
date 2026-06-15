@@ -74,10 +74,11 @@ function isWeighted(njesia: string) {
 }
 
 const PERIUDHAT = [
-  { value: 'sot', label: 'Sot' },
-  { value: 'dje', label: 'Dje' },
-  { value: 'jave', label: 'Kjo Javë' },
-  { value: 'muaj', label: 'Ky Muaj' },
+  { value: 'sot',       label: 'Sot' },
+  { value: 'dje',       label: 'Dje' },
+  { value: 'jave',      label: 'Këtë javë' },
+  { value: 'muaj',      label: 'Këtë muaj' },
+  { value: 'te-gjitha', label: 'Të gjitha' },
 ]
 
 interface StaffSession {
@@ -122,7 +123,9 @@ export default function HistorikuPage() {
     try {
       const url = dataFiltri
         ? `/api/sales?data=${dataFiltri}`
-        : `/api/sales?periudha=${periudha}`
+        : periudha === 'te-gjitha'
+          ? '/api/sales'
+          : `/api/sales?periudha=${periudha}`
       const res = await fetch(url)
       if (res.status === 401) {
         window.location.href = staffSession ? '/staff-login' : '/login'
