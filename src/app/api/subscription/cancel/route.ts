@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.subscription.update({
       where: { organizationId },
-      data: { cancelAtPeriodEnd: false, cancelledAt: null },
+      data: { cancelAtPeriodEnd: false, closeAtPeriodEnd: false, cancelledAt: null },
     })
 
     await prisma.billingAuditLog.create({

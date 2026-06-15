@@ -9,6 +9,7 @@ export interface SubscriptionAccessResult {
   plan?: string | null
   nextPlan?: string | null
   cancelAtPeriodEnd?: boolean
+  closeAtPeriodEnd?: boolean
   cancelledAt?: string | null
 }
 
@@ -27,13 +28,14 @@ export async function checkSubscriptionAccess(
       currentPeriodEnd: true,
       nextPlan: true,
       cancelAtPeriodEnd: true,
+      closeAtPeriodEnd: true,
       cancelledAt: true,
     },
   })
 
   if (!subscription) return { allowed: false, reason: 'Abonimi nuk u gjet' }
 
-  const { plan, status, trialEndsAt, currentPeriodEnd, nextPlan, cancelAtPeriodEnd, cancelledAt } = subscription
+  const { plan, status, trialEndsAt, currentPeriodEnd, nextPlan, cancelAtPeriodEnd, closeAtPeriodEnd, cancelledAt } = subscription
   const now = new Date()
   const effectivePlan = plan === 'trial' ? 'monthly' : plan
 
@@ -74,6 +76,7 @@ export async function checkSubscriptionAccess(
         plan: effectivePlan,
         nextPlan: nextPlan ?? null,
         cancelAtPeriodEnd: cancelAtPeriodEnd ?? false,
+        closeAtPeriodEnd: closeAtPeriodEnd ?? false,
         cancelledAt: cancelledAt?.toISOString() ?? null,
       }
     }

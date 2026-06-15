@@ -179,6 +179,7 @@ model Subscription {
   currentPeriodEnd   DateTime?
   nextPlan           String?
   cancelAtPeriodEnd  Boolean   @default(false)
+  closeAtPeriodEnd   Boolean   @default(false)
   cancelledAt        DateTime?
   notes              String?
   createdAt          DateTime  @default(now())
