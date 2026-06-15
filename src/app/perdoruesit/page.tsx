@@ -24,6 +24,7 @@ import {
   RiPhoneLine,
   RiCheckLine,
   RiCloseLine,
+  RiAddLine,
 } from 'react-icons/ri'
 
 // ─── Email (Supabase) users ───────────────────────────────────────────────────
@@ -118,6 +119,18 @@ export default function PerdoruesitPage() {
   const [usersLoading, setUsersLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
 
+  // M4 — pending role change awaiting confirmation
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    userId: number
+    newRole: Role
+    userEmail: string
+  } | null>(null)
+
+  // M5 — invite new email user
+  const [inviteModal, setInviteModal] = useState(false)
+  const [inviteForm, setInviteForm] = useState<{ email: string; roli: Role }>({ email: '', roli: 'Manager' })
+  const [inviteLoading, setInviteLoading] = useState(false)
+
   // Staff state
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [staffLoading, setStaffLoading] = useState(true)
@@ -202,6 +215,31 @@ export default function PerdoruesitPage() {
       toast.error('Gabim gjatë ndryshimit të rolit')
     } finally {
       setSaving(null)
+    }
+  }
+
+  const handleInvite = async () => {
+    if (!inviteForm.email.trim()) { toast.error('Shkruani emailin'); return }
+    setInviteLoading(true)
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteForm.email.trim(), roli: inviteForm.roli }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Gabim gjatë shtimit të përdoruesit')
+        return
+      }
+      toast.success(data.message || 'Përdoruesi u shtua me sukses')
+      setInviteModal(false)
+      setInviteForm({ email: '', roli: 'Manager' })
+      fetchUsers()
+    } catch {
+      toast.error('Gabim i papritur')
+    } finally {
+      setInviteLoading(false)
     }
   }
 
@@ -397,17 +435,26 @@ export default function PerdoruesitPage() {
           SECTION A: Supabase / email users
           ═══════════════════════════════════════════════════════════════ */}
       <section className="mb-10">
-        <div className="flex items-center gap-2 mb-2">
-          <RiShieldUserLine className="text-blue-500 text-lg" />
-          <h2 className="text-base font-semibold text-slate-800">Përdorues me Email</h2>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <RiShieldUserLine className="text-blue-500 text-lg" />
+            <h2 className="text-base font-semibold text-slate-800">Përdorues me Email</h2>
+          </div>
+          <button
+            onClick={() => { setInviteForm({ email: '', roli: 'Manager' }); setInviteModal(true) }}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <RiAddLine className="text-base" />
+            Shto Përdorues
+          </button>
         </div>
         <p className="text-xs text-slate-500 mb-4">
-          Hyjnë me email dhe fjalëkalim. Rolet e disponueshme: Pronar, Menaxher, Kasijer, Punonjës.
+          Hyjnë me email dhe fjalëkalim. Rolet e disponueshme: Pronar, Menaxher, Kasijer.
         </p>
 
         {/* Role legend */}
         <div className="card p-4 mb-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="font-semibold text-blue-700 mb-1">Pronar</p>
               <p className="text-blue-600 text-xs">Akses i plotë — të gjitha funksionet</p>
@@ -419,10 +466,6 @@ export default function PerdoruesitPage() {
             <div className="bg-emerald-50 rounded-lg p-3">
               <p className="font-semibold text-emerald-700 mb-1">Kasijer</p>
               <p className="text-emerald-600 text-xs">POS (Shitjet) dhe Historiku</p>
-            </div>
-            <div className="bg-slate-50 rounded-lg p-3">
-              <p className="font-semibold text-slate-700 mb-1">Punonjës</p>
-              <p className="text-slate-600 text-xs">Akses vetëm-lexim ku është e përshtatshme</p>
             </div>
           </div>
         </div>
@@ -469,7 +512,12 @@ export default function PerdoruesitPage() {
                       <td className="table-td">
                         <select
                           value={user.roli}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value as Role)}
+                          onChange={(e) => {
+                            const newRole = e.target.value as Role
+                            if (newRole !== user.roli) {
+                              setPendingRoleChange({ userId: user.id, newRole, userEmail: user.email })
+                            }
+                          }}
                           disabled={saving === user.id}
                           className="input py-1 text-sm w-36 disabled:opacity-50"
                         >
@@ -708,6 +756,101 @@ export default function PerdoruesitPage() {
             </button>
             <button onClick={handleStaffPinChange} className="btn-primary flex-1" disabled={pinLoading}>
               {pinLoading ? 'Duke ndryshuar...' : 'Ndrysho PIN'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Role Change Confirmation Modal (M4) ───────────────────────── */}
+      <Modal
+        isOpen={!!pendingRoleChange}
+        onClose={() => setPendingRoleChange(null)}
+        title="Konfirmo Ndryshimin e Rolit"
+        size="sm"
+      >
+        {pendingRoleChange && (
+          <div>
+            <p className="text-slate-700 text-sm mb-5">
+              A jeni i sigurt që doni të ndryshoni rolin e{' '}
+              <strong>{pendingRoleChange.userEmail}</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingRoleChange(null)}
+                disabled={saving === pendingRoleChange.userId}
+                className="btn-secondary flex-1"
+              >
+                Anulo
+              </button>
+              <button
+                onClick={async () => {
+                  await handleRoleChange(pendingRoleChange.userId, pendingRoleChange.newRole)
+                  setPendingRoleChange(null)
+                }}
+                disabled={saving === pendingRoleChange.userId}
+                className="btn-primary flex-1"
+              >
+                {saving === pendingRoleChange.userId ? 'Duke ndryshuar...' : 'Konfirmo ndryshimin'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Invite User Modal (M5) ─────────────────────────────────────── */}
+      <Modal
+        isOpen={inviteModal}
+        onClose={() => !inviteLoading && setInviteModal(false)}
+        title="Shto Përdorues"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+            <input
+              type="email"
+              value={inviteForm.email}
+              onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+              className="input"
+              placeholder="email@shembull.com"
+              autoComplete="off"
+              disabled={inviteLoading}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Roli *</label>
+            <select
+              value={inviteForm.roli}
+              onChange={(e) => setInviteForm({ ...inviteForm, roli: e.target.value as Role })}
+              className="input"
+              disabled={inviteLoading}
+            >
+              {EMAIL_ROLES.map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setInviteModal(false)}
+              disabled={inviteLoading}
+              className="btn-secondary flex-1"
+            >
+              Anulo
+            </button>
+            <button
+              onClick={handleInvite}
+              disabled={inviteLoading}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              {inviteLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Duke dërguar...
+                </>
+              ) : (
+                'Shto Përdorues'
+              )}
             </button>
           </div>
         </div>

@@ -80,7 +80,7 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  Administrator:  'Administrator',
+  Administrator:  'Pronar',
   Manager:        'Menaxher',
   Cashier:        'Kasijer',
   platform_owner: 'Pronar Platforme',
