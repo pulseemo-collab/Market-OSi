@@ -16,7 +16,13 @@
       "Bash(Sort-Object FullName)",
       "Bash(Out-String -Width 300)",
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Admin\\\\Desktop\\\\Market-OSi\\\\src\\\\app\\\\api\\\\platform\")",
-      "Bash(Out-Null)"
+      "Bash(Out-Null)",
+      "Bash('C:\\\\Users\\\\Admin/.claude/skills/gstack/browse/dist/browse' console *)",
+      "Bash('C:\\\\Users\\\\Admin/.claude/skills/gstack/browse/dist/browse' snapshot *)",
+      "Bash('C:\\\\Users\\\\Admin/.claude/skills/gstack/browse/dist/browse' goto *)",
+      "Bash('C:\\\\Users\\\\Admin/.claude/skills/gstack/browse/dist/browse' wait *)",
+      "Bash(~/.claude/skills/gstack/browse/dist/browse.exe --server http://localhost:11502 --token aea464ff-5db4-4777-9920-62c1b89eb3ba goto http://localhost:3001/login/manager)",
+      "Bash(~/.claude/skills/gstack/browse/dist/browse.exe goto *)"
     ]
   }
 }

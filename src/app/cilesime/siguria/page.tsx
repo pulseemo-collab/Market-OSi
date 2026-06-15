@@ -23,8 +23,10 @@ export default function SiguriaPage() {
   const subscription = useSubscription()
   const canView = role === 'Administrator' || role === 'Manager'
 
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -33,6 +35,10 @@ export default function SiguriaPage() {
   if (subscription === 'blocked') return <SubscriptionExpired />
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      toast.error('Shkruani fjalëkalimin aktual')
+      return
+    }
     if (!newPassword) {
       toast.error('Shkruani fjalëkalimin e ri')
       return
@@ -49,12 +55,29 @@ export default function SiguriaPage() {
     setSaving(true)
     try {
       const supabase = createClient()
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) {
+        toast.error('Nuk mund të identifikohet llogaria')
+        return
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      })
+      if (signInError) {
+        toast.error('Fjalëkalimi aktual është i gabuar')
+        return
+      }
+
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) {
         toast.error(error.message ?? 'Gabim gjatë ndryshimit të fjalëkalimit')
         return
       }
       toast.success('Fjalëkalimi u ndryshua me sukses')
+      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch {
@@ -100,6 +123,28 @@ export default function SiguriaPage() {
           <div className="flex items-center gap-2">
             <RiLockPasswordLine className="text-slate-500 text-lg" />
             <h2 className="text-base font-semibold text-slate-800">Ndrysho Fjalëkalimin</h2>
+          </div>
+
+          {/* Current password */}
+          <div>
+            <label className="label">Fjalëkalimi Aktual</label>
+            <div className="relative">
+              <input
+                type={showCurrent ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="input pr-10"
+                placeholder="Fjalëkalimi juaj aktual"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrent((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showCurrent ? <RiEyeOffLine /> : <RiEyeLine />}
+              </button>
+            </div>
           </div>
 
           {/* New password */}

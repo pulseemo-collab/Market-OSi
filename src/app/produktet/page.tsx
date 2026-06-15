@@ -99,6 +99,10 @@ export default function ProduktetPage() {
   const safeSuppliers = Array.isArray(suppliers) ? suppliers : []
 
   const fetchProducts = useCallback(async () => {
+    if (!role || !['Administrator', 'Manager'].includes(role)) {
+      setLoading(false)
+      return
+    }
     setError(false)
     const params = new URLSearchParams()
     if (kerkimi) params.set('kerkimi', kerkimi)
@@ -106,7 +110,6 @@ export default function ProduktetPage() {
     params.set('arkivuar', arkivuarFilter)
     try {
       const res = await fetch(`/api/products?${params}`)
-      if (res.status === 401) { window.location.href = '/login'; return }
       if (!res.ok) throw new Error()
       const data = await res.json()
       setProducts(toArray<Product>(data, 'products'))
@@ -116,7 +119,7 @@ export default function ProduktetPage() {
     } finally {
       setLoading(false)
     }
-  }, [kerkimi, kategoriaFilter, arkivuarFilter])
+  }, [kerkimi, kategoriaFilter, arkivuarFilter, role])
 
   useEffect(() => {
     fetchProducts()
