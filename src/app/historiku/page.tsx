@@ -338,7 +338,16 @@ export default function HistorikuPage() {
       </div>
 
       {/* Summary Cards */}
-      {sales.length > 0 && (
+      {loading ? (
+        <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-2 sm:gap-4 mb-6`}>
+          {Array.from({ length: isAdmin ? 3 : 2 }).map((_, i) => (
+            <div key={i} className="card p-3 sm:p-4 animate-pulse">
+              <div className="h-3 bg-slate-100 rounded w-24 mb-2" />
+              <div className="h-6 bg-slate-200 rounded w-28" />
+            </div>
+          ))}
+        </div>
+      ) : sales.length > 0 ? (
         <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-2 sm:gap-4 mb-6`}>
           <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Shitjet Totale</p>
@@ -355,7 +364,7 @@ export default function HistorikuPage() {
             <p className="text-base sm:text-xl font-bold text-slate-900">{sales.length}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Sales Table */}
       <div className="card overflow-hidden">

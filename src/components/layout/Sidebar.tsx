@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/contexts/RoleContext'
 import { Role, ROLE_LABELS } from '@/lib/roles'
 import { useSubscriptionDetails } from '@/hooks/useSubscription'
+import { useNotificationCount } from '@/hooks/useNotificationCount'
 import type { ClientStaffSession } from './ClientLayout'
 import toast from 'react-hot-toast'
 import {
@@ -117,6 +118,7 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
 
   const showSubStatus = role === 'Administrator' || role === 'Manager'
   const subDetails = useSubscriptionDetails(showSubStatus)
+  const notifCount = useNotificationCount(showSubStatus)
 
   // Hide sidebar on all auth pages
   const isAuthPage =
@@ -193,7 +195,13 @@ export default function Sidebar({ onClose, orgName, staffSession = null }: Sideb
         {visibleBottom.length > 0 && (
           <div className="pt-3 space-y-0.5">
             {visibleBottom.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} onClose={onClose} />
+              <NavLink
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onClose={onClose}
+                badge={item.href === '/administrim' ? notifCount : undefined}
+              />
             ))}
           </div>
         )}

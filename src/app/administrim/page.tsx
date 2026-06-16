@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useRole } from '@/contexts/RoleContext'
 import { useSubscription } from '@/hooks/useSubscription'
+import { useNotificationCount } from '@/hooks/useNotificationCount'
 import SubscriptionExpired from '@/components/SubscriptionExpired'
 import AccessDenied from '@/components/AccessDenied'
 import PageHeader from '@/components/ui/PageHeader'
@@ -59,6 +60,7 @@ export default function AdministrimPage() {
   const { role } = useRole()
   const subscription = useSubscription()
   const router = useRouter()
+  const notifCount = useNotificationCount(role === 'Administrator' || role === 'Manager')
 
   useEffect(() => {
     if (role !== null && role !== 'Administrator' && role !== 'Manager') {
@@ -85,10 +87,15 @@ export default function AdministrimPage() {
             <Link
               key={section.href}
               href={section.href}
-              className="card p-5 flex items-start gap-4 hover:border-slate-300 hover:shadow-md transition-all duration-150 group"
+              className="card p-5 flex items-start gap-4 hover:border-slate-300 hover:shadow-md transition-all duration-150 group relative"
             >
-              <div className={`w-11 h-11 ${section.iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}>
+              <div className={`w-11 h-11 ${section.iconBg} rounded-xl flex items-center justify-center flex-shrink-0 relative`}>
                 <Icon className={`text-xl ${section.iconColor}`} />
+                {section.href === '/njoftime' && notifCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                    {notifCount > 99 ? '99+' : notifCount}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-slate-800 group-hover:text-slate-900">

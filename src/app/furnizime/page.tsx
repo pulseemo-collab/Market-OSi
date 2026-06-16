@@ -409,7 +409,16 @@ export default function FurnizimePage() {
       </div>
 
       {/* Summary Cards */}
-      {filteredSupplies.length > 0 && (
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={`card p-3 sm:p-4 animate-pulse${i === 3 ? ' col-span-2 sm:col-span-1' : ''}`}>
+              <div className="h-3 bg-slate-100 rounded w-24 mb-2" />
+              <div className="h-6 bg-slate-200 rounded w-20" />
+            </div>
+          ))}
+        </div>
+      ) : filteredSupplies.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-6">
           <div className="card p-3 sm:p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Furnizime</p>
@@ -424,7 +433,7 @@ export default function FurnizimePage() {
             <p className="text-base sm:text-xl font-bold text-slate-900">{totalItems}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Supply History Table */}
       <div className="card overflow-hidden">

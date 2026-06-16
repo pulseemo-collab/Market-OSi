@@ -210,7 +210,16 @@ export default function PorositjeTeSugjeruaraPage() {
       />
 
       {/* Summary cards */}
-      {!loading && (
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={`card p-3 sm:p-4 animate-pulse${i === 3 ? ' col-span-2 sm:col-span-1' : ''}`}>
+              <div className="h-3 bg-slate-100 rounded w-32 mb-2" />
+              <div className="h-7 bg-slate-200 rounded w-16" />
+            </div>
+          ))}
+        </div>
+      ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div className="card p-3 sm:p-4 border-l-4 border-orange-400">
             <p className="text-xs font-medium text-slate-500 mb-1">Produkte për Porosi</p>

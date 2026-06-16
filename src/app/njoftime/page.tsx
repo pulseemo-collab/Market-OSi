@@ -101,9 +101,10 @@ export default function NjoftimePage() {
   }, [fetchNotifications])
 
   const markAsRead = async (id: number) => {
-    // Optimistic update
+    // Optimistic update + immediate sidebar refresh
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
     setUnreadCount((prev) => Math.max(0, prev - 1))
+    window.dispatchEvent(new Event('notifications-updated'))
     setMarkingId(id)
     try {
       const res = await fetch(`/api/notifications/${id}`, { method: 'PATCH' })
@@ -112,6 +113,7 @@ export default function NjoftimePage() {
       // Rollback
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)))
       setUnreadCount((prev) => prev + 1)
+      window.dispatchEvent(new Event('notifications-updated'))
       toast.error('Gabim gjatë shënimit')
     } finally {
       setMarkingId(null)
@@ -120,9 +122,10 @@ export default function NjoftimePage() {
 
   const markAllAsRead = async () => {
     const snapshot = { notifications, unreadCount }
-    // Optimistic update
+    // Optimistic update + immediate sidebar refresh
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
     setUnreadCount(0)
+    window.dispatchEvent(new Event('notifications-updated'))
     setMarkingAll(true)
     try {
       const res = await fetch('/api/notifications/mark-all-read', { method: 'POST' })
@@ -132,6 +135,7 @@ export default function NjoftimePage() {
       // Rollback
       setNotifications(snapshot.notifications)
       setUnreadCount(snapshot.unreadCount)
+      window.dispatchEvent(new Event('notifications-updated'))
       toast.error('Gabim gjatë shënimit')
     } finally {
       setMarkingAll(false)
