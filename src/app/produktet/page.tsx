@@ -273,7 +273,7 @@ export default function ProduktetPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Produktet"
-        subtitle={`${safeProducts.length} produkte${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${safeProducts.length} produkte${lowStockCount > 0 ? ` · ${lowStockCount} me stok të ulët` : ''}`}
         action={
           isAdmin ? (
             <button onClick={openAdd} className="btn-primary flex items-center gap-2">

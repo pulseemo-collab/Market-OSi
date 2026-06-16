@@ -300,7 +300,7 @@ export default function HistorikuPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Historiku i Shitjeve"
-        subtitle={`${sales.length} shitje gjatë periudhës`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${sales.length} shitje gjatë periudhës`}
       />
 
       {/* Period Filter + Date + Export */}

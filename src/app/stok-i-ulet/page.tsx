@@ -70,7 +70,7 @@ export default function StokUletPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Stok i Ulët"
-        subtitle={`${products.length} produkte nën nivelin minimal`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${products.length} produkte nën nivelin minimal`}
         action={
           <button
             onClick={fetchLowStock}

@@ -197,7 +197,7 @@ export default function PorositjeTeSugjeruaraPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Porositje të Sugjeruara"
-        subtitle={`${totalProducts} produkte kanë nevojë për porosi`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${totalProducts} produkte kanë nevojë për porosi`}
         action={
           <button
             onClick={fetchData}

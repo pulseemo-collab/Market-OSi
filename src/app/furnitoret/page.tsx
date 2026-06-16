@@ -150,7 +150,7 @@ export default function FurnitoretPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Furnitorët"
-        subtitle={`${suppliers.length} furnitorë të regjistruar`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${suppliers.length} furnitorë të regjistruar`}
         action={
           <button onClick={openAdd} className="btn-primary flex items-center gap-2">
             <RiAddLine className="text-lg" />

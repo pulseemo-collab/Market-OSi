@@ -17,6 +17,13 @@ import {
   RiUserSettingsLine,
   RiDownloadLine,
   RiInformationLine,
+  RiArchiveLine,
+  RiBankCardLine,
+  RiDatabase2Line,
+  RiGroupLine,
+  RiLoginBoxLine,
+  RiLockLine,
+  RiErrorWarningLine,
 } from 'react-icons/ri'
 
 interface AuditLog {
@@ -42,8 +49,23 @@ const ACTION_LABELS: Record<string, string> = {
   create: 'Krijim',
   update: 'Modifikim',
   delete: 'Fshirje',
+  archive: 'Arkivim',
   change_role: 'Ndryshim Roli',
   export: 'Eksport',
+  backup_exported: 'Eksport Backup',
+  backup_restored: 'Rikthim Backup',
+  backup_restore_failed: 'Dështim Rikthimi',
+  billing_plan_changed: 'Ndryshim Plani',
+  billing_status_changed: 'Ndryshim Statusi',
+  billing_subscription_created: 'Krijim Abonimi',
+  billing_access_blocked: 'Aksess i Bllokuar',
+  staff_created: 'Shtim Stafi',
+  staff_deactivated: 'Çaktivizim Stafi',
+  staff_activated: 'Aktivizim Stafi',
+  staff_pin_changed: 'Ndryshim PIN',
+  staff_login: 'Hyrje Stafi',
+  staff_login_failed: 'Hyrje Dështuar',
+  staff_locked: 'Bllokues Stafi',
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -53,6 +75,9 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   sale: 'Shitje',
   user: 'Përdorues',
   export: 'Eksport',
+  backup: 'Backup',
+  subscription: 'Abonim',
+  staff: 'Staf',
 }
 
 interface FieldChange {
@@ -81,11 +106,26 @@ function ChangesDisplay({ metadata }: { metadata: Record<string, unknown> | null
 
 function ActionIcon({ action }: { action: string }) {
   switch (action) {
-    case 'create': return <RiAddCircleLine className="text-emerald-500" />
-    case 'update': return <RiEditLine className="text-blue-500" />
-    case 'delete': return <RiDeleteBin6Line className="text-red-500" />
-    case 'change_role': return <RiUserSettingsLine className="text-violet-500" />
-    case 'export': return <RiDownloadLine className="text-slate-500" />
+    case 'create':                      return <RiAddCircleLine className="text-emerald-500" />
+    case 'update':                      return <RiEditLine className="text-blue-500" />
+    case 'delete':                      return <RiDeleteBin6Line className="text-red-500" />
+    case 'archive':                     return <RiArchiveLine className="text-amber-500" />
+    case 'change_role':                 return <RiUserSettingsLine className="text-violet-500" />
+    case 'export':                      return <RiDownloadLine className="text-slate-500" />
+    case 'backup_exported':
+    case 'backup_restored':             return <RiDatabase2Line className="text-cyan-500" />
+    case 'backup_restore_failed':       return <RiErrorWarningLine className="text-red-500" />
+    case 'billing_plan_changed':
+    case 'billing_status_changed':
+    case 'billing_subscription_created':
+    case 'billing_access_blocked':      return <RiBankCardLine className="text-blue-500" />
+    case 'staff_created':
+    case 'staff_deactivated':
+    case 'staff_activated':
+    case 'staff_pin_changed':           return <RiGroupLine className="text-rose-500" />
+    case 'staff_login':                 return <RiLoginBoxLine className="text-slate-500" />
+    case 'staff_login_failed':
+    case 'staff_locked':                return <RiLockLine className="text-amber-500" />
     default: return null
   }
 }
@@ -94,8 +134,23 @@ const ACTION_BADGE: Record<string, string> = {
   create: 'bg-emerald-100 text-emerald-700',
   update: 'bg-blue-100 text-blue-700',
   delete: 'bg-red-100 text-red-700',
+  archive: 'bg-amber-100 text-amber-700',
   change_role: 'bg-violet-100 text-violet-700',
   export: 'bg-slate-100 text-slate-600',
+  backup_exported: 'bg-cyan-100 text-cyan-700',
+  backup_restored: 'bg-teal-100 text-teal-700',
+  backup_restore_failed: 'bg-red-100 text-red-700',
+  billing_plan_changed: 'bg-blue-100 text-blue-700',
+  billing_status_changed: 'bg-orange-100 text-orange-700',
+  billing_subscription_created: 'bg-emerald-100 text-emerald-700',
+  billing_access_blocked: 'bg-red-100 text-red-700',
+  staff_created: 'bg-emerald-100 text-emerald-700',
+  staff_deactivated: 'bg-red-100 text-red-700',
+  staff_activated: 'bg-teal-100 text-teal-700',
+  staff_pin_changed: 'bg-violet-100 text-violet-700',
+  staff_login: 'bg-slate-100 text-slate-600',
+  staff_login_failed: 'bg-amber-100 text-amber-700',
+  staff_locked: 'bg-red-100 text-red-700',
 }
 
 const ENTITY_BADGE: Record<string, string> = {
@@ -105,6 +160,9 @@ const ENTITY_BADGE: Record<string, string> = {
   sale: 'bg-green-100 text-green-700',
   user: 'bg-violet-100 text-violet-700',
   export: 'bg-slate-100 text-slate-600',
+  backup: 'bg-blue-100 text-blue-700',
+  subscription: 'bg-indigo-100 text-indigo-700',
+  staff: 'bg-rose-100 text-rose-700',
 }
 
 const ROLE_BADGE: Record<string, string> = {

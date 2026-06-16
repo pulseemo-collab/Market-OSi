@@ -368,7 +368,7 @@ export default function FurnizimePage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Furnizime"
-        subtitle={`${filteredSupplies.length} furnizime · Historia e Stokut`}
+        subtitle={loading ? 'Duke ngarkuar...' : `${filteredSupplies.length} furnizime · Historia e Stokut`}
         action={
           <button onClick={openCreate} className="btn-primary flex items-center gap-2">
             <RiAddLine className="text-base" />

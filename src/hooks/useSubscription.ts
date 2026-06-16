@@ -27,6 +27,13 @@ export interface SubscriptionDetails {
 
 export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
   const [details, setDetails] = useState<SubscriptionDetails>({ loading: enabled })
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1)
+    window.addEventListener('subscription-updated', handler)
+    return () => window.removeEventListener('subscription-updated', handler)
+  }, [])
 
   useEffect(() => {
     if (!enabled) {
@@ -45,7 +52,7 @@ export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
         })
       )
       .catch(() => setDetails({ loading: false }))
-  }, [enabled])
+  }, [enabled, refreshKey])
 
   return details
 }

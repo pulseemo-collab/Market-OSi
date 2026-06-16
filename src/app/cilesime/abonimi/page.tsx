@@ -258,6 +258,7 @@ export default function AbonimiFaturimiPage() {
         toast.success('Rinovimi automatik u aktivizua.')
         setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: false, closeAtPeriodEnd: false, cancelledAt: null } : prev)
       }
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë ndryshimit')
     } finally {
@@ -277,6 +278,7 @@ export default function AbonimiFaturimiPage() {
       if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë riaktivizimit'); return }
       toast.success('Rinovimi u riaktivizua.')
       setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: false, closeAtPeriodEnd: false, cancelledAt: null } : prev)
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë riaktivizimit')
     } finally {
@@ -293,6 +295,7 @@ export default function AbonimiFaturimiPage() {
       setShowCloseModal(false)
       toast.success('Dyqani do të mbyllet pas skadimit të abonimit.')
       setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: true, closeAtPeriodEnd: true, cancelledAt: new Date().toISOString() } : prev)
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë mbylljes')
     } finally {
@@ -312,6 +315,7 @@ export default function AbonimiFaturimiPage() {
       if (!res.ok) { toast.error(data.error ?? 'Gabim gjatë anulimit'); return }
       toast.success('Mbyllja u anulua. Rinovimi vazhdon normalisht.')
       setDetails((prev) => prev ? { ...prev, cancelAtPeriodEnd: false, closeAtPeriodEnd: false, cancelledAt: null } : prev)
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë anulimit')
     } finally {
@@ -344,6 +348,7 @@ export default function AbonimiFaturimiPage() {
         .then((r) => r.json())
         .then((d) => setHistory(d.records ?? []))
         .catch(() => {})
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë ndryshimit të planit')
     } finally {
@@ -375,6 +380,7 @@ export default function AbonimiFaturimiPage() {
         .then((r) => r.json())
         .then((d) => setHistory(d.records ?? []))
         .catch(() => {})
+      window.dispatchEvent(new Event('subscription-updated'))
     } catch {
       toast.error('Gabim gjatë zgjatjes')
     } finally {

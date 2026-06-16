@@ -4,22 +4,12 @@ export function formatCurrency(amount: number): string {
 
 export function formatDate(date: string | Date): string {
   const d = new Date(date)
-  return d.toLocaleDateString('sq-AL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 export function formatDateTime(date: string | Date): string {
   const d = new Date(date)
-  return d.toLocaleString('sq-AL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 export function formatTime(date: string | Date): string {
