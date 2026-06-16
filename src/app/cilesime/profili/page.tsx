@@ -106,8 +106,20 @@ export default function ProfiliBiznesitPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-40">
-          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-5 animate-pulse">
+          <div className="card p-6 space-y-4">
+            <div className="h-3 bg-slate-200 rounded w-48 mb-2" />
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i}>
+                <div className="h-3 bg-slate-100 rounded w-28 mb-1.5" />
+                <div className="h-10 bg-slate-100 rounded-lg" />
+              </div>
+            ))}
+          </div>
+          <div className="card p-6">
+            <div className="h-3 bg-slate-200 rounded w-36 mb-4" />
+            <div className="h-32 bg-slate-100 rounded-xl" />
+          </div>
         </div>
       ) : (
         <div className="space-y-5">
@@ -185,16 +197,16 @@ export default function ProfiliBiznesitPage() {
           </div>
 
           {/* Logo placeholder */}
-          <div className="card p-6">
+          <div className="card p-6 opacity-60">
             <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4">
               Logo e Biznesit
             </h2>
             <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                <RiImageLine className="text-slate-400 text-2xl" />
+                <RiImageLine className="text-slate-300 text-2xl" />
               </div>
-              <p className="text-sm font-medium text-slate-600">Logo e Biznesit</p>
-              <p className="text-xs text-slate-400 mt-1">Ngarkimi i logos — së shpejti i disponueshëm</p>
+              <p className="text-sm font-medium text-slate-500">Logo e Biznesit</p>
+              <p className="text-xs text-slate-400 mt-1">Nuk është aktivizuar ende</p>
             </div>
           </div>
 

@@ -15,7 +15,6 @@ import {
   RiAlertLine,
   RiBankLine,
   RiArrowLeftLine,
-  RiEditLine,
   RiCheckLine,
   RiArrowRightLine,
   RiRefreshLine,
@@ -53,14 +52,6 @@ interface BillingRecord {
   status: string
 }
 
-// ---------------------------------------------------------------------------
-// Mock card placeholder — replace with real provider data later
-// ---------------------------------------------------------------------------
-const MOCK_PAYMENT_CARD = {
-  brand: 'Mastercard',
-  last4: '2514',
-  expiry: '09/30',
-}
 
 // ---------------------------------------------------------------------------
 // Plan config
@@ -395,8 +386,46 @@ export default function AbonimiFaturimiPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl animate-pulse">
+        <div className="h-4 bg-slate-100 rounded w-24 mb-5" />
+        <div className="flex items-center gap-3 mb-7">
+          <div className="w-10 h-10 bg-slate-200 rounded-xl flex-shrink-0" />
+          <div className="space-y-2">
+            <div className="h-5 bg-slate-200 rounded w-48" />
+            <div className="h-3 bg-slate-100 rounded w-64" />
+          </div>
+        </div>
+        <div className="space-y-6">
+          {/* Status card */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+            <div className="h-4 bg-slate-200 rounded w-40 mb-6" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="h-3 bg-slate-100 rounded w-20" />
+                <div className="h-7 bg-slate-200 rounded-full w-24" />
+              </div>
+              <div className="h-32 bg-slate-100 rounded-xl" />
+            </div>
+          </div>
+          {/* Plans card */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+            <div className="h-4 bg-slate-200 rounded w-32 mb-6" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="h-52 bg-slate-100 rounded-xl" />
+              <div className="h-52 bg-slate-100 rounded-xl" />
+            </div>
+          </div>
+          {/* Top-up card */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+            <div className="h-4 bg-slate-200 rounded w-36 mb-6" />
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="h-10 bg-slate-100 rounded-lg" />
+              <div className="h-10 bg-slate-100 rounded-lg" />
+            </div>
+            <div className="h-6 bg-slate-100 rounded w-full mb-4" />
+            <div className="h-16 bg-slate-100 rounded-xl" />
+          </div>
+        </div>
       </div>
     )
   }
@@ -528,41 +557,29 @@ export default function AbonimiFaturimiPage() {
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Metoda e Pagesës</p>
 
-              <div className="relative rounded-xl overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%)' }}>
+              <div className="relative rounded-xl overflow-hidden opacity-70"
+                style={{ background: 'linear-gradient(135deg, #475569 0%, #64748b 100%)' }}>
                 <div className="p-4">
-                  {/* Card logo area */}
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-white/60 text-xs font-semibold tracking-widest uppercase">
-                      {MOCK_PAYMENT_CARD.brand}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-white/60 text-[10px] font-semibold tracking-widest uppercase">
+                      Metodë pagese demo
                     </span>
                     <div className="flex gap-1">
-                      <div className="w-7 h-5 rounded-full bg-red-500/80" />
-                      <div className="w-7 h-5 rounded-full bg-yellow-400/80 -ml-3" />
+                      <div className="w-7 h-5 rounded-full bg-white/20" />
+                      <div className="w-7 h-5 rounded-full bg-white/20 -ml-3" />
                     </div>
                   </div>
-                  {/* Card number */}
-                  <p className="text-white font-mono text-sm tracking-widest mb-3">
-                    •••• •••• •••• {MOCK_PAYMENT_CARD.last4}
+                  <p className="text-white/80 text-sm font-medium mb-1">
+                    Lidhja me bankën vjen më vonë
                   </p>
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-white/50 text-[10px] uppercase tracking-wider">Skadon</p>
-                      <p className="text-white text-sm font-medium">{MOCK_PAYMENT_CARD.expiry}</p>
-                    </div>
-                    <button
-                      className="flex items-center gap-1 text-white/70 hover:text-white transition-colors text-xs"
-                      onClick={() => toast('Ndryshimi i kartës do të aktivizohet së shpejti', { icon: '💳' })}
-                    >
-                      <RiEditLine className="text-sm" />
-                      Ndrysho
-                    </button>
-                  </div>
+                  <p className="text-white/40 font-mono text-xs tracking-widest">
+                    •••• •••• •••• ••••
+                  </p>
                 </div>
               </div>
 
               <p className="text-[10px] text-slate-400 leading-relaxed">
-                Karta ruhet me siguri. Numri i plotë nuk ruhet kurrë në sisteme tona.
+                Lidhja me bankën do të aktivizohet më vonë.
               </p>
             </div>
           </div>

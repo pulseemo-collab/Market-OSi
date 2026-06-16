@@ -240,11 +240,11 @@ export default function SiguriaPage() {
         </div>
 
         {/* 2FA Placeholder */}
-        <div className="card p-6 opacity-60">
+        <div className="card p-6 opacity-60 cursor-default select-none">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-800">Vërtetimi me Dy Faktorë (2FA)</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Shtoni një shtresë shtesë sigurie në llogarinë tuaj</p>
+              <p className="text-sm text-slate-500 mt-0.5">Nuk është aktivizuar ende</p>
             </div>
             <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-full">
               Së shpejti

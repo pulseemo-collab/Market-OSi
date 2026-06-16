@@ -151,7 +151,7 @@ export default function NjoftimePage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Njoftime"
-        subtitle="Shikoni njoftime të rëndësishme të sistemit dhe biznesit"
+        subtitle={loading ? 'Duke ngarkuar...' : unreadCount > 0 ? `${unreadCount} njoftime pa lexuar` : 'Nuk ka njoftime të palexuara'}
       />
 
       {/* Toolbar */}

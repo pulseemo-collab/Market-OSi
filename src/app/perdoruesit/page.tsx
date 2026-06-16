@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/ui/PageHeader'
 import Modal from '@/components/ui/Modal'
+import TableSkeleton from '@/components/ui/TableSkeleton'
 import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import { ROLE_LABELS, Role } from '@/lib/roles'
@@ -472,10 +473,7 @@ export default function PerdoruesitPage() {
 
         <div className="card overflow-hidden">
           {usersLoading ? (
-            <div className="p-8 text-center">
-              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">Duke ngarkuar përdoruesit...</p>
-            </div>
+            <TableSkeleton rows={3} cols={5} />
           ) : users.length === 0 ? (
             <div className="p-12 text-center">
               <RiTeamLine className="text-4xl text-slate-200 mx-auto mb-3" />
@@ -559,10 +557,7 @@ export default function PerdoruesitPage() {
 
         <div className="card overflow-hidden">
           {staffLoading ? (
-            <div className="p-8 text-center">
-              <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">Duke ngarkuar personalin...</p>
-            </div>
+            <TableSkeleton rows={3} cols={6} />
           ) : staffError ? (
             <div className="p-8 text-center text-slate-400">
               <p className="text-sm">Gabim gjatë ngarkimit të personalit</p>
