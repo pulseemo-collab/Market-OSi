@@ -93,6 +93,7 @@ export default function ProduktetPage() {
   const [saving, setSaving] = useState(false)
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeError, setBarcodeError] = useState('')
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const barcodeInputRef = useRef<HTMLInputElement>(null)
 
   const safeProducts = Array.isArray(products) ? products : []
@@ -137,6 +138,7 @@ export default function ProduktetPage() {
     setForm({ ...emptyForm, kategoria: kategoriaFilter || KATEGORITE[0] })
     setBarcodeInput('')
     setBarcodeError('')
+    setFormErrors({})
     setModalOpen(true)
   }
 
@@ -155,6 +157,7 @@ export default function ProduktetPage() {
     })
     setBarcodeInput('')
     setBarcodeError('')
+    setFormErrors({})
     setModalOpen(true)
   }
 
@@ -162,6 +165,7 @@ export default function ProduktetPage() {
     setModalOpen(false)
     setBarcodeInput('')
     setBarcodeError('')
+    setFormErrors({})
   }
 
   function handleBarcodeAdd() {
@@ -206,10 +210,16 @@ export default function ProduktetPage() {
   }
 
   async function handleSave() {
-    if (!form.emri || !form.kategoria || !form.cmimiBlerjes || !form.cmimiShitjes) {
-      toast.error('Ju lutem plotësoni të gjitha fushat e detyrueshme')
-      return
-    }
+    const errors: Record<string, string> = {}
+    if (!form.emri.trim()) errors.emri = 'Emri është i detyrueshëm'
+    if (!form.cmimiBlerjes) errors.cmimiBlerjes = 'Çmimi i blerjes është i detyrueshëm'
+    else if (isNaN(Number(form.cmimiBlerjes)) || Number(form.cmimiBlerjes) < 0) errors.cmimiBlerjes = 'Çmimi duhet të jetë numër pozitiv'
+    if (!form.cmimiShitjes) errors.cmimiShitjes = 'Çmimi i shitjes është i detyrueshëm'
+    else if (isNaN(Number(form.cmimiShitjes)) || Number(form.cmimiShitjes) < 0) errors.cmimiShitjes = 'Çmimi duhet të jetë numër pozitiv'
+    if (form.sasia !== '' && isNaN(Number(form.sasia))) errors.sasia = 'Sasia duhet të jetë numër'
+    if (form.stokuMinimal !== '' && isNaN(Number(form.stokuMinimal))) errors.stokuMinimal = 'Stoku minimal duhet të jetë numër'
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
+    setFormErrors({})
 
     const validBarcodes = form.barcodes
 
@@ -447,10 +457,11 @@ export default function ProduktetPage() {
             <input
               type="text"
               value={form.emri}
-              onChange={(e) => setForm({ ...form, emri: e.target.value })}
-              className="input"
+              onChange={(e) => { setForm({ ...form, emri: e.target.value }); if (formErrors.emri) setFormErrors((p) => ({ ...p, emri: '' })) }}
+              className={`input ${formErrors.emri ? 'border-red-400 focus:border-red-400' : ''}`}
               placeholder="p.sh. Bukë e Bardhë"
             />
+            {formErrors.emri && <p className="text-xs text-red-500 mt-1">{formErrors.emri}</p>}
           </div>
 
           {/* Barcode scanner section */}
@@ -550,12 +561,13 @@ export default function ProduktetPage() {
             <input
               type="number"
               value={form.cmimiBlerjes}
-              onChange={(e) => isAdmin && setForm({ ...form, cmimiBlerjes: e.target.value })}
-              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+              onChange={(e) => { isAdmin && setForm({ ...form, cmimiBlerjes: e.target.value }); if (formErrors.cmimiBlerjes) setFormErrors((p) => ({ ...p, cmimiBlerjes: '' })) }}
+              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''} ${formErrors.cmimiBlerjes ? 'border-red-400 focus:border-red-400' : ''}`}
               placeholder="0"
               min="0"
               readOnly={!isAdmin}
             />
+            {formErrors.cmimiBlerjes && <p className="text-xs text-red-500 mt-1">{formErrors.cmimiBlerjes}</p>}
           </div>
           <div>
             <label className="label">
@@ -564,34 +576,37 @@ export default function ProduktetPage() {
             <input
               type="number"
               value={form.cmimiShitjes}
-              onChange={(e) => isAdmin && setForm({ ...form, cmimiShitjes: e.target.value })}
-              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+              onChange={(e) => { isAdmin && setForm({ ...form, cmimiShitjes: e.target.value }); if (formErrors.cmimiShitjes) setFormErrors((p) => ({ ...p, cmimiShitjes: '' })) }}
+              className={`input ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''} ${formErrors.cmimiShitjes ? 'border-red-400 focus:border-red-400' : ''}`}
               placeholder="0"
               min="0"
               readOnly={!isAdmin}
             />
+            {formErrors.cmimiShitjes && <p className="text-xs text-red-500 mt-1">{formErrors.cmimiShitjes}</p>}
           </div>
           <div>
             <label className="label">Sasia në Stok</label>
             <input
               type="number"
               value={form.sasia}
-              onChange={(e) => setForm({ ...form, sasia: e.target.value })}
-              className="input"
+              onChange={(e) => { setForm({ ...form, sasia: e.target.value }); if (formErrors.sasia) setFormErrors((p) => ({ ...p, sasia: '' })) }}
+              className={`input ${formErrors.sasia ? 'border-red-400 focus:border-red-400' : ''}`}
               min="0"
               step={form.njesia === 'kg' || form.njesia === 'gram' ? '0.001' : '1'}
             />
+            {formErrors.sasia && <p className="text-xs text-red-500 mt-1">{formErrors.sasia}</p>}
           </div>
           <div>
             <label className="label">Stoku Minimal</label>
             <input
               type="number"
               value={form.stokuMinimal}
-              onChange={(e) => setForm({ ...form, stokuMinimal: e.target.value })}
-              className="input"
+              onChange={(e) => { setForm({ ...form, stokuMinimal: e.target.value }); if (formErrors.stokuMinimal) setFormErrors((p) => ({ ...p, stokuMinimal: '' })) }}
+              className={`input ${formErrors.stokuMinimal ? 'border-red-400 focus:border-red-400' : ''}`}
               min="0"
               step={form.njesia === 'kg' || form.njesia === 'gram' ? '0.001' : '1'}
             />
+            {formErrors.stokuMinimal && <p className="text-xs text-red-500 mt-1">{formErrors.stokuMinimal}</p>}
           </div>
           <div className="sm:col-span-2">
             <label className="label">Furnitori</label>

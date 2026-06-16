@@ -83,26 +83,37 @@ export default function StokUletPage() {
       />
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 min-w-0">
-        <div className="card p-3 sm:p-4 border-l-4 border-red-500">
-          <p className="text-xs font-medium text-slate-500 mb-1">Kritike</p>
-          <p className="text-xl sm:text-2xl font-bold text-red-600">
-            {products.filter((p) => p.sasia === 0).length}
-          </p>
+      {loading ? (
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 min-w-0">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="card p-3 sm:p-4 animate-pulse">
+              <div className="h-3 bg-slate-100 rounded w-16 mb-2" />
+              <div className="h-7 bg-slate-200 rounded w-8" />
+            </div>
+          ))}
         </div>
-        <div className="card p-3 sm:p-4 border-l-4 border-orange-400">
-          <p className="text-xs font-medium text-slate-500 mb-1">Shumë i Ulët</p>
-          <p className="text-xl sm:text-2xl font-bold text-orange-500">
-            {products.filter((p) => p.sasia > 0 && p.sasia <= p.stokuMinimal * 0.5).length}
-          </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 min-w-0">
+          <div className="card p-3 sm:p-4 border-l-4 border-red-500">
+            <p className="text-xs font-medium text-slate-500 mb-1">Kritike</p>
+            <p className="text-xl sm:text-2xl font-bold text-red-600">
+              {products.filter((p) => p.sasia === 0).length}
+            </p>
+          </div>
+          <div className="card p-3 sm:p-4 border-l-4 border-orange-400">
+            <p className="text-xs font-medium text-slate-500 mb-1">Shumë i Ulët</p>
+            <p className="text-xl sm:text-2xl font-bold text-orange-500">
+              {products.filter((p) => p.sasia > 0 && p.sasia <= p.stokuMinimal * 0.5).length}
+            </p>
+          </div>
+          <div className="card p-3 sm:p-4 border-l-4 border-yellow-400">
+            <p className="text-xs font-medium text-slate-500 mb-1">Nën Minimum</p>
+            <p className="text-xl sm:text-2xl font-bold text-yellow-600">
+              {products.filter((p) => p.sasia > p.stokuMinimal * 0.5 && p.sasia <= p.stokuMinimal).length}
+            </p>
+          </div>
         </div>
-        <div className="card p-3 sm:p-4 border-l-4 border-yellow-400">
-          <p className="text-xs font-medium text-slate-500 mb-1">Nën Minimum</p>
-          <p className="text-xl sm:text-2xl font-bold text-yellow-600">
-            {products.filter((p) => p.sasia > p.stokuMinimal * 0.5 && p.sasia <= p.stokuMinimal).length}
-          </p>
-        </div>
-      </div>
+      )}
 
       {loading ? (
         <div className="card overflow-hidden">

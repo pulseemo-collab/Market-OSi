@@ -449,20 +449,24 @@ export default function CilesimiBackupPage() {
                 </motion.div>
               )}
 
-              {parsedBackup && (
-                <button
-                  onClick={handleRestore}
-                  disabled={!canRestore || restoring}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-150 bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-                >
-                  {restoring ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <RiCheckLine className="text-lg" />
-                  )}
-                  {restoring ? 'Duke rikuperuar...' : 'Rikupero të Dhënat'}
-                </button>
+              {!parsedBackup && (
+                <p className="text-xs text-slate-400 text-center mb-4">
+                  Zgjidhni një file backup për të aktivizuar rikuperimin.
+                </p>
               )}
+
+              <button
+                onClick={handleRestore}
+                disabled={!canRestore || restoring}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-150 bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                {restoring ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <RiCheckLine className="text-lg" />
+                )}
+                {restoring ? 'Duke rikuperuar...' : 'Rikupero të Dhënat'}
+              </button>
             </>
           )}
         </motion.div>

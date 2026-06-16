@@ -922,7 +922,7 @@ export default function AbonimiFaturimiPage() {
                   <strong>{planTarget === 'yearly' ? '365' : '30'} ditë</strong> nga data aktuale e skadimit.
                 </p>
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-                  Plani i ardhshëm shfaqet si «Plani i ardhshëm» derisa periudha aktuale të mbarojë.
+                  {planLabel(planTarget)} pas skadimit aktivizohet pas përfundimit të periudhës aktuale.
                 </div>
               </div>
             ) : (
@@ -1086,9 +1086,12 @@ function PlanCard({ planKey, label, price, unit, isCurrentPlan, nextPlan, isOwne
           Plani aktual
         </div>
       ) : isNextPlan ? (
-        <div className="flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg border border-blue-200">
-          <RiRefreshLine className="text-base" />
-          Plani i ardhshëm
+        <div className="flex flex-col items-center gap-1 py-2.5 px-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-1.5 text-blue-700 text-sm font-semibold">
+            <RiRefreshLine className="text-base" />
+            {label} pas skadimit
+          </div>
+          <p className="text-xs text-blue-500 text-center">Aktivizohet pas përfundimit të periudhës aktuale.</p>
         </div>
       ) : isOwner ? (
         <button
