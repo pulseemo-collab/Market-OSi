@@ -386,7 +386,7 @@ export default function AbonimiFaturimiPage() {
 
   if (loading) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl animate-pulse">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto animate-pulse">
         <div className="h-4 bg-slate-100 rounded w-24 mb-5" />
         <div className="flex items-center gap-3 mb-7">
           <div className="w-10 h-10 bg-slate-200 rounded-xl flex-shrink-0" />
@@ -434,7 +434,7 @@ export default function AbonimiFaturimiPage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
       {/* Back link */}
       <Link
         href="/cilesime"

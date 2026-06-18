@@ -10,6 +10,16 @@ export const dynamic = 'force-dynamic'
 
 const VALID_ROLES = ['Administrator', 'Manager', 'Cashier'] as const
 
+async function authUserExists(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient()
+    const { data } = await admin.auth.admin.getUserById(userId)
+    return !!data.user
+  } catch {
+    return true // fail-safe: assume exists when we can't verify
+  }
+}
+
 async function resolveSupabaseUser(email: string): Promise<{ userId: string; method: string }> {
   const admin = createAdminClient()
 
@@ -136,24 +146,34 @@ export async function POST(
     return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
   }
 
-  // Block duplicate email within this org
+  // Block duplicate email within this org (unless the auth user was deleted — orphaned record)
   const existingInOrg = await prisma.userRole.findFirst({
     where: { email, organizationId: orgId },
   })
   if (existingInOrg) {
-    return NextResponse.json(
-      { error: 'Ky email ekziston tashmë në këtë organizatë' },
-      { status: 409 }
-    )
+    const stillExists = await authUserExists(existingInOrg.userId)
+    if (stillExists) {
+      return NextResponse.json(
+        { error: 'Ky email ekziston tashmë në këtë organizatë' },
+        { status: 409 }
+      )
+    }
+    // Orphaned record — auth user no longer exists, clean up and proceed
+    await prisma.userRole.delete({ where: { id: existingInOrg.id } })
   }
 
-  // Block email already assigned to any other org
+  // Block email already assigned to any other org (unless orphaned)
   const existingElsewhere = await prisma.userRole.findFirst({ where: { email } })
   if (existingElsewhere) {
-    return NextResponse.json(
-      { error: 'Ky email është tashmë i caktuar në një organizatë tjetër' },
-      { status: 409 }
-    )
+    const stillExists = await authUserExists(existingElsewhere.userId)
+    if (stillExists) {
+      return NextResponse.json(
+        { error: 'Ky email është tashmë i caktuar në një organizatë tjetër' },
+        { status: 409 }
+      )
+    }
+    // Orphaned record — auth user no longer exists, clean up and proceed
+    await prisma.userRole.delete({ where: { id: existingElsewhere.id } })
   }
 
   // Resolve Supabase user ID

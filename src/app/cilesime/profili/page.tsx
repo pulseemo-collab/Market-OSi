@@ -85,7 +85,7 @@ export default function ProfiliBiznesitPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
       {/* Back link */}
       <Link
         href="/cilesime"

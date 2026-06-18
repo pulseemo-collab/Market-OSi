@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from 'react'
 
+// Module-level cache: all hook instances share the same count immediately
+let _cachedCount = 0
+const _listeners = new Set<() => void>()
+
+function _broadcast() {
+  _listeners.forEach((fn) => fn())
+}
+
 export function useNotificationCount(enabled = true): number {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(_cachedCount)
 
   useEffect(() => {
     if (!enabled) {
@@ -11,16 +19,25 @@ export function useNotificationCount(enabled = true): number {
       return
     }
 
+    // Sync with current cache value immediately (may have been fetched by sidebar)
+    setCount(_cachedCount)
+
     const fetchCount = async () => {
       try {
         const res = await fetch('/api/notifications?countOnly=true')
         if (!res.ok) return
         const data = await res.json()
-        setCount(data.unreadCount ?? 0)
+        _cachedCount = data.unreadCount ?? 0
+        setCount(_cachedCount)
+        _broadcast()
       } catch {
         // silent — sidebar badge is non-critical
       }
     }
+
+    // Listen for cache updates from other hook instances
+    const listener = () => setCount(_cachedCount)
+    _listeners.add(listener)
 
     fetchCount()
 
@@ -29,6 +46,7 @@ export function useNotificationCount(enabled = true): number {
     const interval = setInterval(fetchCount, 60_000)
 
     return () => {
+      _listeners.delete(listener)
       window.removeEventListener('notifications-updated', handler)
       clearInterval(interval)
     }

@@ -32,7 +32,7 @@ export default function LoginSelectPage() {
         >
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Link
-              href="/login/manager"
+              href="/login/options"
               className="flex items-center gap-4 w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-500 rounded-2xl p-5 transition-all group"
             >
               <div className="w-12 h-12 bg-blue-600/20 group-hover:bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
