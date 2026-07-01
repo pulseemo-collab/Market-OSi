@@ -4,56 +4,91 @@ import { prisma } from '@/lib/prisma'
 import { setManagerOrgCookie, getStaffSession } from '@/lib/staff-auth'
 
 export async function GET(req: NextRequest) {
-  const supabase = createClient()
+  try {
+    const supabase = createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (user) {
-    const userRole = await prisma.userRole.findUnique({
-      where: { userId: user.id },
-      include: { organization: { select: { name: true, isActive: true } } },
-    })
-
-    if (!userRole) {
-      return NextResponse.json({ error: 'UserRole missing' }, { status: 404 })
+    if (authError) {
+      console.error('[org-context] auth.getUser error:', authError.message)
     }
 
-    const organization = userRole.organization
+    if (user) {
+      let userRole: Awaited<ReturnType<typeof prisma.userRole.findUnique<{
+        where: { userId: string }
+        include: { organization: { select: { name: true; isActive: true } } }
+      }>>> | null = null
 
-    if (!organization.isActive) {
-      return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+      try {
+        userRole = await prisma.userRole.findUnique({
+          where: { userId: user.id },
+          include: { organization: { select: { name: true, isActive: true } } },
+        })
+      } catch (dbErr) {
+        console.error('[org-context] userRole query failed:', dbErr)
+        return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+      }
+
+      if (!userRole) {
+        console.error('[org-context] no UserRole for userId:', user.id)
+        return NextResponse.json({ error: 'UserRole missing' }, { status: 404 })
+      }
+
+      // Prisma types this as non-null for a required relation, but guard at runtime
+      // in case of a FK integrity issue in the database.
+      const organization = userRole.organization as typeof userRole.organization | null
+
+      if (!organization) {
+        console.error('[org-context] organization missing for orgId:', userRole.organizationId)
+        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+      }
+
+      if (!organization.isActive) {
+        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+      }
+
+      if (userRole.roli === 'platform_owner') {
+        return NextResponse.json({ organizationId: null })
+      }
+
+      const res = NextResponse.json({
+        organizationId: userRole.organizationId,
+        orgName: organization.name,
+      })
+
+      setManagerOrgCookie(res, userRole.organizationId)
+      return res
     }
 
-    if (userRole.roli === 'platform_owner') {
-      return NextResponse.json({ organizationId: null })
+    // Try PIN staff session
+    const staffSession = await getStaffSession(req)
+
+    if (staffSession) {
+      let organization: { name: string; isActive: boolean } | null = null
+
+      try {
+        organization = await prisma.organization.findUnique({
+          where: { id: staffSession.organizationId },
+          select: { name: true, isActive: true },
+        })
+      } catch (dbErr) {
+        console.error('[org-context] org query (staff) failed:', dbErr)
+        return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+      }
+
+      if (!organization || !organization.isActive) {
+        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+      }
+
+      return NextResponse.json({
+        organizationId: staffSession.organizationId,
+        orgName: organization.name,
+      })
     }
 
-    const res = NextResponse.json({
-      organizationId: userRole.organizationId,
-      orgName: organization.name,
-    })
-
-    setManagerOrgCookie(res, userRole.organizationId)
-    return res
+    return NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 })
+  } catch (err) {
+    console.error('[org-context] UNEXPECTED ERROR:', err)
+    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
   }
-
-  // Try PIN staff session
-  const staffSession = await getStaffSession(req)
-
-  if (staffSession) {
-    const organization = await prisma.organization.findUnique({
-      where: { id: staffSession.organizationId },
-      select: { name: true, isActive: true },
-    })
-
-    if (!organization || !organization.isActive) {
-      return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
-    }
-    return NextResponse.json({
-      organizationId: staffSession.organizationId,
-      orgName: organization.name,
-    })
-  }
-
-  return NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 })
 }
