@@ -17,15 +17,17 @@ model Organization {
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  auditLogs     AuditLog[]
+  notifications Notification[]
   products      Product[]
   sales         Sale[]
+  staff         Staff[]
+  subscription  Subscription?
   suppliers     Supplier[]
   supplies      Supply[]
   userRoles     UserRole[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  subscription  Subscription?
-  staff         Staff[]
+
+  @@index([createdAt])
 }
 
 model Supplier {
@@ -36,11 +38,13 @@ model Supplier {
   adresa         String?
   shenime        String?
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   products       Product[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
   supplies       Supply[]
+
+  @@index([organizationId, emri])
 }
 
 model Product {
@@ -56,48 +60,61 @@ model Product {
   archivedAt     DateTime?
   furnitorId     Int?
   organizationId Int
-  organization   Organization     @relation(fields: [organizationId], references: [id])
-  furnitor       Supplier?        @relation(fields: [furnitorId], references: [id])
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  saleItems      SaleItem[]
+  furnitor       Supplier?        @relation(fields: [furnitorId], references: [id])
+  organization   Organization     @relation(fields: [organizationId], references: [id])
   barcodes       ProductBarcode[]
+  saleItems      SaleItem[]
   supplyItems    SupplyItem[]
+
+  @@index([organizationId, isArchived])
+  @@index([organizationId, emri])
+  @@index([organizationId, kategoria])
+  @@index([furnitorId])
 }
 
 model Supply {
   id             Int          @id @default(autoincrement())
   furnitorId     Int?
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  furnitor       Supplier?    @relation(fields: [furnitorId], references: [id])
   data           DateTime     @default(now())
   shenime        String?
   totali         Float        @default(0)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  furnitor       Supplier?    @relation(fields: [furnitorId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
   items          SupplyItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([furnitorId])
 }
 
 model SupplyItem {
   id            Int     @id @default(autoincrement())
   supplyId      Int
-  supply        Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)
   productId     Int
-  product       Product @relation(fields: [productId], references: [id])
   emriProduktit String
   sasia         Float
   njesia        String
   cmimiBlerjes  Float
   totali        Float
+  product       Product @relation(fields: [productId], references: [id])
+  supply        Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+
+  @@index([supplyId])
+  @@index([productId])
 }
 
 model ProductBarcode {
   id        Int      @id @default(autoincrement())
   barcode   String   @unique
   productId Int
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
 
 model Sale {
@@ -107,12 +124,16 @@ model Sale {
   shenime        String?
   paymentMethod  String       @default("cash")
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
   staffId        Int?
   staffName      String?
-  staff          Staff?       @relation(fields: [staffId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  staff          Staff?       @relation(fields: [staffId], references: [id])
   items          SaleItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, paymentMethod, createdAt])
+  @@index([staffId])
 }
 
 model SaleItem {
@@ -124,8 +145,11 @@ model SaleItem {
   cmimiBlerjes  Float
   cmimiShitjes  Float
   fitimi        Float
-  sale          Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product       Product @relation(fields: [productId], references: [id])
+  sale          Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([productId])
 }
 
 model UserRole {
@@ -134,15 +158,18 @@ model UserRole {
   email          String
   roli           String       @default("staff")
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, email])
+  @@index([email])
 }
 
 model AuditLog {
   id             Int          @id @default(autoincrement())
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
   userId         String
   userEmail      String
   userRole       String
@@ -152,12 +179,17 @@ model AuditLog {
   description    String
   metadata       Json?
   createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, action, createdAt])
+  @@index([organizationId, entityType, createdAt])
 }
 
 model Notification {
   id             Int          @id @default(autoincrement())
   organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
   userId         String?
   type           String
   title          String
@@ -166,24 +198,30 @@ model Notification {
   isRead         Boolean      @default(false)
   metadata       Json?
   createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, isRead])
+  @@index([organizationId, userId, isRead])
+  @@index([organizationId, type, isRead, createdAt])
 }
 
 model Subscription {
-  id                 Int       @id @default(autoincrement())
-  organizationId     Int       @unique
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  plan               String    @default("trial")
-  status             String    @default("trialing")
+  id                 Int          @id @default(autoincrement())
+  organizationId     Int          @unique
+  plan               String       @default("trial")
+  status             String       @default("trialing")
   trialEndsAt        DateTime?
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
   nextPlan           String?
-  cancelAtPeriodEnd  Boolean   @default(false)
-  closeAtPeriodEnd   Boolean   @default(false)
+  cancelAtPeriodEnd  Boolean      @default(false)
   cancelledAt        DateTime?
   notes              String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  closeAtPeriodEnd   Boolean      @default(false)
+  organization       Organization @relation(fields: [organizationId], references: [id])
 }
 
 model BillingAuditLog {
@@ -196,14 +234,15 @@ model BillingAuditLog {
   oldStatus       String?
   newStatus       String?
   notes           String?
-  amount          Int?
   createdAt       DateTime @default(now())
+  amount          Int?
+
+  @@index([organizationId, createdAt])
 }
 
 model Staff {
   id             Int            @id @default(autoincrement())
   organizationId Int
-  organization   Organization   @relation(fields: [organizationId], references: [id])
   emri           String
   kodi           String?
   roli           String         @default("cashier")
@@ -213,8 +252,9 @@ model Staff {
   lockedUntil    DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  sessions       StaffSession[]
   sales          Sale[]
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  sessions       StaffSession[]
 
   @@unique([organizationId, kodi])
   @@index([organizationId])
@@ -224,10 +264,11 @@ model StaffSession {
   id             Int      @id @default(autoincrement())
   token          String   @unique
   staffId        Int
-  staff          Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
   organizationId Int
   expiresAt      DateTime
   createdAt      DateTime @default(now())
+  staff          Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId])
+  @@index([expiresAt])
 }

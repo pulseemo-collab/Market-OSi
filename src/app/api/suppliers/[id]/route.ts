@@ -5,11 +5,12 @@ import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } 
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } }
+
+async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
 
@@ -17,14 +18,14 @@ export async function PUT(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const existing = await prisma.supplier.findFirst({
       where: { id: Number(params.id), organizationId: organizationId! },
     })
     if (!existing) {
-      return NextResponse.json({ error: 'Furnitori nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Furnitori nuk u gjet', 404)
     }
 
     const body = await req.json()
@@ -44,6 +45,8 @@ export async function PUT(
       include: { products: { select: { id: true, emri: true } } },
     })
 
+    invalidateTags(orgTag(organizationId!, 'suppliers'))
+
     await logAuditAction({
       userId: userId!,
       userEmail: userEmail!,
@@ -59,14 +62,11 @@ export async function PUT(
     return NextResponse.json(supplier)
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/suppliers/[id]', action: 'PUT' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handleDelete(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('suppliers:delete')
   if (error) return error
 
@@ -74,7 +74,7 @@ export async function DELETE(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const existing = await prisma.supplier.findFirst({
@@ -86,8 +86,11 @@ export async function DELETE(
       where: { id: Number(params.id), organizationId: organizationId! },
     })
     if (result.count === 0) {
-      return NextResponse.json({ error: 'Furnitori nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Furnitori nuk u gjet', 404)
     }
+
+    // Products carry a supplier link, so any product-derived payload is stale too.
+    invalidateTags(orgTag(organizationId!, 'suppliers'), orgTag(organizationId!, 'products'))
 
     await logAuditAction({
       userId: userId!,
@@ -103,6 +106,9 @@ export async function DELETE(
     return NextResponse.json({ sukses: true })
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/suppliers/[id]', action: 'DELETE' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const PUT = instrumentRoute<RouteContext>('/api/suppliers/[id]', handlePut)
+export const DELETE = instrumentRoute<RouteContext>('/api/suppliers/[id]', handleDelete)

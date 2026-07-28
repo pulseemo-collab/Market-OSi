@@ -3,10 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
+import { withIdempotency } from '@/lib/idempotency'
 
 const VALID_ROLES = ['Administrator', 'Manager', 'Cashier'] as const
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
@@ -14,54 +17,76 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   try {
-    const users = await prisma.userRole.findMany({
-      where: { organizationId: organizationId! },
-      orderBy: { createdAt: 'asc' },
-    })
-    return NextResponse.json(users)
+    const { searchParams } = new URL(req.url)
+    const where = { organizationId: organizationId! }
+    const page = parsePageRequest(searchParams)
+
+    const query = {
+      where,
+      orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+      take: page.take,
+    }
+
+    if (!page.explicit) {
+      return NextResponse.json(await prisma.userRole.findMany(query))
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.userRole.findMany({ ...query, skip: page.skip }),
+      prisma.userRole.count({ where }),
+    ])
+
+    return NextResponse.json(users, { headers: paginationHeaders(page, total) })
   } catch {
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
   const rl = rateLimit(req, 'auth', userId, organizationId)
   if (rl.limited) return rl.response!
 
+  // Inviting a user sends an email and creates a Supabase account. A duplicate
+  // submit must not do either a second time.
+  return withIdempotency(
+    req,
+    { route: 'POST /api/users', organizationId: organizationId!, userId: userId! },
+    () => inviteUser(req, organizationId!),
+  )
+}
+
+async function inviteUser(req: NextRequest, organizationId: number) {
   let body: { email?: unknown; roli?: unknown }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Body i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Body i pavlefshëm', 400)
   }
 
   const email = typeof body.email === 'string' ? body.email.toLowerCase().trim() : ''
   const roli  = typeof body.roli  === 'string' ? body.roli.trim() : ''
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: 'Email i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Email i pavlefshëm', 400)
   }
   if (!VALID_ROLES.includes(roli as (typeof VALID_ROLES)[number])) {
-    return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Roli i pavlefshëm', 400)
   }
 
   // Duplicate checks before touching Supabase
   const existingInOrg = await prisma.userRole.findFirst({
-    where: { email, organizationId: organizationId! },
+    where: { email, organizationId },
   })
   if (existingInOrg) {
-    return NextResponse.json({ error: 'Ky email ekziston tashmë në organizatë' }, { status: 409 })
+    return errorResponse(req, 'Ky email ekziston tashmë në organizatë', 409)
   }
 
   const existingElsewhere = await prisma.userRole.findFirst({ where: { email } })
   if (existingElsewhere) {
-    return NextResponse.json(
-      { error: 'Ky email është i caktuar në një organizatë tjetër' },
-      { status: 409 }
-    )
+    return errorResponse(req, 'Ky email është i caktuar në një organizatë tjetër', 409)
   }
 
   let supabaseUserId: string
@@ -83,10 +108,7 @@ export async function POST(req: NextRequest) {
         inviteError?.message?.toLowerCase().includes('registered')
 
       if (!alreadyExists) {
-        return NextResponse.json(
-          { error: `Gabim gjatë ftesës: ${inviteError?.message ?? 'E panjohur'}` },
-          { status: 500 }
-        )
+        return errorResponse(req, `Gabim gjatë ftesës: ${inviteError?.message ?? 'E panjohur'}`, 500)
       }
 
       // Find existing Supabase user by email
@@ -102,7 +124,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!foundId) {
-        return NextResponse.json({ error: 'Përdoruesi nuk u gjet në sistem' }, { status: 500 })
+        return errorResponse(req, 'Përdoruesi nuk u gjet në sistem', 500)
       }
       supabaseUserId = foundId
       inviteMethod   = 'existing'
@@ -110,26 +132,20 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : ''
     if (msg.includes('SERVICE_ROLE_KEY')) {
-      return NextResponse.json(
-        { error: 'Email-i nuk mund të dërgohet — SUPABASE_SERVICE_ROLE_KEY nuk është konfiguruar.' },
-        { status: 501 }
-      )
+      return errorResponse(req, 'Email-i nuk mund të dërgohet — SUPABASE_SERVICE_ROLE_KEY nuk është konfiguruar.', 501)
     }
-    return NextResponse.json({ error: 'Gabim gjatë krijimit të përdoruesit' }, { status: 500 })
+    return errorResponse(req, 'Gabim gjatë krijimit të përdoruesit', 500)
   }
 
   // Guard against userId already assigned to any org
   const existingByUserId = await prisma.userRole.findUnique({ where: { userId: supabaseUserId } })
   if (existingByUserId) {
-    return NextResponse.json(
-      { error: 'Ky përdorues është tashmë i caktuar në një organizatë' },
-      { status: 409 }
-    )
+    return errorResponse(req, 'Ky përdorues është tashmë i caktuar në një organizatë', 409)
   }
 
   try {
     const userRole = await prisma.userRole.create({
-      data: { userId: supabaseUserId, email, roli, organizationId: organizationId! },
+      data: { userId: supabaseUserId, email, roli, organizationId },
     })
 
     const messages: Record<string, string> = {
@@ -142,6 +158,9 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     )
   } catch {
-    return NextResponse.json({ error: 'Gabim gjatë ruajtjes' }, { status: 500 })
+    return errorResponse(req, 'Gabim gjatë ruajtjes', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/users', handleGet)
+export const POST = instrumentRoute('/api/users', handlePost)

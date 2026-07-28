@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatCurrency } from '@/lib/utils'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiRefreshLine,
   RiFileListLine,
@@ -75,6 +76,7 @@ export default function PorositjeTeSugjeruaraPage() {
   const [modalShenime, setModalShenime] = useState('')
   const [modalItems, setModalItems] = useState<SupplyItemForm[]>([])
   const [saving, setSaving] = useState(false)
+  const supplyIdempotency = useIdempotencyKey()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -158,7 +160,7 @@ export default function PorositjeTeSugjeruaraPage() {
     try {
       const res = await fetch('/api/supplies', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...supplyIdempotency.headers() },
         body: JSON.stringify({
           furnitorId: modalFurnitorId ? parseInt(modalFurnitorId) : null,
           data: modalDate || getTodayString(),
@@ -178,6 +180,7 @@ export default function PorositjeTeSugjeruaraPage() {
         toast.error(data.error || 'Gabim gjatë ruajtjes')
         return
       }
+      supplyIdempotency.reset()
       toast.success('Furnizimi u krijua me sukses')
       setShowModal(false)
       fetchData()

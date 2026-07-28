@@ -12,6 +12,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { formatCurrency, isLowStock, toArray } from '@/lib/utils'
 import TableSkeleton from '@/components/ui/TableSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiAddLine,
   RiSearchLine,
@@ -78,6 +79,7 @@ const emptyForm = {
 
 export default function ProduktetPage() {
   const { role } = useRole()
+  const productIdempotency = useIdempotencyKey()
   const subscription = useSubscription()
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -229,7 +231,7 @@ export default function ProduktetPage() {
       const method = editProduct ? 'PUT' : 'POST'
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...productIdempotency.headers() },
         body: JSON.stringify({
           emri: form.emri,
           barcodes: validBarcodes,
@@ -247,6 +249,7 @@ export default function ProduktetPage() {
         toast.error(err.error || 'Gabim gjatë ruajtjes')
         return
       }
+      productIdempotency.reset()
       toast.success(editProduct ? 'Produkti u përditësua' : 'Produkti u shtua')
       closeModal()
       fetchProducts()

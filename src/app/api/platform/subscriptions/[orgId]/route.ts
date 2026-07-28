@@ -4,13 +4,14 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { captureApiError } from '@/lib/sentry'
 import { isValidPlan, isValidStatus } from '@/lib/billing'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { PLATFORM_TAG, invalidateTags } from '@/lib/cache'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+type RouteContext = { params: { orgId: string } }
+
+async function handleGet(req: NextRequest, { params }: RouteContext) {
   const { userId, organizationId, error } = await requirePermission('billing:read')
   if (error) return error
 
@@ -19,7 +20,7 @@ export async function GET(
 
   const orgId = parseInt(params.orgId, 10)
   if (isNaN(orgId)) {
-    return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+    return errorResponse(req, 'ID e pavlefshme', 400)
   }
 
   try {
@@ -39,14 +40,11 @@ export async function GET(
     return NextResponse.json({ subscription, auditLogs, ownerEmail: ownerRole?.email ?? null })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/subscriptions/[orgId]', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, organizationId, error } = await requirePermission('billing:manage')
   if (error) return error
 
@@ -55,7 +53,7 @@ export async function PUT(
 
   const orgId = parseInt(params.orgId, 10)
   if (isNaN(orgId)) {
-    return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+    return errorResponse(req, 'ID e pavlefshme', 400)
   }
 
   try {
@@ -63,15 +61,15 @@ export async function PUT(
     const { plan, status, trialEndsAt, currentPeriodStart, currentPeriodEnd, notes } = body
 
     if (plan !== undefined && !isValidPlan(plan)) {
-      return NextResponse.json({ error: 'Plan i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'Plan i pavlefshëm', 400)
     }
     if (status !== undefined && !isValidStatus(status)) {
-      return NextResponse.json({ error: 'Status i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'Status i pavlefshëm', 400)
     }
 
     const existing = await prisma.subscription.findUnique({ where: { organizationId: orgId } })
     if (!existing) {
-      return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Abonimi nuk u gjet', 404)
     }
 
     const updated = await prisma.subscription.update({
@@ -85,6 +83,10 @@ export async function PUT(
         ...(notes !== undefined && { notes: notes || null }),
       },
     })
+
+    // The subscription row itself is evicted by the Prisma write hook; the
+    // cross-tenant platform statistics need an explicit nudge.
+    invalidateTags(PLATFORM_TAG)
 
     const planChanged   = plan   !== undefined && plan   !== existing.plan
     const statusChanged = status !== undefined && status !== existing.status
@@ -107,14 +109,11 @@ export async function PUT(
     return NextResponse.json({ subscription: updated })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/subscriptions/[orgId]', action: 'PUT' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+async function handlePost(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, organizationId, error } = await requirePermission('billing:manage')
   if (error) return error
 
@@ -123,7 +122,7 @@ export async function POST(
 
   const orgId = parseInt(params.orgId, 10)
   if (isNaN(orgId)) {
-    return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+    return errorResponse(req, 'ID e pavlefshme', 400)
   }
 
   try {
@@ -132,7 +131,7 @@ export async function POST(
 
     const existing = await prisma.subscription.findUnique({ where: { organizationId: orgId } })
     if (!existing) {
-      return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Abonimi nuk u gjet', 404)
     }
 
     const now = new Date()
@@ -145,7 +144,7 @@ export async function POST(
     if (action === 'activate') {
       const { plan } = body
       if (!['monthly', 'yearly'].includes(plan)) {
-        return NextResponse.json({ error: 'Plan i pavlefshëm' }, { status: 400 })
+        return errorResponse(req, 'Plan i pavlefshëm', 400)
       }
       const base = (existing.currentPeriodEnd && existing.currentPeriodEnd > now)
         ? new Date(existing.currentPeriodEnd)
@@ -166,10 +165,10 @@ export async function POST(
       const years  = Math.floor(Number(body.years)  || 0)
       const months = Math.floor(Number(body.months) || 0)
       if (years < 0 || months < 0) {
-        return NextResponse.json({ error: 'Vlerat duhet të jenë pozitive' }, { status: 400 })
+        return errorResponse(req, 'Vlerat duhet të jenë pozitive', 400)
       }
       if (years === 0 && months === 0) {
-        return NextResponse.json({ error: 'Të paktën një fushë duhet të jetë më e madhe se 0' }, { status: 400 })
+        return errorResponse(req, 'Të paktën një fushë duhet të jetë më e madhe se 0', 400)
       }
 
       const base = (existing.currentPeriodEnd && existing.currentPeriodEnd > now)
@@ -199,7 +198,7 @@ export async function POST(
 
     } else if (action === 'undoCancel') {
       if (!existing.cancelAtPeriodEnd) {
-        return NextResponse.json({ error: 'Nuk ka anulim të planifikuar' }, { status: 400 })
+        return errorResponse(req, 'Nuk ka anulim të planifikuar', 400)
       }
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
@@ -210,10 +209,10 @@ export async function POST(
     } else if (action === 'reactivate') {
       const { plan } = body
       if (!['monthly', 'yearly'].includes(plan)) {
-        return NextResponse.json({ error: 'Plan i pavlefshëm' }, { status: 400 })
+        return errorResponse(req, 'Plan i pavlefshëm', 400)
       }
       if (!['cancelled', 'expired'].includes(existing.status)) {
-        return NextResponse.json({ error: 'Abonimi nuk mund të riaktivizohet' }, { status: 400 })
+        return errorResponse(req, 'Abonimi nuk mund të riaktivizohet', 400)
       }
       const base = (existing.currentPeriodEnd && existing.currentPeriodEnd > now)
         ? new Date(existing.currentPeriodEnd)
@@ -233,7 +232,7 @@ export async function POST(
     } else if (action === 'setNextPlan') {
       const { nextPlan } = body
       if (!['monthly', 'yearly'].includes(nextPlan)) {
-        return NextResponse.json({ error: 'Plan i ardhshëm i pavlefshëm' }, { status: 400 })
+        return errorResponse(req, 'Plan i ardhshëm i pavlefshëm', 400)
       }
       updated = await prisma.subscription.update({
         where: { organizationId: orgId },
@@ -242,8 +241,10 @@ export async function POST(
       auditNotes = `Plan i ardhshëm u caktua: ${nextPlan}`
 
     } else {
-      return NextResponse.json({ error: 'Veprim i panjohur' }, { status: 400 })
+      return errorResponse(req, 'Veprim i panjohur', 400)
     }
+
+    invalidateTags(PLATFORM_TAG)
 
     await prisma.billingAuditLog.create({
       data: {
@@ -261,6 +262,10 @@ export async function POST(
     return NextResponse.json({ subscription: updated, message: 'Veprimi u krye me sukses' })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/subscriptions/[orgId]', action: 'POST' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute<RouteContext>('/api/platform/subscriptions/[orgId]', handleGet)
+export const PUT = instrumentRoute<RouteContext>('/api/platform/subscriptions/[orgId]', handlePut)
+export const POST = instrumentRoute<RouteContext>('/api/platform/subscriptions/[orgId]', handlePost)

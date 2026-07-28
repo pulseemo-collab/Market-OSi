@@ -10,6 +10,7 @@ import { formatDateTime } from '@/lib/utils'
 import { ROLE_LABELS } from '@/lib/roles'
 import { getPlanInfo, getStatusInfo, BILLING_STATUSES } from '@/lib/billing'
 import toast from 'react-hot-toast'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiGlobalLine,
   RiBuildingLine,
@@ -162,6 +163,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function PlatformaPage() {
   const { role } = useRole()
+  const orgIdempotency = useIdempotencyKey()
 
   const [stats, setStats] = useState<PlatformStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -228,11 +230,12 @@ export default function PlatformaPage() {
     try {
       const res = await fetch('/api/platform/organizations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...orgIdempotency.headers() },
         body: JSON.stringify({ name }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gabim')
+      orgIdempotency.reset()
       toast.success(`Marketi "${name}" u krijua`)
       setCreatingOrg(false)
       setNewOrgName('')

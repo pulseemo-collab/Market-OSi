@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { PLAN_PRICES } from '@/lib/billing'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { CACHE_TTL, cached, orgTag } from '@/lib/cache'
 
 const PLAN_AMOUNTS: Record<string, number> = {
   monthly: PLAN_PRICES.monthly,
@@ -22,19 +24,30 @@ function statusLabel(status: string | null | undefined): string {
   return status ?? '—'
 }
 
-export async function GET() {
+async function handleGet() {
   const { organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   if (!organizationId) {
-    return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 400 })
+    return errorResponse('Organizata nuk u gjet', 400)
   }
 
-  const logs = await prisma.billingAuditLog.findMany({
-    where: { organizationId },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  })
+  // An append-only ledger that the billing page reloads after every action.
+  // Tagged on subscription so any plan change refreshes it immediately.
+  const logs = await cached(
+    {
+      namespace: 'billingHistory',
+      organizationId,
+      ttlMs: CACHE_TTL.billingHistory,
+      tags: [orgTag(organizationId, 'subscription')],
+    },
+    () =>
+      prisma.billingAuditLog.findMany({
+        where: { organizationId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+      }),
+  )
 
   const records = logs.map((log) => {
     let description = log.notes ?? '—'
@@ -72,3 +85,5 @@ export async function GET() {
 
   return NextResponse.json({ records })
 }
+
+export const GET = instrumentRoute('/api/subscription/billing-history', handleGet)

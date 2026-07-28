@@ -3,10 +3,11 @@ import { getAuthUserAndRole } from '@/lib/auth-helpers'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { getStaffSession } from '@/lib/staff-auth'
+import { instrumentRoute } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await getAuthUserAndRole()
 
   if (!error) {
@@ -50,3 +51,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ allowed: true })
 }
+
+export const GET = instrumentRoute('/api/subscription-status', handleGet)

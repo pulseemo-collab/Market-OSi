@@ -5,8 +5,11 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { CACHE_TTL, cached, invalidateTags, orgTag } from '@/lib/cache'
+import { withIdempotency } from '@/lib/idempotency'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, role, organizationId, error } = await requirePermission('suppliers:read')
   if (error) return error
 
@@ -14,26 +17,37 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
-    const suppliers = await prisma.supplier.findMany({
-      where: { organizationId: organizationId! },
-      include: {
-        products: {
-          select: { id: true, emri: true },
-        },
+    // Three pages load this list purely to populate a supplier select, and it
+    // changes only when a supplier or a product's supplier link is edited.
+    const suppliers = await cached(
+      {
+        namespace: 'suppliers',
+        organizationId: organizationId!,
+        ttlMs: CACHE_TTL.suppliers,
+        tags: [orgTag(organizationId!, 'suppliers'), orgTag(organizationId!, 'products')],
       },
-      orderBy: { emri: 'asc' },
-    })
+      () =>
+        prisma.supplier.findMany({
+          where: { organizationId: organizationId! },
+          include: {
+            products: {
+              select: { id: true, emri: true },
+            },
+          },
+          orderBy: [{ emri: 'asc' }, { id: 'asc' }],
+        }),
+    )
     return NextResponse.json(suppliers)
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/suppliers', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('suppliers:write')
   if (error) return error
 
@@ -41,29 +55,42 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
+  return withIdempotency(
+    req,
+    { route: 'POST /api/suppliers', organizationId: organizationId!, userId: userId! },
+    () => createSupplier(req, userId!, userEmail!, role!, organizationId!),
+  )
+}
+
+async function createSupplier(
+  req: NextRequest,
+  userId: string,
+  userEmail: string,
+  role: string,
+  organizationId: number,
+) {
   try {
     const body = await req.json()
     const { emri, telefoni, email: supplierEmail, adresa, shenime } = body
 
     if (!emri) {
-      return NextResponse.json(
-        { error: 'Emri i furnitorit është i detyrueshëm' },
-        { status: 400 }
-      )
+      return errorResponse(req, 'Emri i furnitorit është i detyrueshëm', 400)
     }
 
     const supplier = await prisma.supplier.create({
-      data: { emri, telefoni, email: supplierEmail, adresa, shenime, organizationId: organizationId! },
+      data: { emri, telefoni, email: supplierEmail, adresa, shenime, organizationId },
       include: { products: { select: { id: true, emri: true } } },
     })
 
+    invalidateTags(orgTag(organizationId, 'suppliers'))
+
     await logAuditAction({
-      userId: userId!,
-      userEmail: userEmail!,
-      userRole: role!,
-      organizationId: organizationId!,
+      userId,
+      userEmail,
+      userRole: role,
+      organizationId,
       action: AUDIT_ACTIONS.CREATE,
       entityType: AUDIT_ENTITY_TYPES.SUPPLIER,
       entityId: supplier.id,
@@ -74,6 +101,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(supplier, { status: 201 })
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/suppliers', action: 'POST' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/suppliers', handleGet)
+export const POST = instrumentRoute('/api/suppliers', handlePost)

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/prisma'
+import { rateLimit } from '@/lib/rate-limit'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
+  const rl = rateLimit(req, 'register', null, null)
+  if (rl.limited) return rl.response!
+
   const admin = createAdminClient()
   let authUserId: string | null = null
 
@@ -10,14 +15,14 @@ export async function POST(req: NextRequest) {
     const { dyqani, emri, telefoni, email, password, plan } = await req.json()
 
     if (!dyqani?.trim() || !emri?.trim() || !telefoni?.trim() || !email?.trim() || !password) {
-      return NextResponse.json({ error: 'Të gjitha fushat janë të detyrueshme' }, { status: 400 })
+      return errorResponse(req, 'Të gjitha fushat janë të detyrueshme', 400)
     }
     if (password.length < 6) {
-      return NextResponse.json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' }, { status: 400 })
+      return errorResponse(req, 'Fjalëkalimi duhet të ketë të paktën 6 karaktere', 400)
     }
     const phone = telefoni.trim().replace(/[\s\-]/g, '')
     if (!/^(\+355\d{9}|0\d{9})$/.test(phone)) {
-      return NextResponse.json({ error: 'Numri i telefonit nuk është valid' }, { status: 400 })
+      return errorResponse(req, 'Numri i telefonit nuk është valid', 400)
     }
     const selectedPlan = plan === 'yearly' ? 'yearly' : 'monthly'
 
@@ -32,9 +37,9 @@ export async function POST(req: NextRequest) {
     if (authError) {
       const msg = authError.message.toLowerCase()
       if (msg.includes('already') || msg.includes('registered') || msg.includes('duplicate')) {
-        return NextResponse.json({ error: 'Ky email është tashmë i regjistruar' }, { status: 409 })
+        return errorResponse(req, 'Ky email është tashmë i regjistruar', 409)
       }
-      return NextResponse.json({ error: authError.message }, { status: 400 })
+      return errorResponse(req, authError.message, 400)
     }
 
     authUserId = authData.user.id
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
       await admin.auth.admin.deleteUser(authUserId).catch((e) =>
         console.error('[register] Auth rollback failed:', e)
       )
-      return NextResponse.json({ error: 'Gabim gjatë krijimit të organizatës. Provo sërish.' }, { status: 500 })
+      return errorResponse(req, 'Gabim gjatë krijimit të organizatës. Provo sërish.', 500)
     }
 
     // Step 3: Create UserRole
@@ -73,7 +78,7 @@ export async function POST(req: NextRequest) {
         admin.auth.admin.deleteUser(authUserId),
         prisma.organization.delete({ where: { id: orgId } }),
       ])
-      return NextResponse.json({ error: 'Gabim gjatë krijimit të llogarisë. Provo sërish.' }, { status: 500 })
+      return errorResponse(req, 'Gabim gjatë krijimit të llogarisë. Provo sërish.', 500)
     }
 
     // Step 4: Create Subscription
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
       await admin.auth.admin.deleteUser(authUserId).catch((e) =>
         console.error('[register] Auth rollback failed:', e)
       )
-      return NextResponse.json({ error: 'Gabim gjatë aktivizimit të provës. Provo sërish.' }, { status: 500 })
+      return errorResponse(req, 'Gabim gjatë aktivizimit të provës. Provo sërish.', 500)
     }
 
     return NextResponse.json({ success: true })
@@ -106,6 +111,8 @@ export async function POST(req: NextRequest) {
         console.error('[register] Auth rollback failed:', e)
       )
     }
-    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
+    return errorResponse(req, 'Gabim i brendshëm i serverit', 500)
   }
 }
+
+export const POST = instrumentRoute('/api/auth/register', handlePost)

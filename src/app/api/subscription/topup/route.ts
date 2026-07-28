@@ -1,32 +1,37 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { PLAN_PRICES } from '@/lib/billing'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 const PLAN_DAILY_RATES: Record<string, number> = {
   monthly: PLAN_PRICES.monthly / 30,
   yearly:  PLAN_PRICES.yearly / 365,
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator'])
   if (error) return error
 
+  const rl = rateLimit(req, 'billing', userId, organizationId)
+  if (rl.limited) return rl.response!
+
   if (!organizationId) {
-    return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 400 })
+    return errorResponse(req, 'Organizata nuk u gjet', 400)
   }
 
   const body = await req.json()
   const { days } = body as { days: number }
 
   if (!days || !Number.isInteger(days) || days < 1 || days > 1095) {
-    return NextResponse.json({ error: 'Numri i ditëve është i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Numri i ditëve është i pavlefshëm', 400)
   }
 
   const existing = await prisma.subscription.findUnique({ where: { organizationId } })
   if (!existing) {
-    return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
+    return errorResponse(req, 'Abonimi nuk u gjet', 404)
   }
 
   const plan = existing.plan ?? 'monthly'
@@ -80,3 +85,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ success: true, newPeriodEnd: newPeriodEnd.toISOString() })
 }
+
+export const POST = instrumentRoute('/api/subscription/topup', handlePost)

@@ -6,6 +6,7 @@ import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import SubscriptionExpired from '@/components/SubscriptionExpired'
 import { useSubscription } from '@/hooks/useSubscription'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -78,6 +79,7 @@ export default function ShitjetPage() {
   const [kerkimi, setKerkimi] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(false)
+  const saleIdempotency = useIdempotencyKey()
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState(false)
   const [receiptModal, setReceiptModal] = useState<CompletedSale | null>(null)
@@ -461,11 +463,12 @@ export default function ShitjetPage() {
       toast.error('Shporta është bosh')
       return
     }
+    if (loading) return
     setLoading(true)
     try {
       const res = await fetch('/api/sales', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...saleIdempotency.headers() },
         body: JSON.stringify({
           paymentMethod,
           items: cart.map((i) => ({
@@ -489,6 +492,8 @@ export default function ShitjetPage() {
       }
 
       const sale = await res.json()
+      // The sale is committed — the next basket is a new logical operation.
+      saleIdempotency.reset()
       setReceiptModal(sale)
       setCart([])
       setPaymentMethod('cash')

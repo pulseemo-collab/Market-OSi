@@ -8,10 +8,15 @@ import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from 
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { resolveStaffAuth } from '@/lib/staff-auth'
 import type { Role } from '@/lib/roles'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
+import { withIdempotency } from '@/lib/idempotency'
+import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
+import { queueLowStockScan } from '@/lib/stock-alerts'
 
 const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   // Dual auth: Supabase session or staff cashier session
   const supabase = await requirePermission('sales:read')
   let userId: string | null
@@ -34,85 +39,82 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const { searchParams } = new URL(req.url)
     const periudha = searchParams.get('periudha') || 'sot'
     const dataParam = searchParams.get('data') // YYYY-MM-DD for exact date filter
 
-    // Exact date filter
+    // All three selections (exact date, "dje", rolling period) differ only in
+    // the createdAt range, so the range is resolved first and the query is
+    // issued once.
+    let createdAt: { gte: Date; lt?: Date }
+
     if (dataParam) {
       const d = new Date(dataParam)
-      const dateStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
-      const dateEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0)
-      const salesByDate = await prisma.sale.findMany({
-        where: { organizationId: organizationId!, createdAt: { gte: dateStart, lt: dateEnd } },
-        include: { items: { include: { product: true } } },
-        orderBy: { createdAt: 'desc' },
-      })
-      return NextResponse.json(salesByDate)
-    }
-
-    const now = new Date()
-    let dateFrom: Date
-
-    switch (periudha) {
-      case 'sot':
-        dateFrom = new Date(now)
-        dateFrom.setHours(0, 0, 0, 0)
-        break
-      case 'dje': {
-        dateFrom = new Date(now)
-        dateFrom.setDate(dateFrom.getDate() - 1)
-        dateFrom.setHours(0, 0, 0, 0)
-        const djeTomorrow = new Date(dateFrom)
-        djeTomorrow.setDate(djeTomorrow.getDate() + 1)
-        const salesDje = await prisma.sale.findMany({
-          where: {
-            organizationId: organizationId!,
-            createdAt: { gte: dateFrom, lt: djeTomorrow },
-          },
-          include: { items: { include: { product: true } } },
-          orderBy: { createdAt: 'desc' },
-        })
-        return NextResponse.json(salesDje)
+      createdAt = {
+        gte: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0),
+        lt: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0),
       }
-      case 'jave':
-        dateFrom = new Date(now)
-        dateFrom.setDate(dateFrom.getDate() - 7)
-        dateFrom.setHours(0, 0, 0, 0)
-        break
-      case 'muaj':
-        dateFrom = new Date(now)
-        dateFrom.setDate(1)
-        dateFrom.setHours(0, 0, 0, 0)
-        break
-      default:
-        dateFrom = new Date(now)
-        dateFrom.setHours(0, 0, 0, 0)
+    } else {
+      const now = new Date()
+      const dateFrom = new Date(now)
+
+      switch (periudha) {
+        case 'dje': {
+          dateFrom.setDate(dateFrom.getDate() - 1)
+          dateFrom.setHours(0, 0, 0, 0)
+          const djeTomorrow = new Date(dateFrom)
+          djeTomorrow.setDate(djeTomorrow.getDate() + 1)
+          createdAt = { gte: dateFrom, lt: djeTomorrow }
+          break
+        }
+        case 'jave':
+          dateFrom.setDate(dateFrom.getDate() - 7)
+          dateFrom.setHours(0, 0, 0, 0)
+          createdAt = { gte: dateFrom }
+          break
+        case 'muaj':
+          dateFrom.setDate(1)
+          dateFrom.setHours(0, 0, 0, 0)
+          createdAt = { gte: dateFrom }
+          break
+        default:
+          dateFrom.setHours(0, 0, 0, 0)
+          createdAt = { gte: dateFrom }
+      }
     }
 
-    const sales = await prisma.sale.findMany({
-      where: {
-        organizationId: organizationId!,
-        createdAt: { gte: dateFrom },
-      },
-      include: {
-        items: { include: { product: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+    const where = { organizationId: organizationId!, createdAt }
+    const page = parsePageRequest(searchParams)
 
-    return NextResponse.json(sales)
+    // createdAt alone is not unique, so id breaks ties and keeps pages stable.
+    const query = {
+      where,
+      include: { items: { include: { product: true } } },
+      orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
+      take: page.take,
+    }
+
+    if (!page.explicit) {
+      return NextResponse.json(await prisma.sale.findMany(query))
+    }
+
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({ ...query, skip: page.skip }),
+      prisma.sale.count({ where }),
+    ])
+
+    return NextResponse.json(sales, { headers: paginationHeaders(page, total) })
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/sales', action: 'GET' })
     console.error('Sales GET error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   // Dual auth: Supabase session or staff cashier session
   const supabase = await requirePermission('sales:create')
   let userId: string | null
@@ -142,40 +144,74 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
+
+  return withIdempotency(
+    req,
+    { route: 'POST /api/sales', organizationId: organizationId!, userId: userId! },
+    () =>
+      createSale(req, {
+        userId: userId!,
+        userEmail: userEmail!,
+        role: role!,
+        organizationId: organizationId!,
+        saleStaffId,
+        saleStaffName,
+      }),
+  )
+}
+
+interface SaleActor {
+  userId: string
+  userEmail: string
+  role: Role
+  organizationId: number
+  saleStaffId: number | undefined
+  saleStaffName: string | undefined
+}
+
+interface SaleItemInput {
+  productId: number
+  emriProduktit: string
+  sasia: number
+}
+
+async function createSale(req: NextRequest, actor: SaleActor) {
+  const { userId, userEmail, role, organizationId, saleStaffId, saleStaffName } = actor
 
   try {
     const body = await req.json()
-    const { items, shenime, paymentMethod } = body
-    const validPaymentMethod = ['cash', 'bank'].includes(paymentMethod) ? paymentMethod : 'cash'
+    const { items, shenime, paymentMethod } = body as {
+      items: SaleItemInput[]
+      shenime?: string
+      paymentMethod?: string
+    }
+    const validPaymentMethod = ['cash', 'bank'].includes(paymentMethod ?? '') ? paymentMethod! : 'cash'
 
     if (!items || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Nuk ka produkte në shitje' },
-        { status: 400 }
-      )
+      return errorResponse(req, 'Nuk ka produkte në shitje', 400)
     }
+
+    // One lookup for the whole basket. This previously ran a query per line
+    // item for validation and another per line item inside the transaction —
+    // three round trips per product on a POS request.
+    const products = await prisma.product.findMany({
+      where: { id: { in: items.map((i) => i.productId) }, organizationId },
+    })
+    const productById = new Map(products.map((p) => [p.id, p]))
 
     let totali = 0
     let fitimi = 0
 
     for (const item of items) {
-      const product = await prisma.product.findFirst({
-        where: { id: item.productId, organizationId: organizationId! },
-      })
+      const product = productById.get(item.productId)
 
       if (!product) {
-        return NextResponse.json(
-          { error: `Produkti nuk u gjet: ${item.emriProduktit}` },
-          { status: 404 }
-        )
+        return errorResponse(req, `Produkti nuk u gjet: ${item.emriProduktit}`, 404)
       }
 
       if (product.sasia < item.sasia) {
-        return NextResponse.json(
-          { error: `Stoku i pamjaftueshëm për: ${product.emri}. Stoku: ${product.sasia}` },
-          { status: 400 }
-        )
+        return errorResponse(req, `Stoku i pamjaftueshëm për: ${product.emri}. Stoku: ${product.sasia}`, 400)
       }
 
       totali += product.cmimiShitjes * item.sasia
@@ -189,31 +225,21 @@ export async function POST(req: NextRequest) {
           fitimi,
           shenime: shenime || null,
           paymentMethod: validPaymentMethod,
-          organizationId: organizationId!,
+          organizationId,
           staffId: saleStaffId ?? null,
           staffName: saleStaffName ?? null,
           items: {
-            create: await Promise.all(
-              items.map(async (item: {
-                productId: number
-                emriProduktit: string
-                sasia: number
-                cmimiBlerjes: number
-                cmimiShitjes: number
-              }) => {
-                const product = await tx.product.findFirst({
-                  where: { id: item.productId, organizationId: organizationId! },
-                })
-                return {
-                  productId: item.productId,
-                  emriProduktit: item.emriProduktit,
-                  sasia: item.sasia,
-                  cmimiBlerjes: product!.cmimiBlerjes,
-                  cmimiShitjes: product!.cmimiShitjes,
-                  fitimi: (product!.cmimiShitjes - product!.cmimiBlerjes) * item.sasia,
-                }
-              })
-            ),
+            create: items.map((item) => {
+              const product = productById.get(item.productId)!
+              return {
+                productId: item.productId,
+                emriProduktit: item.emriProduktit,
+                sasia: item.sasia,
+                cmimiBlerjes: product.cmimiBlerjes,
+                cmimiShitjes: product.cmimiShitjes,
+                fitimi: (product.cmimiShitjes - product.cmimiBlerjes) * item.sasia,
+              }
+            }),
           },
         },
         include: { items: { include: { product: true } } },
@@ -221,7 +247,7 @@ export async function POST(req: NextRequest) {
 
       for (const item of items) {
         await tx.product.updateMany({
-          where: { id: item.productId, organizationId: organizationId! },
+          where: { id: item.productId, organizationId },
           data: { sasia: { decrement: item.sasia } },
         })
       }
@@ -229,13 +255,16 @@ export async function POST(req: NextRequest) {
       return newSale
     })
 
+    // Sales change revenue totals; the stock decrement changes product figures.
+    invalidateTags(orgTag(organizationId, 'sales'), orgTag(organizationId, 'products'))
+
     const methodLabel = validPaymentMethod === 'cash' ? 'Cash' : 'Bankë'
     const staffLabel = saleStaffName ? ` nga ${saleStaffName}` : ''
     await logAuditAction({
-      userId: userId!,
-      userEmail: userEmail!,
-      userRole: role!,
-      organizationId: organizationId!,
+      userId,
+      userEmail,
+      userRole: role,
+      organizationId,
       action: AUDIT_ACTIONS.CREATE,
       entityType: AUDIT_ENTITY_TYPES.SALE,
       entityId: sale.id,
@@ -246,8 +275,8 @@ export async function POST(req: NextRequest) {
     // Trigger LARGE_SALE notification (assigned to the seller)
     if (sale.totali >= LARGE_SALE_THRESHOLD) {
       await createNotification({
-        organizationId: organizationId!,
-        userId: userId!,
+        organizationId,
+        userId,
         type: NOTIFICATION_TYPES.LARGE_SALE,
         title: 'Shitje e Madhe',
         message: `Shitja #${sale.id} arriti ${sale.totali.toFixed(0)} L (${sale.items.length} produkte, ${methodLabel})`,
@@ -256,52 +285,18 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Trigger LOW_STOCK notifications for products that went below minimum
-    const soldProductIds = items.map((i: { productId: number }) => i.productId)
-    const updatedProducts = await prisma.product.findMany({
-      where: { id: { in: soldProductIds }, organizationId: organizationId! },
-      select: { id: true, emri: true, sasia: true, stokuMinimal: true, njesia: true },
-    })
-
-    // Deduplication: skip products that already have a recent unread LOW_STOCK notification
-    const recentLowStock = await prisma.notification.findMany({
-      where: {
-        organizationId: organizationId!,
-        type: NOTIFICATION_TYPES.LOW_STOCK,
-        isRead: false,
-        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      },
-      select: { metadata: true },
-    })
-    const recentProductIds = new Set(
-      recentLowStock
-        .map((n) => (n.metadata as Record<string, unknown> | null)?.productId as number | undefined)
-        .filter((id): id is number => id != null)
-    )
-
-    for (const product of updatedProducts) {
-      if (product.sasia <= product.stokuMinimal && !recentProductIds.has(product.id)) {
-        const isCritical = product.sasia <= 0
-        await createNotification({
-          organizationId: organizationId!,
-          type: NOTIFICATION_TYPES.LOW_STOCK,
-          title: isCritical ? 'Stok i Zbrazur' : 'Stok i Ulët',
-          message: `"${product.emri}": ${product.sasia} ${product.njesia} (minimal: ${product.stokuMinimal})`,
-          severity: isCritical ? NOTIFICATION_SEVERITIES.CRITICAL : NOTIFICATION_SEVERITIES.HIGH,
-          metadata: {
-            productId: product.id,
-            productName: product.emri,
-            currentStock: product.sasia,
-            minimalStock: product.stokuMinimal,
-          },
-        })
-      }
-    }
+    // The low-stock check re-reads the sold products, looks for recent unread
+    // alerts and inserts one notification per affected product. None of that
+    // changes the response, so the cashier does not wait for it.
+    queueLowStockScan(organizationId, items.map((i) => i.productId))
 
     return NextResponse.json(sale, { status: 201 })
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales', action: 'POST' })
     console.error('Sales POST error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/sales', handleGet)
+export const POST = instrumentRoute('/api/sales', handlePost)

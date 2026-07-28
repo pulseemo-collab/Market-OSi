@@ -3,10 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, role, organizationId, error } = await requirePermission('notifications:read')
   if (error) return error
 
@@ -14,14 +16,12 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const { searchParams } = new URL(req.url)
     const countOnly = searchParams.get('countOnly') === 'true'
     const unreadOnly = searchParams.get('unreadOnly') === 'true'
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
-    const skip = parseInt(searchParams.get('skip') || '0')
 
     // Cashiers only see notifications assigned to them
     const userFilter = role === 'Cashier' ? { userId: userId! } : {}
@@ -35,19 +35,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ unreadCount })
     }
 
-    const [notifications, unreadCount] = await Promise.all([
+    // The existing limit/skip contract is preserved; the shared parser adds the
+    // page-size ceiling and a default for callers that send neither.
+    const page = parsePageRequest(searchParams, { defaultPageSize: 50, maxPageSize: 100 })
+    const take = page.explicit ? page.take : 50
+
+    const [notifications, unreadCount, listTotal] = await Promise.all([
       prisma.notification.findMany({
         where: listWhere,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take,
+        skip: page.skip,
       }),
       prisma.notification.count({ where: unreadWhere }),
+      page.explicit && !unreadOnly
+        ? prisma.notification.count({ where: listWhere })
+        : Promise.resolve(null),
     ])
 
-    return NextResponse.json({ notifications, unreadCount })
+    return NextResponse.json(
+      { notifications, unreadCount },
+      page.explicit
+        ? { headers: paginationHeaders(page, listTotal ?? unreadCount) }
+        : undefined,
+    )
   } catch (err) {
     console.error('[Notifications] GET error:', err)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/notifications', handleGet)

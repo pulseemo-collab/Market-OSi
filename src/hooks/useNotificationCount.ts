@@ -10,6 +10,20 @@ function _broadcast() {
   _listeners.forEach((fn) => fn())
 }
 
+/**
+ * Publishes a count obtained elsewhere — the notification bell already receives
+ * `unreadCount` with every list fetch, and applies optimistic updates when
+ * marking items read.
+ *
+ * Routing those through here keeps the sidebar badge and the bell badge in
+ * agreement, and means the unread count only needs one poller for the whole
+ * page instead of one per component.
+ */
+export function setNotificationCount(count: number): void {
+  _cachedCount = Math.max(0, count)
+  _broadcast()
+}
+
 export function useNotificationCount(enabled = true): number {
   const [count, setCount] = useState(_cachedCount)
 

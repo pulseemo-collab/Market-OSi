@@ -5,6 +5,7 @@ import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import SubscriptionExpired from '@/components/SubscriptionExpired'
 import { useSubscription } from '@/hooks/useSubscription'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
@@ -89,6 +90,7 @@ export default function FurnizimePage() {
   const { role } = useRole()
   const subscription = useSubscription()
   const [supplies, setSupplies] = useState<Supply[]>([])
+  const supplyIdempotency = useIdempotencyKey()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -257,7 +259,7 @@ export default function FurnizimePage() {
     try {
       const res = await fetch('/api/supplies', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...supplyIdempotency.headers() },
         body: JSON.stringify({
           furnitorId: formFurnitorId ? parseInt(formFurnitorId) : null,
           data: formDate || getTodayString(),
@@ -279,6 +281,7 @@ export default function FurnizimePage() {
         return
       }
 
+      supplyIdempotency.reset()
       toast.success('Furnizimi u ruajt me sukses')
       setShowCreate(false)
       fetchSupplies()

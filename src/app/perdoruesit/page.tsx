@@ -10,6 +10,7 @@ import { useRole } from '@/contexts/RoleContext'
 import AccessDenied from '@/components/AccessDenied'
 import { ROLE_LABELS, Role } from '@/lib/roles'
 import { formatDateTime } from '@/lib/utils'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiShieldUserLine,
   RiTeamLine,
@@ -105,6 +106,7 @@ function PinInput({
 
 export default function PerdoruesitPage() {
   const { role } = useRole()
+  const inviteIdempotency = useIdempotencyKey()
 
   // Org profile state
   const [orgTelefoni, setOrgTelefoni] = useState<string | null>(null)
@@ -225,7 +227,7 @@ export default function PerdoruesitPage() {
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...inviteIdempotency.headers() },
         body: JSON.stringify({ email: inviteForm.email.trim(), roli: inviteForm.roli }),
       })
       const data = await res.json()
@@ -233,6 +235,7 @@ export default function PerdoruesitPage() {
         toast.error(data.error || 'Gabim gjatë shtimit të përdoruesit')
         return
       }
+      inviteIdempotency.reset()
       toast.success(data.message || 'Përdoruesi u shtua me sukses')
       setInviteModal(false)
       setInviteForm({ email: '', roli: 'Manager' })

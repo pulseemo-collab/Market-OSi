@@ -10,8 +10,9 @@ import {
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import { captureApiError } from '@/lib/sentry'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const rl = rateLimit(req, 'staff-auth', null, null)
   if (rl.limited) return rl.response!
 
@@ -20,12 +21,12 @@ export async function POST(req: NextRequest) {
     const { emri, pin } = body
 
     if (!emri || !pin) {
-      return NextResponse.json({ error: 'Të dhënat mungojnë' }, { status: 400 })
+      return errorResponse(req, 'Të dhënat mungojnë', 400)
     }
 
     const pinStr = String(pin)
     if (pinStr.length < 4 || pinStr.length > 20) {
-      return NextResponse.json({ error: 'PIN duhet të jetë 4-20 karaktere' }, { status: 400 })
+      return errorResponse(req, 'PIN duhet të jetë 4-20 karaktere', 400)
     }
 
     const staffMatches = await prisma.staff.findMany({
@@ -36,24 +37,18 @@ export async function POST(req: NextRequest) {
     })
 
     if (staffMatches.length > 1) {
-      return NextResponse.json(
-        { error: 'Ka më shumë se një punonjës me këtë emër. Kontaktoni menaxherin.' },
-        { status: 409 },
-      )
+      return errorResponse(req, 'Ka më shumë se një punonjës me këtë emër. Kontaktoni menaxherin.', 409)
     }
 
     if (staffMatches.length === 0) {
-      return NextResponse.json({ error: 'Stafi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Stafi nuk u gjet', 404)
     }
 
     const staff = staffMatches[0]
 
     if (staff.lockedUntil && staff.lockedUntil > new Date()) {
       const minutesLeft = Math.ceil((staff.lockedUntil.getTime() - Date.now()) / 60000)
-      return NextResponse.json(
-        { error: `Llogaria është e bllokuar. Provo pas ${minutesLeft} minutash.` },
-        { status: 429 },
-      )
+      return errorResponse(req, `Llogaria është e bllokuar. Provo pas ${minutesLeft} minutash.`, 429)
     }
 
     const valid = await verifyPin(pinStr, staff.pinHash)
@@ -85,17 +80,11 @@ export async function POST(req: NextRequest) {
       })
 
       if (shouldLock) {
-        return NextResponse.json(
-          { error: `PIN i gabuar. Llogaria u bllokua për ${LOCKOUT_MINUTES} minuta.` },
-          { status: 429 },
-        )
+        return errorResponse(req, `PIN i gabuar. Llogaria u bllokua për ${LOCKOUT_MINUTES} minuta.`, 429)
       }
 
       const remaining = MAX_FAILED_ATTEMPTS - newAttempts
-      return NextResponse.json(
-        { error: `PIN i gabuar. ${remaining} përpjekje të mbetura.` },
-        { status: 401 },
-      )
+      return errorResponse(req, `PIN i gabuar. ${remaining} përpjekje të mbetura.`, 401)
     }
 
     await prisma.staff.update({
@@ -109,7 +98,7 @@ export async function POST(req: NextRequest) {
       token = await createStaffSession(staff.id, staff.organizationId)
     } catch (sessionError) {
       captureApiError(sessionError, { route: '/api/staff-auth/login', action: 'POST' })
-      return NextResponse.json({ error: 'Sesioni nuk u krijua. Provoni përsëri.' }, { status: 500 })
+      return errorResponse(req, 'Sesioni nuk u krijua. Provoni përsëri.', 500)
     }
 
     await logAuditAction({
@@ -135,6 +124,8 @@ export async function POST(req: NextRequest) {
     return res
   } catch (error) {
     captureApiError(error, { route: '/api/staff-auth/login', action: 'POST' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const POST = instrumentRoute('/api/staff-auth/login', handlePost)

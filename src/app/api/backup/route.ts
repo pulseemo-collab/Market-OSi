@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import * as Sentry from '@sentry/nextjs'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ function sanitizeFilename(name: string): string {
     .slice(0, 50) || 'org'
 }
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('backup:create')
   if (error) return error
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(request, 'Abonimi ka skaduar', 403)
 
   try {
     const orgId = organizationId!
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     ])
 
     if (!organization) {
-      return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+      return errorResponse(request, 'Organizata nuk u gjet', 404)
     }
 
     const now = new Date()
@@ -146,6 +147,8 @@ export async function GET(request: NextRequest) {
     Sentry.captureException(err, {
       tags: { operation: 'backup_export', organizationId: String(organizationId) },
     })
-    return NextResponse.json({ error: 'Gabim gjatë eksportit të backup-it' }, { status: 500 })
+    return errorResponse(request, 'Gabim gjatë eksportit të backup-it', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/backup', handleGet)

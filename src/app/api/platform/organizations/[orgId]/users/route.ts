@@ -5,6 +5,9 @@ import { rateLimit } from '@/lib/rate-limit'
 import { captureApiError } from '@/lib/sentry'
 import { LEGACY_ROLE_MAP } from '@/lib/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+
+type RouteContext = { params: { orgId: string } }
 
 export const dynamic = 'force-dynamic'
 
@@ -74,10 +77,7 @@ async function resolveSupabaseUser(email: string): Promise<{ userId: string; met
   return { userId: createData.user.id, method: 'created' }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+async function handleGet(req: NextRequest, { params }: RouteContext) {
   const { userId, organizationId, error } = await requirePermission('organizations:read')
   if (error) return error
 
@@ -86,7 +86,7 @@ export async function GET(
 
   const orgId = parseInt(params.orgId, 10)
   if (isNaN(orgId)) {
-    return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+    return errorResponse(req, 'ID e pavlefshme', 400)
   }
 
   try {
@@ -104,14 +104,11 @@ export async function GET(
     return NextResponse.json({ users: mapped })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/organizations/[orgId]/users', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
+async function handlePost(req: NextRequest, { params }: RouteContext) {
   const { userId: callerUserId, error } = await requirePermission('organizations:manage')
   if (error) return error
 
@@ -120,30 +117,30 @@ export async function POST(
 
   const orgId = parseInt(params.orgId, 10)
   if (isNaN(orgId)) {
-    return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+    return errorResponse(req, 'ID e pavlefshme', 400)
   }
 
   let body: { email?: unknown; roli?: unknown }
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Body i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Body i pavlefshëm', 400)
   }
 
   const email = typeof body.email === 'string' ? body.email.toLowerCase().trim() : ''
   const roli = typeof body.roli === 'string' ? body.roli : ''
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: 'Email i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Email i pavlefshëm', 400)
   }
   if (!VALID_ROLES.includes(roli as (typeof VALID_ROLES)[number])) {
-    return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
+    return errorResponse(req, 'Roli i pavlefshëm', 400)
   }
 
   // Verify org exists
   const org = await prisma.organization.findUnique({ where: { id: orgId } })
   if (!org) {
-    return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+    return errorResponse(req, 'Organizata nuk u gjet', 404)
   }
 
   // Block duplicate email within this org (unless the auth user was deleted — orphaned record)
@@ -153,10 +150,7 @@ export async function POST(
   if (existingInOrg) {
     const stillExists = await authUserExists(existingInOrg.userId)
     if (stillExists) {
-      return NextResponse.json(
-        { error: 'Ky email ekziston tashmë në këtë organizatë' },
-        { status: 409 }
-      )
+      return errorResponse(req, 'Ky email ekziston tashmë në këtë organizatë', 409)
     }
     // Orphaned record — auth user no longer exists, clean up and proceed
     await prisma.userRole.delete({ where: { id: existingInOrg.id } })
@@ -167,10 +161,7 @@ export async function POST(
   if (existingElsewhere) {
     const stillExists = await authUserExists(existingElsewhere.userId)
     if (stillExists) {
-      return NextResponse.json(
-        { error: 'Ky email është tashmë i caktuar në një organizatë tjetër' },
-        { status: 409 }
-      )
+      return errorResponse(req, 'Ky email është tashmë i caktuar në një organizatë tjetër', 409)
     }
     // Orphaned record — auth user no longer exists, clean up and proceed
     await prisma.userRole.delete({ where: { id: existingElsewhere.id } })
@@ -195,7 +186,7 @@ export async function POST(
       )
     }
     captureApiError(err, { route: '/api/platform/organizations/[orgId]/users', action: 'POST' })
-    return NextResponse.json({ error: `Gabim Supabase: ${msg}` }, { status: 500 })
+    return errorResponse(req, `Gabim Supabase: ${msg}`, 500)
   }
 
   // Guard against userId collision (shouldn't happen but be safe)
@@ -203,10 +194,7 @@ export async function POST(
     where: { userId: supabaseUserId },
   })
   if (existingByUserId) {
-    return NextResponse.json(
-      { error: 'Ky përdorues është tashmë i caktuar në një organizatë' },
-      { status: 409 }
-    )
+    return errorResponse(req, 'Ky përdorues është tashmë i caktuar në një organizatë', 409)
   }
 
   try {
@@ -226,6 +214,9 @@ export async function POST(
     )
   } catch (err) {
     captureApiError(err, { route: '/api/platform/organizations/[orgId]/users', action: 'POST' })
-    return NextResponse.json({ error: 'Gabim gjatë ruajtjes në bazën e të dhënave' }, { status: 500 })
+    return errorResponse(req, 'Gabim gjatë ruajtjes në bazën e të dhënave', 500)
   }
 }
+
+export const GET = instrumentRoute<RouteContext>('/api/platform/organizations/[orgId]/users', handleGet)
+export const POST = instrumentRoute<RouteContext>('/api/platform/organizations/[orgId]/users', handlePost)

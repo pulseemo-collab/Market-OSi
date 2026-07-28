@@ -12,6 +12,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { toArray } from '@/lib/utils'
 import CardSkeleton from '@/components/ui/CardSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiAddLine,
   RiEditLine,
@@ -48,6 +49,7 @@ const emptyForm = {
 
 export default function FurnitoretPage() {
   const { role } = useRole()
+  const supplierIdempotency = useIdempotencyKey()
   const subscription = useSubscription()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,13 +112,14 @@ export default function FurnitoretPage() {
       const method = editSupplier ? 'PUT' : 'POST'
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...supplierIdempotency.headers() },
         body: JSON.stringify(form),
       })
       if (!res.ok) {
         toast.error('Gabim gjatë ruajtjes')
         return
       }
+      supplierIdempotency.reset()
       toast.success(editSupplier ? 'Furnitori u përditësua' : 'Furnitori u shtua')
       setModalOpen(false)
       fetchSuppliers()

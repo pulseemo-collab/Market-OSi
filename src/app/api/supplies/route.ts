@@ -5,8 +5,12 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
+import { withIdempotency } from '@/lib/idempotency'
+import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, role, organizationId, error } = await requirePermission('supplies:read')
   if (error) return error
 
@@ -14,11 +18,15 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
-    const supplies = await prisma.supply.findMany({
-      where: { organizationId: organizationId! },
+    const { searchParams } = new URL(req.url)
+    const where = { organizationId: organizationId! }
+    const page = parsePageRequest(searchParams)
+
+    const query = {
+      where,
       include: {
         furnitor: { select: { id: true, emri: true } },
         items: {
@@ -27,17 +35,28 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
-    })
-    return NextResponse.json(supplies)
+      orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
+      take: page.take,
+    }
+
+    if (!page.explicit) {
+      return NextResponse.json(await prisma.supply.findMany(query))
+    }
+
+    const [supplies, total] = await Promise.all([
+      prisma.supply.findMany({ ...query, skip: page.skip }),
+      prisma.supply.count({ where }),
+    ])
+
+    return NextResponse.json(supplies, { headers: paginationHeaders(page, total) })
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/supplies', action: 'GET' })
     console.error('Supplies GET error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('supplies:write')
   if (error) return error
 
@@ -45,31 +64,39 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
+  return withIdempotency(
+    req,
+    { route: 'POST /api/supplies', organizationId: organizationId!, userId: userId! },
+    () => createSupply(req, userId!, userEmail!, role!, organizationId!),
+  )
+}
+
+async function createSupply(
+  req: NextRequest,
+  userId: string,
+  userEmail: string,
+  role: string,
+  organizationId: number,
+) {
   try {
     const body = await req.json()
     const { furnitorId, data, shenime, items } = body
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'Nuk ka produkte në furnizim' }, { status: 400 })
+      return errorResponse(req, 'Nuk ka produkte në furnizim', 400)
     }
 
     for (const item of items) {
       if (!item.productId) {
-        return NextResponse.json({ error: 'Produkti është i pavlefshëm' }, { status: 400 })
+        return errorResponse(req, 'Produkti është i pavlefshëm', 400)
       }
       if (typeof item.sasia !== 'number' || item.sasia <= 0) {
-        return NextResponse.json(
-          { error: `Sasia duhet të jetë pozitive për: ${item.emriProduktit}` },
-          { status: 400 }
-        )
+        return errorResponse(req, `Sasia duhet të jetë pozitive për: ${item.emriProduktit}`, 400)
       }
       if (typeof item.cmimiBlerjes !== 'number' || item.cmimiBlerjes < 0) {
-        return NextResponse.json(
-          { error: `Çmimi i blerjes i pavlefshëm për: ${item.emriProduktit}` },
-          { status: 400 }
-        )
+        return errorResponse(req, `Çmimi i blerjes i pavlefshëm për: ${item.emriProduktit}`, 400)
       }
     }
 
@@ -86,7 +113,7 @@ export async function POST(req: NextRequest) {
           data: data ? new Date(data) : new Date(),
           shenime: shenime || null,
           totali,
-          organizationId: organizationId!,
+          organizationId,
           items: {
             create: items.map((item: {
               productId: number
@@ -114,7 +141,7 @@ export async function POST(req: NextRequest) {
 
       for (const item of items) {
         await tx.product.updateMany({
-          where: { id: item.productId, organizationId: organizationId! },
+          where: { id: item.productId, organizationId },
           data: {
             sasia: { increment: item.sasia },
             ...(item.updatePrice ? { cmimiBlerjes: item.cmimiBlerjes } : {}),
@@ -125,11 +152,15 @@ export async function POST(req: NextRequest) {
       return newSupply
     })
 
+    // A supply raises stock and may change purchase prices, so product-derived
+    // payloads (dashboard, reorder suggestions) are stale too.
+    invalidateTags(orgTag(organizationId, 'supplies'), orgTag(organizationId, 'products'))
+
     await logAuditAction({
-      userId: userId!,
-      userEmail: userEmail!,
-      userRole: role!,
-      organizationId: organizationId!,
+      userId,
+      userEmail,
+      userRole: role,
+      organizationId,
       action: AUDIT_ACTIONS.CREATE,
       entityType: AUDIT_ENTITY_TYPES.SUPPLY,
       entityId: supply.id,
@@ -141,6 +172,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/supplies', action: 'POST' })
     console.error('Supplies POST error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/supplies', handleGet)
+export const POST = instrumentRoute('/api/supplies', handlePost)

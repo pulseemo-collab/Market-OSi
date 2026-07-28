@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { CACHE_TTL, cached, orgTag } from './cache'
 
 export interface SubscriptionAccessResult {
   allowed: boolean
@@ -13,25 +14,61 @@ export interface SubscriptionAccessResult {
   cancelledAt?: string | null
 }
 
+interface CachedSubscription {
+  plan: string
+  status: string
+  trialEndsAt: Date | null
+  currentPeriodEnd: Date | null
+  nextPlan: string | null
+  cancelAtPeriodEnd: boolean
+  closeAtPeriodEnd: boolean
+  cancelledAt: Date | null
+}
+
+/**
+ * Reads the organization's subscription row, cached briefly.
+ *
+ * This lookup used to run on every products, sales, supplies, dashboard and
+ * export request — one database round trip per API call, per user, forever.
+ * Only the row is cached; the access decision itself is recomputed on every
+ * call, so trial countdowns and period expiry stay exact to the second.
+ *
+ * Any write to a Subscription row evicts this entry from inside the Prisma
+ * client, so plan changes, cancellations and top-ups take effect on the very
+ * next request no matter which route performed them.
+ */
+function loadSubscription(organizationId: number): Promise<CachedSubscription | null> {
+  return cached(
+    {
+      namespace: 'subscription',
+      organizationId,
+      ttlMs: CACHE_TTL.subscription,
+      tags: [orgTag(organizationId, 'subscription')],
+    },
+    () =>
+      prisma.subscription.findUnique({
+        where: { organizationId },
+        select: {
+          plan: true,
+          status: true,
+          trialEndsAt: true,
+          currentPeriodEnd: true,
+          nextPlan: true,
+          cancelAtPeriodEnd: true,
+          closeAtPeriodEnd: true,
+          cancelledAt: true,
+        },
+      }),
+  )
+}
+
 export async function checkSubscriptionAccess(
   organizationId: number,
   role: string
 ): Promise<SubscriptionAccessResult> {
   if (role === 'platform_owner') return { allowed: true }
 
-  const subscription = await prisma.subscription.findUnique({
-    where: { organizationId },
-    select: {
-      plan: true,
-      status: true,
-      trialEndsAt: true,
-      currentPeriodEnd: true,
-      nextPlan: true,
-      cancelAtPeriodEnd: true,
-      closeAtPeriodEnd: true,
-      cancelledAt: true,
-    },
-  })
+  const subscription = await loadSubscription(organizationId)
 
   if (!subscription) return { allowed: false, reason: 'Abonimi nuk u gjet' }
 

@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator'])
   if (error) return error
 
+  const rl = rateLimit(req, 'billing', userId, organizationId)
+  if (rl.limited) return rl.response!
+
   if (!organizationId) {
-    return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 400 })
+    return errorResponse(req, 'Organizata nuk u gjet', 400)
   }
 
   const body = await req.json().catch(() => ({})) as { action?: string }
@@ -16,13 +21,13 @@ export async function POST(req: NextRequest) {
 
   const existing = await prisma.subscription.findUnique({ where: { organizationId } })
   if (!existing) {
-    return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
+    return errorResponse(req, 'Abonimi nuk u gjet', 404)
   }
 
   // ── Undo scheduled closure ───────────────────────────────────────────────────
   if (action === 'undo') {
     if (!existing.closeAtPeriodEnd) {
-      return NextResponse.json({ error: 'Nuk ka mbyllje të planifikuar' }, { status: 400 })
+      return errorResponse(req, 'Nuk ka mbyllje të planifikuar', 400)
     }
 
     await prisma.subscription.update({
@@ -54,10 +59,10 @@ export async function POST(req: NextRequest) {
 
   // ── Schedule closure ─────────────────────────────────────────────────────────
   if (existing.closeAtPeriodEnd) {
-    return NextResponse.json({ error: 'Mbyllja është tashmë e planifikuar' }, { status: 400 })
+    return errorResponse(req, 'Mbyllja është tashmë e planifikuar', 400)
   }
   if (existing.status === 'cancelled') {
-    return NextResponse.json({ error: 'Abonimi është tashmë i anuluar' }, { status: 400 })
+    return errorResponse(req, 'Abonimi është tashmë i anuluar', 400)
   }
 
   const now = new Date()
@@ -95,3 +100,5 @@ export async function POST(req: NextRequest) {
     closeAt: closeAt?.toISOString() ?? null,
   })
 }
+
+export const POST = instrumentRoute('/api/subscription/close', handlePost)

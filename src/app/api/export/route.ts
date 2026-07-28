@@ -4,10 +4,11 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('export:read')
   if (error) return error
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(request, 'Abonimi ka skaduar', 403)
 
   try {
     const { searchParams } = new URL(request.url)
@@ -120,6 +121,8 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Export error:', error)
-    return NextResponse.json({ error: 'Gabim ne server' }, { status: 500 })
+    return errorResponse(request, 'Gabim ne server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/export', handleGet)

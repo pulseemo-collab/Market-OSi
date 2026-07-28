@@ -5,11 +5,12 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } }
+
+async function handleGet(req: NextRequest, { params }: RouteContext) {
   const { userId, role, organizationId, error } = await requirePermission('supplies:read')
   if (error) return error
 
@@ -17,12 +18,12 @@ export async function GET(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'ID i pavlefshëm', 400)
     }
 
     const supply = await prisma.supply.findFirst({
@@ -38,21 +39,18 @@ export async function GET(
     })
 
     if (!supply) {
-      return NextResponse.json({ error: 'Furnizimi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Furnizimi nuk u gjet', 404)
     }
 
     return NextResponse.json(supply)
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/supplies/[id]', action: 'GET' })
     console.error('Supply GET error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handleDelete(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('supplies:delete')
   if (error) return error
 
@@ -60,12 +58,12 @@ export async function DELETE(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'ID i pavlefshëm', 400)
     }
 
     let supplySnapshot: { id: number; totali: number; numriItems: number } | null = null
@@ -90,6 +88,8 @@ export async function DELETE(
       await tx.supply.delete({ where: { id } })
     })
 
+    invalidateTags(orgTag(organizationId!, 'supplies'), orgTag(organizationId!, 'products'))
+
     if (supplySnapshot) {
       await logAuditAction({
         userId: userId!,
@@ -107,10 +107,13 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'NOT_FOUND') {
-      return NextResponse.json({ error: 'Furnizimi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Furnizimi nuk u gjet', 404)
     }
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/supplies/[id]', action: 'DELETE' })
     console.error('Supply DELETE error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute<RouteContext>('/api/supplies/[id]', handleGet)
+export const DELETE = instrumentRoute<RouteContext>('/api/supplies/[id]', handleDelete)

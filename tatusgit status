@@ -1,0 +1,180 @@
+warning: in the working copy of 'prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/prisma/schema.prisma b/prisma/schema.prisma[m
+[1mindex 65ba302..7b1df09 100644[m
+[1m--- a/prisma/schema.prisma[m
+[1m+++ b/prisma/schema.prisma[m
+[36m@@ -17,15 +17,15 @@[m [mmodel Organization {[m
+   isActive      Boolean        @default(true)[m
+   createdAt     DateTime       @default(now())[m
+   updatedAt     DateTime       @updatedAt[m
+[32m+[m[32m  auditLogs     AuditLog[][m
+[32m+[m[32m  notifications Notification[][m
+   products      Product[][m
+   sales         Sale[][m
+[32m+[m[32m  staff         Staff[][m
+[32m+[m[32m  subscription  Subscription?[m
+   suppliers     Supplier[][m
+   supplies      Supply[][m
+   userRoles     UserRole[][m
+[31m-  auditLogs     AuditLog[][m
+[31m-  notifications Notification[][m
+[31m-  subscription  Subscription?[m
+[31m-  staff         Staff[][m
+ }[m
+ [m
+ model Supplier {[m
+[36m@@ -36,10 +36,10 @@[m [mmodel Supplier {[m
+   adresa         String?[m
+   shenime        String?[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   createdAt      DateTime     @default(now())[m
+   updatedAt      DateTime     @updatedAt[m
+   products       Product[][m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   supplies       Supply[][m
+ }[m
+ [m
+[36m@@ -56,12 +56,12 @@[m [mmodel Product {[m
+   archivedAt     DateTime?[m
+   furnitorId     Int?[m
+   organizationId Int[m
+[31m-  organization   Organization     @relation(fields: [organizationId], references: [id])[m
+[31m-  furnitor       Supplier?        @relation(fields: [furnitorId], references: [id])[m
+   createdAt      DateTime         @default(now())[m
+   updatedAt      DateTime         @updatedAt[m
+[31m-  saleItems      SaleItem[][m
+[32m+[m[32m  furnitor       Supplier?        @relation(fields: [furnitorId], references: [id])[m
+[32m+[m[32m  organization   Organization     @relation(fields: [organizationId], references: [id])[m
+   barcodes       ProductBarcode[][m
+[32m+[m[32m  saleItems      SaleItem[][m
+   supplyItems    SupplyItem[][m
+ }[m
+ [m
+[36m@@ -69,35 +69,35 @@[m [mmodel Supply {[m
+   id             Int          @id @default(autoincrement())[m
+   furnitorId     Int?[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+[31m-  furnitor       Supplier?    @relation(fields: [furnitorId], references: [id])[m
+   data           DateTime     @default(now())[m
+   shenime        String?[m
+   totali         Float        @default(0)[m
+   createdAt      DateTime     @default(now())[m
+   updatedAt      DateTime     @updatedAt[m
+[32m+[m[32m  furnitor       Supplier?    @relation(fields: [furnitorId], references: [id])[m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   items          SupplyItem[][m
+ }[m
+ [m
+ model SupplyItem {[m
+   id            Int     @id @default(autoincrement())[m
+   supplyId      Int[m
+[31m-  supply        Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)[m
+   productId     Int[m
+[31m-  product       Product @relation(fields: [productId], references: [id])[m
+   emriProduktit String[m
+   sasia         Float[m
+   njesia        String[m
+   cmimiBlerjes  Float[m
+   totali        Float[m
+[32m+[m[32m  product       Product @relation(fields: [productId], references: [id])[m
+[32m+[m[32m  supply        Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)[m
+ }[m
+ [m
+ model ProductBarcode {[m
+   id        Int      @id @default(autoincrement())[m
+   barcode   String   @unique[m
+   productId Int[m
+[31m-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)[m
+   createdAt DateTime @default(now())[m
+[32m+[m[32m  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)[m
+ }[m
+ [m
+ model Sale {[m
+[36m@@ -107,11 +107,11 @@[m [mmodel Sale {[m
+   shenime        String?[m
+   paymentMethod  String       @default("cash")[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   staffId        Int?[m
+   staffName      String?[m
+[31m-  staff          Staff?       @relation(fields: [staffId], references: [id], onDelete: SetNull)[m
+   createdAt      DateTime     @default(now())[m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+[32m+[m[32m  staff          Staff?       @relation(fields: [staffId], references: [id])[m
+   items          SaleItem[][m
+ }[m
+ [m
+[36m@@ -124,8 +124,8 @@[m [mmodel SaleItem {[m
+   cmimiBlerjes  Float[m
+   cmimiShitjes  Float[m
+   fitimi        Float[m
+[31m-  sale          Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)[m
+   product       Product @relation(fields: [productId], references: [id])[m
+[32m+[m[32m  sale          Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)[m
+ }[m
+ [m
+ model UserRole {[m
+[36m@@ -134,15 +134,14 @@[m [mmodel UserRole {[m
+   email          String[m
+   roli           String       @default("staff")[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   createdAt      DateTime     @default(now())[m
+   updatedAt      DateTime     @updatedAt[m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+ }[m
+ [m
+ model AuditLog {[m
+   id             Int          @id @default(autoincrement())[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   userId         String[m
+   userEmail      String[m
+   userRole       String[m
+[36m@@ -152,12 +151,12 @@[m [mmodel AuditLog {[m
+   description    String[m
+   metadata       Json?[m
+   createdAt      DateTime     @default(now())[m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+ }[m
+ [m
+ model Notification {[m
+   id             Int          @id @default(autoincrement())[m
+   organizationId Int[m
+[31m-  organization   Organization @relation(fields: [organizationId], references: [id])[m
+   userId         String?[m
+   type           String[m
+   title          String[m
+[36m@@ -166,24 +165,25 @@[m [mmodel Notification {[m
+   isRead         Boolean      @default(false)[m
+   metadata       Json?[m
+   createdAt      DateTime     @default(now())[m
+[32m+[m[32m  organization   Organization @relation(fields: [organizationId], references: [id])[m
+ }[m
+ [m
+ model Subscription {[m
+[31m-  id                 Int       @id @default(autoincrement())[m
+[31m-  organizationId     Int       @unique[m
+[31m-  organization       Organization @relation(fields: [organizationId], references: [id])[m
+[31m-  plan               String    @default("trial")[m
+[31m-  status             String    @default("trialing")[m
+[32m+[m[32m  id                 Int          @id @default(autoincrement())[m
+[32m+[m[32m  organizationId     Int          @unique[m
+[32m+[m[32m  plan               String       @default("trial")[m
+[32m+[m[32m  status             String       @default("trialing")[m
+   trialEndsAt        DateTime?[m
+   currentPeriodStart DateTime?[m
+   currentPeriodEnd   DateTime?[m
+   nextPlan           String?[m
+[31m-  cancelAtPeriodEnd  Boolean   @default(false)[m
+[31m-  closeAtPeriodEnd   Boolean   @default(false)[m
+[32m+[m[32m  cancelAtPeriodEnd  Boolean      @default(false)[m
+   cancelledAt        DateTime?[m
+   notes              String?[m
+[31m-  createdAt          DateTime  @default(now())[m
+[31m-  updatedAt          DateTime  @updatedAt[m
+[32m+[m[32m  createdAt          DateTime     @default(now())[m
+[32m+[m[32m  updatedAt          DateTime     @updatedAt[m
+[32m+[m[32m  closeAtPeriodEnd   Bool

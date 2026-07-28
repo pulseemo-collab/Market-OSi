@@ -4,13 +4,13 @@ import { requirePermission } from '@/lib/auth-helpers'
 import { Role, ROLE_LABELS } from '@/lib/roles'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+
+type RouteContext = { params: { id: string } }
 
 const VALID_ROLES: Role[] = ['Administrator', 'Manager', 'Cashier']
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('users:manage')
   if (error) return error
 
@@ -20,28 +20,25 @@ export async function PUT(
   try {
     const id = parseInt(params.id)
     if (isNaN(id)) {
-      return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'ID i pavlefshëm', 400)
     }
 
     const body = await req.json()
     const { roli } = body
 
     if (!VALID_ROLES.includes(roli)) {
-      return NextResponse.json({ error: 'Rol i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'Rol i pavlefshëm', 400)
     }
 
     const targetUser = await prisma.userRole.findFirst({
       where: { id, organizationId: organizationId! },
     })
     if (!targetUser) {
-      return NextResponse.json({ error: 'Përdoruesi nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Përdoruesi nuk u gjet', 404)
     }
 
     if (targetUser.userId === userId && roli !== 'Administrator') {
-      return NextResponse.json(
-        { error: 'Nuk mund të ndryshosh rolin tënd' },
-        { status: 403 }
-      )
+      return errorResponse(req, 'Nuk mund të ndryshosh rolin tënd', 403)
     }
 
     const oldRole = targetUser.roli as Role
@@ -64,6 +61,8 @@ export async function PUT(
 
     return NextResponse.json(userRole)
   } catch {
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const PUT = instrumentRoute<RouteContext>('/api/users/[id]', handlePut)

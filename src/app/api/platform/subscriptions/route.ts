@@ -3,10 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { rateLimit } from '@/lib/rate-limit'
 import { captureApiError } from '@/lib/sentry'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, organizationId, error } = await requirePermission('billing:read')
   if (error) return error
 
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subscriptions })
   } catch (err) {
     captureApiError(err, { route: '/api/platform/subscriptions', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/platform/subscriptions', handleGet)

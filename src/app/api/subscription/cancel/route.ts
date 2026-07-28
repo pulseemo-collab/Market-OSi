@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator'])
   if (error) return error
 
+  const rl = rateLimit(req, 'billing', userId, organizationId)
+  if (rl.limited) return rl.response!
+
   if (!organizationId) {
-    return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 400 })
+    return errorResponse(req, 'Organizata nuk u gjet', 400)
   }
 
   const body = await req.json().catch(() => ({})) as { action?: string }
@@ -16,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const existing = await prisma.subscription.findUnique({ where: { organizationId } })
   if (!existing) {
-    return NextResponse.json({ error: 'Abonimi nuk u gjet' }, { status: 404 })
+    return errorResponse(req, 'Abonimi nuk u gjet', 404)
   }
 
   const now = new Date()
@@ -24,7 +29,7 @@ export async function POST(req: NextRequest) {
   // ── Undo scheduled cancellation ──────────────────────────────────────────────
   if (action === 'undo') {
     if (!existing.cancelAtPeriodEnd) {
-      return NextResponse.json({ error: 'Nuk ka anulim të planifikuar' }, { status: 400 })
+      return errorResponse(req, 'Nuk ka anulim të planifikuar', 400)
     }
 
     await prisma.subscription.update({
@@ -56,10 +61,10 @@ export async function POST(req: NextRequest) {
 
   // ── Cancel ───────────────────────────────────────────────────────────────────
   if (existing.status === 'cancelled') {
-    return NextResponse.json({ error: 'Abonimi është tashmë i anuluar' }, { status: 400 })
+    return errorResponse(req, 'Abonimi është tashmë i anuluar', 400)
   }
   if (existing.cancelAtPeriodEnd) {
-    return NextResponse.json({ error: 'Anulimi është tashmë i planifikuar' }, { status: 400 })
+    return errorResponse(req, 'Anulimi është tashmë i planifikuar', 400)
   }
 
   const isTrialing = existing.status === 'trialing'
@@ -129,3 +134,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ success: true, scheduledCancel: false })
 }
+
+export const POST = instrumentRoute('/api/subscription/cancel', handlePost)

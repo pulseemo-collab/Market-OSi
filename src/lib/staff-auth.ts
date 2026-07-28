@@ -145,13 +145,26 @@ export async function resolveStaffAuth(
   error: NextResponse
 }> {
   const session = await getStaffSession(req)
+  const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID()
 
   if (!session) {
-    return { isStaffAuth: false, error: NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 }) }
+    return {
+      isStaffAuth: false,
+      error: NextResponse.json(
+        { error: 'Nuk je i autorizuar', requestId },
+        { status: 401, headers: { 'X-Request-Id': requestId } },
+      ),
+    }
   }
 
   if (!allowedRoles.includes(session.staffRole)) {
-    return { isStaffAuth: false, error: NextResponse.json({ error: 'Nuk ke akses' }, { status: 403 }) }
+    return {
+      isStaffAuth: false,
+      error: NextResponse.json(
+        { error: 'Nuk ke akses', requestId },
+        { status: 403, headers: { 'X-Request-Id': requestId } },
+      ),
+    }
   }
 
   return {

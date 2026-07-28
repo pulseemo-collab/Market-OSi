@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 
 export type RouteType =
   | 'auth'
+  | 'register'
   | 'sales'
   | 'products'
   | 'suppliers'
@@ -19,6 +20,7 @@ export type RouteType =
 
 const LIMITS: Record<RouteType, number> = {
   auth: 10,
+  register: 5,
   sales: 120,
   products: 100,
   suppliers: 100,
@@ -78,6 +80,7 @@ export function rateLimit(
 ): RateLimitResult {
   maybeCleanup()
 
+  const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID()
   const limit = LIMITS[routeType]
   const now = Date.now()
   const identifier = getIdentifier(req, userId)
@@ -120,8 +123,8 @@ export function rateLimit(
     return {
       limited: true,
       response: NextResponse.json(
-        { error: 'Shumë kërkesa. Ju lutem provoni përsëri pas pak.' },
-        { status: 429, headers },
+        { error: 'Shumë kërkesa. Ju lutem provoni përsëri pas pak.', requestId },
+        { status: 429, headers: { ...headers, 'X-Request-Id': requestId } },
       ),
       headers,
     }

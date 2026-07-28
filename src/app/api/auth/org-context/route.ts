@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { setManagerOrgCookie, getStaffSession } from '@/lib/staff-auth'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   try {
     const supabase = createClient()
 
@@ -26,12 +27,12 @@ export async function GET(req: NextRequest) {
         })
       } catch (dbErr) {
         console.error('[org-context] userRole query failed:', dbErr)
-        return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+        return errorResponse(req, 'Gabim në server', 500)
       }
 
       if (!userRole) {
         console.error('[org-context] no UserRole for userId:', user.id)
-        return NextResponse.json({ error: 'UserRole missing' }, { status: 404 })
+        return errorResponse(req, 'UserRole missing', 404)
       }
 
       // Prisma types this as non-null for a required relation, but guard at runtime
@@ -40,11 +41,11 @@ export async function GET(req: NextRequest) {
 
       if (!organization) {
         console.error('[org-context] organization missing for orgId:', userRole.organizationId)
-        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+        return errorResponse(req, 'Organizata nuk u gjet', 404)
       }
 
       if (!organization.isActive) {
-        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+        return errorResponse(req, 'Organizata nuk u gjet', 404)
       }
 
       if (userRole.roli === 'platform_owner') {
@@ -73,11 +74,11 @@ export async function GET(req: NextRequest) {
         })
       } catch (dbErr) {
         console.error('[org-context] org query (staff) failed:', dbErr)
-        return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+        return errorResponse(req, 'Gabim në server', 500)
       }
 
       if (!organization || !organization.isActive) {
-        return NextResponse.json({ error: 'Organizata nuk u gjet' }, { status: 404 })
+        return errorResponse(req, 'Organizata nuk u gjet', 404)
       }
 
       return NextResponse.json({
@@ -86,9 +87,11 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ error: 'Nuk je i autorizuar' }, { status: 401 })
+    return errorResponse(req, 'Nuk je i autorizuar', 401)
   } catch (err) {
     console.error('[org-context] UNEXPECTED ERROR:', err)
-    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
+    return errorResponse(req, 'Gabim i brendshëm i serverit', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/auth/org-context', handleGet)

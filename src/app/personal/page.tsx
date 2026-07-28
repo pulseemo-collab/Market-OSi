@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatDateTime, toArray } from '@/lib/utils'
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
   RiAddLine,
   RiEditLine,
@@ -63,6 +64,7 @@ function PinInput({ value, onChange, label }: { value: string; onChange: (v: str
 
 export default function PersonalPage() {
   const { role } = useRole()
+  const staffIdempotency = useIdempotencyKey()
   const subscription = useSubscription()
 
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -113,11 +115,12 @@ export default function PersonalPage() {
     try {
       const res = await fetch('/api/staff', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...staffIdempotency.headers() },
         body: JSON.stringify({ emri: emri.trim(), kodi: kodi.trim() || null, roli, pin }),
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Gabim'); return }
+      staffIdempotency.reset()
       toast.success(`Stafi "${data.emri}" u shtua`)
       setShowCreate(false)
       setCreateForm({ emri: '', kodi: '', roli: 'Cashier', pin: '', pinConfirm: '' })

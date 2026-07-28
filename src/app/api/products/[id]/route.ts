@@ -6,11 +6,12 @@ import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } 
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } }
+
+async function handleGet(req: NextRequest, { params }: RouteContext) {
   const { userId, role, organizationId, error } = await requirePermission('products:read')
   if (error) return error
 
@@ -18,7 +19,7 @@ export async function GET(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const product = await prisma.product.findFirst({
@@ -26,19 +27,16 @@ export async function GET(
       include: { furnitor: true, barcodes: true },
     })
     if (!product) {
-      return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Produkti nuk u gjet', 404)
     }
     return NextResponse.json(product)
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/products/[id]', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error: authError } = await requirePermission('products:write')
   if (authError) return authError
 
@@ -46,7 +44,7 @@ export async function PUT(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const body = await req.json()
@@ -67,17 +65,14 @@ export async function PUT(
       : []
 
     if (validBarcodes.length > 10) {
-      return NextResponse.json(
-        { error: 'Maksimumi 10 barkode për produkt' },
-        { status: 400 }
-      )
+      return errorResponse(req, 'Maksimumi 10 barkode për produkt', 400)
     }
 
     const existing = await prisma.product.findFirst({
       where: { id: Number(params.id), organizationId: organizationId! },
     })
     if (!existing) {
-      return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Produkti nuk u gjet', 404)
     }
 
     const canEditPrices = hasPermission(role, 'products:prices')
@@ -118,6 +113,8 @@ export async function PUT(
       include: { furnitor: true, barcodes: true },
     })
 
+    invalidateTags(orgTag(organizationId!, 'products'))
+
     await logAuditAction({
       userId: userId!,
       userEmail: userEmail!,
@@ -138,20 +135,14 @@ export async function PUT(
       'code' in error &&
       (error as { code: string }).code === 'P2002'
     ) {
-      return NextResponse.json(
-        { error: 'Barkodi ekziston tashmë' },
-        { status: 409 }
-      )
+      return errorResponse(req, 'Barkodi ekziston tashmë', 409)
     }
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products/[id]', action: 'PUT' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handleDelete(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('products:delete')
   if (error) return error
 
@@ -159,7 +150,7 @@ export async function DELETE(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const existing = await prisma.product.findFirst({
@@ -168,7 +159,7 @@ export async function DELETE(
     })
 
     if (!existing) {
-      return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Produkti nuk u gjet', 404)
     }
 
     const hasSales = (await prisma.saleItem.count({ where: { productId: existing.id } })) > 0
@@ -178,6 +169,8 @@ export async function DELETE(
         where: { id: existing.id },
         data: { isArchived: true, archivedAt: new Date() },
       })
+
+      invalidateTags(orgTag(organizationId!, 'products'))
 
       await logAuditAction({
         userId: userId!,
@@ -196,6 +189,8 @@ export async function DELETE(
 
     await prisma.product.delete({ where: { id: existing.id } })
 
+    invalidateTags(orgTag(organizationId!, 'products'))
+
     await logAuditAction({
       userId: userId!,
       userEmail: userEmail!,
@@ -211,6 +206,10 @@ export async function DELETE(
     return NextResponse.json({ sukses: true, arkivuar: false })
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products/[id]', action: 'DELETE' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute<RouteContext>('/api/products/[id]', handleGet)
+export const PUT = instrumentRoute<RouteContext>('/api/products/[id]', handlePut)
+export const DELETE = instrumentRoute<RouteContext>('/api/products/[id]', handleDelete)

@@ -6,8 +6,10 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { withIdempotency } from '@/lib/idempotency'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const { userId, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const staff = await prisma.staff.findMany({
@@ -35,11 +37,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(staff)
   } catch (err) {
     captureApiError(err, { organizationId, route: '/api/staff', action: 'GET' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
@@ -47,29 +49,43 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
+  return withIdempotency(
+    req,
+    { route: 'POST /api/staff', organizationId: organizationId!, userId: userId! },
+    () => createStaff(req, userId!, userEmail!, role!, organizationId!),
+  )
+}
+
+async function createStaff(
+  req: NextRequest,
+  userId: string,
+  userEmail: string,
+  role: string,
+  organizationId: number,
+) {
   try {
     const { emri, kodi, roli, pin } = await req.json()
 
     if (!emri?.trim() || !roli || !pin) {
-      return NextResponse.json({ error: 'Fushat e detyrueshme mungojnë' }, { status: 400 })
+      return errorResponse(req, 'Fushat e detyrueshme mungojnë', 400)
     }
 
     if (!['Cashier'].includes(roli)) {
-      return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'Roli i pavlefshëm', 400)
     }
 
     if (!/^\d{4,6}$/.test(String(pin))) {
-      return NextResponse.json({ error: 'PIN duhet të jetë 4-6 shifra' }, { status: 400 })
+      return errorResponse(req, 'PIN duhet të jetë 4-6 shifra', 400)
     }
 
     if (kodi?.trim()) {
       const existing = await prisma.staff.findUnique({
-        where: { organizationId_kodi: { organizationId: organizationId!, kodi: kodi.trim() } },
+        where: { organizationId_kodi: { organizationId, kodi: kodi.trim() } },
       })
       if (existing) {
-        return NextResponse.json({ error: 'Kodi ekziston tashmë' }, { status: 409 })
+        return errorResponse(req, 'Kodi ekziston tashmë', 409)
       }
     }
 
@@ -81,15 +97,15 @@ export async function POST(req: NextRequest) {
         kodi: kodi?.trim() || null,
         roli,
         pinHash,
-        organizationId: organizationId!,
+        organizationId,
       },
     })
 
     await logAuditAction({
-      userId: userId!,
-      userEmail: userEmail!,
-      userRole: role!,
-      organizationId: organizationId!,
+      userId,
+      userEmail,
+      userRole: role,
+      organizationId,
       action: AUDIT_ACTIONS.STAFF_CREATED,
       entityType: AUDIT_ENTITY_TYPES.STAFF,
       entityId: staff.id,
@@ -103,6 +119,9 @@ export async function POST(req: NextRequest) {
     )
   } catch (err) {
     captureApiError(err, { organizationId, route: '/api/staff', action: 'POST' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/staff', handleGet)
+export const POST = instrumentRoute('/api/staff', handlePost)

@@ -6,11 +6,11 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+type RouteContext = { params: { id: string } }
+
+async function handlePost(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
@@ -18,20 +18,20 @@ export async function POST(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   const staffId = parseInt(params.id)
-  if (isNaN(staffId)) return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+  if (isNaN(staffId)) return errorResponse(req, 'ID e pavlefshme', 400)
 
   try {
     const existing = await prisma.staff.findFirst({
       where: { id: staffId, organizationId: organizationId! },
     })
-    if (!existing) return NextResponse.json({ error: 'Stafi nuk u gjet' }, { status: 404 })
+    if (!existing) return errorResponse(req, 'Stafi nuk u gjet', 404)
 
     const { pin } = await req.json()
     if (!pin || !/^\d{4,6}$/.test(String(pin))) {
-      return NextResponse.json({ error: 'PIN duhet të jetë 4-6 shifra' }, { status: 400 })
+      return errorResponse(req, 'PIN duhet të jetë 4-6 shifra', 400)
     }
 
     const pinHash = await hashPin(String(pin))
@@ -59,6 +59,8 @@ export async function POST(
     return NextResponse.json({ success: true })
   } catch (err) {
     captureApiError(err, { organizationId, route: `/api/staff/${staffId}/pin`, action: 'POST' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const POST = instrumentRoute<RouteContext>('/api/staff/[id]/pin', handlePost)

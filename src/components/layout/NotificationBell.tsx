@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRole } from '@/contexts/RoleContext'
 import { cn, formatRelativeTime } from '@/lib/utils'
+import { setNotificationCount, useNotificationCount } from '@/hooks/useNotificationCount'
 import {
   RiBellLine,
   RiCheckLine,
@@ -56,23 +57,16 @@ export default function NotificationBell() {
   const { role } = useRole()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const canSee = role === 'Administrator' || role === 'Manager' || role === 'Cashier'
 
-  const fetchCount = useCallback(async () => {
-    if (!canSee) return
-    try {
-      const res = await fetch('/api/notifications?countOnly=true')
-      if (res.ok) {
-        const data = await res.json()
-        setUnreadCount(data.unreadCount ?? 0)
-      }
-    } catch {}
-  }, [canSee])
+  // The badge count comes from the shared hook, which runs a single poller for
+  // the whole page. This component used to run a second one against the same
+  // endpoint, so every open tab polled it twice.
+  const unreadCount = useNotificationCount(canSee)
 
   const fetchNotifications = useCallback(async () => {
     if (!canSee) return
@@ -82,19 +76,13 @@ export default function NotificationBell() {
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications ?? [])
-        setUnreadCount(data.unreadCount ?? 0)
+        setNotificationCount(data.unreadCount ?? 0)
       }
     } catch {
     } finally {
       setLoading(false)
     }
   }, [canSee])
-
-  useEffect(() => {
-    fetchCount()
-    const interval = setInterval(fetchCount, 30000)
-    return () => clearInterval(interval)
-  }, [fetchCount])
 
   useEffect(() => {
     if (open) fetchNotifications()
@@ -113,13 +101,13 @@ export default function NotificationBell() {
   const markAsRead = async (id: number) => {
     // Optimistic update
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
-    setUnreadCount((prev) => Math.max(0, prev - 1))
+    setNotificationCount(unreadCount - 1)
     try {
       await fetch(`/api/notifications/${id}`, { method: 'PATCH' })
     } catch {
       // Rollback
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)))
-      setUnreadCount((prev) => prev + 1)
+      setNotificationCount(unreadCount)
     }
   }
 
@@ -128,13 +116,13 @@ export default function NotificationBell() {
     const snapshot = { notifications, unreadCount }
     // Optimistic update
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
-    setUnreadCount(0)
+    setNotificationCount(0)
     try {
       await fetch('/api/notifications/mark-all-read', { method: 'POST' })
     } catch {
       // Rollback
       setNotifications(snapshot.notifications)
-      setUnreadCount(snapshot.unreadCount)
+      setNotificationCount(snapshot.unreadCount)
     } finally {
       setMarkingAll(false)
     }

@@ -7,8 +7,12 @@ import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { resolveStaffAuth } from '@/lib/staff-auth'
 import type { Role } from '@/lib/roles'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
+import { withIdempotency } from '@/lib/idempotency'
+import { DEFAULT_SAFETY_LIMIT, paginationHeaders, parsePageRequest } from '@/lib/pagination'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   // Dual auth: Supabase session or staff PIN session
   const supabase = await requirePermission('products:read')
   let userId: string | null
@@ -31,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const { searchParams } = new URL(req.url)
@@ -47,40 +51,75 @@ export async function GET(req: NextRequest) {
           ? {}
           : { isArchived: false }
 
-    const products = await prisma.product.findMany({
-      where: {
-        organizationId: organizationId!,
-        ...archivedWhere,
-        AND: [
-          kerkimi
-            ? {
-                OR: [
-                  { emri: { contains: kerkimi, mode: 'insensitive' } },
-                  { kategoria: { contains: kerkimi, mode: 'insensitive' } },
-                  { barcodes: { some: { barcode: { contains: kerkimi } } } },
-                ],
-              }
-            : {},
-          kategoria ? { kategoria } : {},
-        ],
-      },
-      include: { furnitor: true, barcodes: true },
-      orderBy: { emri: 'asc' },
-    })
+    const where = {
+      organizationId: organizationId!,
+      ...archivedWhere,
+      AND: [
+        kerkimi
+          ? {
+              OR: [
+                { emri: { contains: kerkimi, mode: 'insensitive' as const } },
+                { kategoria: { contains: kerkimi, mode: 'insensitive' as const } },
+                { barcodes: { some: { barcode: { contains: kerkimi } } } },
+              ],
+            }
+          : {},
+        kategoria ? { kategoria } : {},
+      ],
+    }
 
-    const filtered = stokUlet
-      ? products.filter((p) => p.sasia <= p.stokuMinimal)
-      : products
+    const page = parsePageRequest(searchParams)
 
-    return NextResponse.json(filtered)
+    // "Low stock" compares two columns, which Prisma cannot express in a filter,
+    // so those rows are selected in Node. Paging therefore happens after the
+    // filter for that view, and in the database for every other view. Either
+    // way the read stays bounded by the safety limit.
+    if (stokUlet) {
+      const products = await prisma.product.findMany({
+        where,
+        include: { furnitor: true, barcodes: true },
+        orderBy: [{ emri: 'asc' }, { id: 'asc' }],
+        take: DEFAULT_SAFETY_LIMIT,
+      })
+      const lowStock = products.filter((p) => p.sasia <= p.stokuMinimal)
+
+      if (!page.explicit) return NextResponse.json(lowStock)
+
+      return NextResponse.json(lowStock.slice(page.skip, page.skip + page.take), {
+        headers: paginationHeaders(page, lowStock.length),
+      })
+    }
+
+    if (!page.explicit) {
+      const products = await prisma.product.findMany({
+        where,
+        include: { furnitor: true, barcodes: true },
+        orderBy: [{ emri: 'asc' }, { id: 'asc' }],
+        take: page.take,
+      })
+      return NextResponse.json(products)
+    }
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: { furnitor: true, barcodes: true },
+        orderBy: [{ emri: 'asc' }, { id: 'asc' }],
+        take: page.take,
+        skip: page.skip,
+      }),
+      prisma.product.count({ where }),
+    ])
+
+    return NextResponse.json(products, { headers: paginationHeaders(page, total) })
   } catch (error) {
     captureApiError(error, { organizationId, route: '/api/products', action: 'GET' })
     console.error('Products GET error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('products:write')
   if (error) return error
 
@@ -88,8 +127,22 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
+  return withIdempotency(
+    req,
+    { route: 'POST /api/products', organizationId: organizationId!, userId: userId! },
+    () => createProduct(req, userId!, userEmail!, role!, organizationId!),
+  )
+}
+
+async function createProduct(
+  req: NextRequest,
+  userId: string,
+  userEmail: string,
+  role: Role,
+  organizationId: number,
+) {
   try {
     const body = await req.json()
     const {
@@ -105,10 +158,7 @@ export async function POST(req: NextRequest) {
     } = body
 
     if (!emri || !kategoria || cmimiBlerjes == null || cmimiShitjes == null) {
-      return NextResponse.json(
-        { error: 'Fushat e detyrueshme mungojnë' },
-        { status: 400 }
-      )
+      return errorResponse(req, 'Fushat e detyrueshme mungojnë', 400)
     }
 
     const validBarcodes: string[] = Array.isArray(barcodes)
@@ -116,10 +166,7 @@ export async function POST(req: NextRequest) {
       : []
 
     if (validBarcodes.length > 10) {
-      return NextResponse.json(
-        { error: 'Maksimumi 10 barkode për produkt' },
-        { status: 400 }
-      )
+      return errorResponse(req, 'Maksimumi 10 barkode për produkt', 400)
     }
 
     const product = await prisma.product.create({
@@ -132,7 +179,7 @@ export async function POST(req: NextRequest) {
         cmimiShitjes: Number(cmimiShitjes),
         njesia: njesia || 'copë',
         furnitorId: furnitorId ? Number(furnitorId) : null,
-        organizationId: organizationId!,
+        organizationId,
         barcodes: {
           create: validBarcodes.map((barcode) => ({ barcode })),
         },
@@ -140,11 +187,13 @@ export async function POST(req: NextRequest) {
       include: { furnitor: true, barcodes: true },
     })
 
+    invalidateTags(orgTag(organizationId, 'products'))
+
     await logAuditAction({
-      userId: userId!,
-      userEmail: userEmail!,
-      userRole: role!,
-      organizationId: organizationId!,
+      userId,
+      userEmail,
+      userRole: role,
+      organizationId,
       action: AUDIT_ACTIONS.CREATE,
       entityType: AUDIT_ENTITY_TYPES.PRODUCT,
       entityId: product.id,
@@ -160,13 +209,13 @@ export async function POST(req: NextRequest) {
       'code' in error &&
       (error as { code: string }).code === 'P2002'
     ) {
-      return NextResponse.json(
-        { error: 'Barkodi ekziston tashmë' },
-        { status: 409 }
-      )
+      return errorResponse(req, 'Barkodi ekziston tashmë', 409)
     }
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/products', action: 'POST' })
     console.error('Products POST error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const GET = instrumentRoute('/api/products', handleGet)
+export const POST = instrumentRoute('/api/products', handlePost)

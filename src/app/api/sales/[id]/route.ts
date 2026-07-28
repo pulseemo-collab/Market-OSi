@@ -5,11 +5,12 @@ import { logAuditAction, buildFieldChanges, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } 
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { invalidateTags, orgTag } from '@/lib/cache'
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } }
+
+async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
@@ -17,19 +18,19 @@ export async function PUT(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const saleId = parseInt(params.id)
     if (isNaN(saleId)) {
-      return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'ID i pavlefshëm', 400)
     }
 
     const body = await req.json()
     const { items } = body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Nuk ka produkte në shitje' }, { status: 400 })
+      return errorResponse(req, 'Nuk ka produkte në shitje', 400)
     }
 
     const existingSale = await prisma.sale.findFirst({
@@ -38,7 +39,7 @@ export async function PUT(
     })
 
     if (!existingSale) {
-      return NextResponse.json({ error: 'Fatura nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Fatura nuk u gjet', 404)
     }
 
     const originalQtyMap = new Map<number, number>()
@@ -58,29 +59,34 @@ export async function PUT(
       fitimiItem: number
     }> = []
 
+    // One lookup for every line item, instead of a query per item inside the
+    // validation loop.
+    const referencedIds = items
+      .map((item: { productId: unknown }) => Number(item.productId))
+      .filter((id: number) => !isNaN(id))
+    const products = await prisma.product.findMany({
+      where: { id: { in: referencedIds }, organizationId: organizationId! },
+    })
+    const productById = new Map(products.map((p) => [p.id, p]))
+
     for (const item of items) {
       const productId = Number(item.productId)
       const sasia = Number(item.sasia)
 
       if (isNaN(productId) || isNaN(sasia) || sasia <= 0) {
-        return NextResponse.json({ error: 'Të dhëna të pavlefshme' }, { status: 400 })
+        return errorResponse(req, 'Të dhëna të pavlefshme', 400)
       }
 
-      const product = await prisma.product.findFirst({
-        where: { id: productId, organizationId: organizationId! },
-      })
+      const product = productById.get(productId)
       if (!product) {
-        return NextResponse.json({ error: 'Produkti nuk u gjet' }, { status: 404 })
+        return errorResponse(req, 'Produkti nuk u gjet', 404)
       }
 
       const originalQty = originalQtyMap.get(productId) || 0
       const availableStock = product.sasia + originalQty
 
       if (sasia > availableStock) {
-        return NextResponse.json(
-          { error: `Stoku i pamjaftueshëm për: ${product.emri}. Disponibël: ${availableStock}` },
-          { status: 400 }
-        )
+        return errorResponse(req, `Stoku i pamjaftueshëm për: ${product.emri}. Disponibël: ${availableStock}`, 400)
       }
 
       const fitimiItem = (product.cmimiShitjes - product.cmimiBlerjes) * sasia
@@ -133,6 +139,8 @@ export async function PUT(
       }
     })
 
+    invalidateTags(orgTag(organizationId!, 'sales'), orgTag(organizationId!, 'products'))
+
     const updatedSale = await prisma.sale.findUnique({
       where: { id: saleId },
       include: { items: { include: { product: true } } },
@@ -160,14 +168,11 @@ export async function PUT(
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'PUT' })
     console.error('Sale PUT error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function handleDelete(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
   if (error) return error
 
@@ -175,13 +180,13 @@ export async function DELETE(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   try {
     const saleId = parseInt(params.id)
 
     if (isNaN(saleId)) {
-      return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'ID i pavlefshëm', 400)
     }
 
     const sale = await prisma.sale.findFirst({
@@ -190,7 +195,7 @@ export async function DELETE(
     })
 
     if (!sale) {
-      return NextResponse.json({ error: 'Fatura nuk u gjet' }, { status: 404 })
+      return errorResponse(req, 'Fatura nuk u gjet', 404)
     }
 
     await prisma.$transaction(async (tx) => {
@@ -203,6 +208,8 @@ export async function DELETE(
 
       await tx.sale.delete({ where: { id: saleId } })
     })
+
+    invalidateTags(orgTag(organizationId!, 'sales'), orgTag(organizationId!, 'products'))
 
     await logAuditAction({
       userId: userId!,
@@ -220,6 +227,9 @@ export async function DELETE(
   } catch (error) {
     captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'DELETE' })
     console.error('Sale DELETE error:', error)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const PUT = instrumentRoute<RouteContext>('/api/sales/[id]', handlePut)
+export const DELETE = instrumentRoute<RouteContext>('/api/sales/[id]', handleDelete)

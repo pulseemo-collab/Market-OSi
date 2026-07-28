@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStaffSession } from '@/lib/staff-auth'
 import { prisma } from '@/lib/prisma'
+import { instrumentRoute } from '@/lib/logger'
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   const session = await getStaffSession(req)
 
   if (!session) {
@@ -25,3 +26,5 @@ export async function GET(req: NextRequest) {
     },
   })
 }
+
+export const GET = instrumentRoute('/api/staff-auth/session', handleGet)

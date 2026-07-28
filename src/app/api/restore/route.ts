@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import * as Sentry from '@sentry/nextjs'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,7 @@ function validateBackup(data: unknown): data is Record<string, any> {
   return true
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('backup:restore')
   if (error) return error
 
@@ -42,26 +43,23 @@ export async function POST(request: NextRequest) {
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(request, 'Abonimi ka skaduar', 403)
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Formati i kërkesës është i pavlefshëm' }, { status: 400 })
+    return errorResponse(request, 'Formati i kërkesës është i pavlefshëm', 400)
   }
 
   if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Të dhënat mungojnë' }, { status: 400 })
+    return errorResponse(request, 'Të dhënat mungojnë', 400)
   }
 
   const { backup, confirmCrossOrg } = body as { backup: unknown; confirmCrossOrg?: boolean }
 
   if (!validateBackup(backup)) {
-    return NextResponse.json(
-      { error: 'Skedari i backup-it është i pavlefshëm ose i dëmtuar' },
-      { status: 400 },
-    )
+    return errorResponse(request, 'Skedari i backup-it është i pavlefshëm ose i dëmtuar', 400)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,7 +74,7 @@ export async function POST(request: NextRequest) {
 
   const orgId = organizationId!
 
-  // Cross-organization guard
+  // Cross-organization guard — preserve compound body (crossOrgWarning + extra fields)
   if (meta.organizationId !== orgId && !confirmCrossOrg) {
     return NextResponse.json(
       {
@@ -318,6 +316,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ error: 'Gabim gjatë rikuperimit të të dhënave' }, { status: 500 })
+    return errorResponse(request, 'Gabim gjatë rikuperimit të të dhënave', 500)
   }
 }
+
+export const POST = instrumentRoute('/api/restore', handlePost)

@@ -5,11 +5,11 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+type RouteContext = { params: { id: string } }
+
+async function handlePatch(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
@@ -17,22 +17,22 @@ export async function PATCH(
   if (rl.limited) return rl.response!
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse(req, 'Abonimi ka skaduar', 403)
 
   const staffId = parseInt(params.id)
-  if (isNaN(staffId)) return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+  if (isNaN(staffId)) return errorResponse(req, 'ID e pavlefshme', 400)
 
   try {
     const existing = await prisma.staff.findFirst({
       where: { id: staffId, organizationId: organizationId! },
     })
-    if (!existing) return NextResponse.json({ error: 'Stafi nuk u gjet' }, { status: 404 })
+    if (!existing) return errorResponse(req, 'Stafi nuk u gjet', 404)
 
     const body = await req.json()
     const { emri, roli, isActive, kodi } = body
 
     if (roli !== undefined && !['Cashier'].includes(roli)) {
-      return NextResponse.json({ error: 'Roli i pavlefshëm' }, { status: 400 })
+      return errorResponse(req, 'Roli i pavlefshëm', 400)
     }
 
     if (kodi !== undefined && kodi !== null && kodi !== '') {
@@ -43,7 +43,7 @@ export async function PATCH(
           NOT: { id: staffId },
         },
       })
-      if (conflict) return NextResponse.json({ error: 'Kodi ekziston tashmë' }, { status: 409 })
+      if (conflict) return errorResponse(req, 'Kodi ekziston tashmë', 409)
     }
 
     const updated = await prisma.staff.update({
@@ -107,25 +107,22 @@ export async function PATCH(
     })
   } catch (err) {
     captureApiError(err, { organizationId, route: `/api/staff/${staffId}`, action: 'PATCH' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+async function handleDelete(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requireRole(['Administrator', 'Manager'])
   if (error) return error
 
   const staffId = parseInt(params.id)
-  if (isNaN(staffId)) return NextResponse.json({ error: 'ID e pavlefshme' }, { status: 400 })
+  if (isNaN(staffId)) return errorResponse(req, 'ID e pavlefshme', 400)
 
   try {
     const existing = await prisma.staff.findFirst({
       where: { id: staffId, organizationId: organizationId! },
     })
-    if (!existing) return NextResponse.json({ error: 'Stafi nuk u gjet' }, { status: 404 })
+    if (!existing) return errorResponse(req, 'Stafi nuk u gjet', 404)
 
     // Invalidate all sessions
     await prisma.staffSession.deleteMany({ where: { staffId } })
@@ -148,6 +145,9 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     captureApiError(err, { organizationId, route: `/api/staff/${staffId}`, action: 'DELETE' })
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse(req, 'Gabim në server', 500)
   }
 }
+
+export const PATCH = instrumentRoute<RouteContext>('/api/staff/[id]', handlePatch)
+export const DELETE = instrumentRoute<RouteContext>('/api/staff/[id]', handleDelete)

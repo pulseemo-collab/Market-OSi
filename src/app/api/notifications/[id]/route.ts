@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
+import { errorResponse, instrumentRoute } from '@/lib/logger'
 
-export async function PATCH(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } }
+
+async function handlePatch(_req: NextRequest, { params }: RouteContext) {
   const { userId, role, organizationId, error } = await requirePermission('notifications:read')
   if (error) return error
 
   const billing = await checkSubscriptionAccess(organizationId!, role!)
-  if (!billing.allowed) return NextResponse.json({ error: 'Abonimi ka skaduar' }, { status: 403 })
+  if (!billing.allowed) return errorResponse('Abonimi ka skaduar', 403)
 
   const id = parseInt(params.id)
   if (isNaN(id)) {
-    return NextResponse.json({ error: 'ID i pavlefshëm' }, { status: 400 })
+    return errorResponse('ID i pavlefshëm', 400)
   }
 
   try {
@@ -23,12 +23,12 @@ export async function PATCH(
       where: { id, organizationId: organizationId! },
     })
     if (!notification) {
-      return NextResponse.json({ error: 'Njoftimi nuk u gjet' }, { status: 404 })
+      return errorResponse('Njoftimi nuk u gjet', 404)
     }
 
     // Cashier can only mark their own notifications
     if (role === 'Cashier' && notification.userId !== userId) {
-      return NextResponse.json({ error: 'Nuk ke akses' }, { status: 403 })
+      return errorResponse('Nuk ke akses', 403)
     }
 
     const updated = await prisma.notification.update({
@@ -39,6 +39,8 @@ export async function PATCH(
     return NextResponse.json(updated)
   } catch (err) {
     console.error('[Notifications] PATCH error:', err)
-    return NextResponse.json({ error: 'Gabim në server' }, { status: 500 })
+    return errorResponse('Gabim në server', 500)
   }
 }
+
+export const PATCH = instrumentRoute<RouteContext>('/api/notifications/[id]', handlePatch)
