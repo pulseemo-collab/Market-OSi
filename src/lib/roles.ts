@@ -77,6 +77,12 @@ export const ROUTE_ACCESS: Record<string, Role[]> = {
   '/cilesime/backup':        ['Administrator'],
   '/cilesime/siguria':       ['Administrator', 'Manager'],
   '/platforma':              ['platform_owner'],
+  '/platforma/organizatat':  ['platform_owner'],
+  '/platforma/perdoruesit':  ['platform_owner'],
+  '/platforma/abonimet':     ['platform_owner'],
+  '/platforma/sinjalizime':  ['platform_owner'],
+  '/platforma/regjistri':    ['platform_owner'],
+  '/platforma/sistemi':      ['platform_owner'],
 }
 
 export const ROLE_LABELS: Record<Role, string> = {

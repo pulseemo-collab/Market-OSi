@@ -5,6 +5,8 @@ import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
 import { CACHE_TTL, PLATFORM_TAG, cached } from '@/lib/cache'
+import { countByState } from '@/lib/platform-orgs'
+import { derivePlatformAlerts, type AlertSeverity } from '@/lib/platform-alerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,16 +24,27 @@ async function buildPlatformStats() {
   const [
     totalOrganizations,
     totalUsers,
+    totalStaff,
     totalProducts,
     salesAgg,
+    salesLast30,
     totalNotifications,
     totalAuditLogs,
     organizations,
   ] = await Promise.all([
     prisma.organization.count(),
     prisma.userRole.count(),
+    prisma.staff.count(),
     prisma.product.count(),
     prisma.sale.aggregate({ _count: { _all: true }, _sum: { totali: true } }),
+    // A rolling window is the only revenue figure this schema can honestly
+    // produce: sales totals are real money that moved, subscription prices are
+    // not billed by this system at all.
+    prisma.sale.aggregate({
+      _count: { _all: true },
+      _sum: { totali: true },
+      where: { createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+    }),
     prisma.notification.count(),
     prisma.auditLog.count(),
     prisma.organization.findMany({
@@ -49,7 +62,7 @@ async function buildPlatformStats() {
             nextPlan: true, cancelAtPeriodEnd: true, cancelledAt: true,
           },
         },
-        _count: { select: { userRoles: true, products: true, sales: true } },
+        _count: { select: { userRoles: true, staff: true, products: true, sales: true } },
         sales: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -61,6 +74,7 @@ async function buildPlatformStats() {
     name: org.name,
     isActive: org.isActive,
     usersCount: org._count.userRoles,
+    staffCount: org._count.staff,
     productsCount: org._count.products,
     salesCount: org._count.sales,
     lastActivity: org.sales[0]?.createdAt ?? null,
@@ -78,14 +92,34 @@ async function buildPlatformStats() {
       : null,
   }))
 
+  // The tally and the attention queue are computed here, from the same rows the
+  // table renders, so a badge and a summary count can never disagree.
+  const stateCounts = countByState(orgsTable)
+  const alerts = derivePlatformAlerts(orgsTable)
+  const alertCounts = alerts.reduce(
+    (acc, a) => {
+      acc[a.severity] += 1
+      return acc
+    },
+    { high: 0, medium: 0, low: 0 } as Record<AlertSeverity, number>,
+  )
+
   return {
     totalOrganizations,
     totalUsers,
+    totalStaff,
     totalProducts,
     totalSales: salesAgg._count._all,
     totalRevenue: salesAgg._sum.totali ?? 0,
+    salesLast30Days: salesLast30._count._all,
+    revenueLast30Days: salesLast30._sum.totali ?? 0,
     totalNotifications,
     totalAuditLogs,
+    stateCounts,
+    alertCounts,
+    alertsTotal: alerts.length,
+    /** The most urgent handful, so the overview needs no second round trip. */
+    topAlerts: alerts.slice(0, 6),
     organizations: orgsTable,
   }
 }
