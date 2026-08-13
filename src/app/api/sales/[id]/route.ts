@@ -7,8 +7,15 @@ import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
 import { invalidateTags, orgTag } from '@/lib/cache'
+import { StockConflictError, classifyError, errorResponseFrom } from '@/lib/errors'
+import { recordStockConflict, recordTransactionFailure } from '@/lib/metrics'
+import { applyStockDeltas, netDeltas, sumByProduct } from '@/lib/stock'
 
 type RouteContext = { params: { id: string } }
+
+/** Matches the create path — see the note in /api/sales/route.ts. */
+const SALE_TX_TIMEOUT_MS = parseInt(process.env.SALE_TX_TIMEOUT_MS ?? '10000')
+const SALE_TX_MAX_WAIT_MS = parseInt(process.env.SALE_TX_MAX_WAIT_MS ?? '5000')
 
 async function handlePut(req: NextRequest, { params }: RouteContext) {
   const { userId, userEmail, role, organizationId, error } = await requirePermission('sales:manage')
@@ -103,41 +110,41 @@ async function handlePut(req: NextRequest, { params }: RouteContext) {
       })
     }
 
-    await prisma.$transaction(async (tx) => {
-      for (const origItem of existingSale.items) {
-        await tx.product.updateMany({
-          where: { id: origItem.productId, organizationId: organizationId! },
-          data: { sasia: { increment: origItem.sasia } },
-        })
-      }
+    // Net the two directions per product before touching the database. Summing
+    // first means each product row is written exactly once, which halves the
+    // locks held and removes the window between "restored" and "re-taken" in
+    // which another sale could observe inflated stock.
+    const deltaByProduct = netDeltas(originalQtyMap, sumByProduct(validatedItems))
 
-      await tx.saleItem.deleteMany({ where: { saleId } })
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.saleItem.deleteMany({ where: { saleId } })
 
-      await tx.sale.update({
-        where: { id: saleId },
-        data: {
-          totali,
-          fitimi,
-          items: {
-            create: validatedItems.map((item) => ({
-              productId: item.productId,
-              emriProduktit: item.emriProduktit,
-              sasia: item.sasia,
-              cmimiBlerjes: item.cmimiBlerjes,
-              cmimiShitjes: item.cmimiShitjes,
-              fitimi: item.fitimiItem,
-            })),
+        await tx.sale.update({
+          where: { id: saleId },
+          data: {
+            totali,
+            fitimi,
+            items: {
+              create: validatedItems.map((item) => ({
+                productId: item.productId,
+                emriProduktit: item.emriProduktit,
+                sasia: item.sasia,
+                cmimiBlerjes: item.cmimiBlerjes,
+                cmimiShitjes: item.cmimiShitjes,
+                fitimi: item.fitimiItem,
+              })),
+            },
           },
-        },
-      })
-
-      for (const item of validatedItems) {
-        await tx.product.updateMany({
-          where: { id: item.productId, organizationId: organizationId! },
-          data: { sasia: { decrement: item.sasia } },
         })
-      }
-    })
+
+        await applyStockDeltas(tx, deltaByProduct, {
+          organizationId: organizationId!,
+          nameOf: (id) => productById.get(id)?.emri,
+        })
+      },
+      { timeout: SALE_TX_TIMEOUT_MS, maxWait: SALE_TX_MAX_WAIT_MS },
+    )
 
     invalidateTags(orgTag(organizationId!, 'sales'), orgTag(organizationId!, 'products'))
 
@@ -166,9 +173,21 @@ async function handlePut(req: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json(updatedSale)
   } catch (error) {
-    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'PUT' })
-    console.error('Sale PUT error:', error)
-    return errorResponse(req, 'Gabim në server', 500)
+    const classified = classifyError(error)
+
+    if (classified instanceof StockConflictError) {
+      recordStockConflict()
+      recordTransactionFailure('update-sale')
+      return errorResponseFrom(req, classified)
+    }
+
+    if (classified.status >= 500) {
+      recordTransactionFailure('update-sale')
+      captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'PUT' })
+    }
+
+    console.error('Sale PUT error:', classified.detail ?? classified.message)
+    return errorResponseFrom(req, classified)
   }
 }
 
@@ -198,16 +217,19 @@ async function handleDelete(req: NextRequest, { params }: RouteContext) {
       return errorResponse(req, 'Fatura nuk u gjet', 404)
     }
 
-    await prisma.$transaction(async (tx) => {
-      for (const item of sale.items) {
-        await tx.product.updateMany({
-          where: { id: item.productId, organizationId: organizationId! },
-          data: { sasia: { increment: item.sasia } },
-        })
-      }
+    // Deleting a sale returns everything it held — all deltas positive, so the
+    // guard never trips, but the shared ordering still applies so a deletion
+    // cannot deadlock against a concurrent sale touching the same products.
+    const returnedByProduct = sumByProduct(sale.items)
 
-      await tx.sale.delete({ where: { id: saleId } })
-    })
+    await prisma.$transaction(
+      async (tx) => {
+        await applyStockDeltas(tx, returnedByProduct, { organizationId: organizationId! })
+
+        await tx.sale.delete({ where: { id: saleId } })
+      },
+      { timeout: SALE_TX_TIMEOUT_MS, maxWait: SALE_TX_MAX_WAIT_MS },
+    )
 
     invalidateTags(orgTag(organizationId!, 'sales'), orgTag(organizationId!, 'products'))
 
@@ -225,9 +247,15 @@ async function handleDelete(req: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'DELETE' })
-    console.error('Sale DELETE error:', error)
-    return errorResponse(req, 'Gabim në server', 500)
+    const classified = classifyError(error)
+
+    if (classified.status >= 500) {
+      recordTransactionFailure('delete-sale')
+      captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales/[id]', action: 'DELETE' })
+    }
+
+    console.error('Sale DELETE error:', classified.detail ?? classified.message)
+    return errorResponseFrom(req, classified)
   }
 }
 

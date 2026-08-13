@@ -9,6 +9,12 @@ import { errorResponse, instrumentRoute } from '@/lib/logger'
 import { invalidateTags, orgTag } from '@/lib/cache'
 import { withIdempotency } from '@/lib/idempotency'
 import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
+import { classifyError, errorResponseFrom } from '@/lib/errors'
+import { recordTransactionFailure } from '@/lib/metrics'
+
+/** A supply can carry many lines; it gets more room than a POS sale. */
+const SUPPLY_TX_TIMEOUT_MS = parseInt(process.env.SUPPLY_TX_TIMEOUT_MS ?? '20000')
+const SUPPLY_TX_MAX_WAIT_MS = parseInt(process.env.SUPPLY_TX_MAX_WAIT_MS ?? '5000')
 
 async function handleGet(req: NextRequest) {
   const { userId, role, organizationId, error } = await requirePermission('supplies:read')
@@ -139,7 +145,15 @@ async function createSupply(
         },
       })
 
-      for (const item of items) {
+      // Ascending product id, matching the sale paths. A supply only ever
+      // increments stock so it cannot oversell, but it locks the same rows a
+      // concurrent sale is decrementing — without a shared order the two can
+      // deadlock.
+      const orderedItems = [...items].sort(
+        (a: { productId: number }, b: { productId: number }) => a.productId - b.productId,
+      )
+
+      for (const item of orderedItems) {
         await tx.product.updateMany({
           where: { id: item.productId, organizationId },
           data: {
@@ -150,7 +164,7 @@ async function createSupply(
       }
 
       return newSupply
-    })
+    }, { timeout: SUPPLY_TX_TIMEOUT_MS, maxWait: SUPPLY_TX_MAX_WAIT_MS })
 
     // A supply raises stock and may change purchase prices, so product-derived
     // payloads (dashboard, reorder suggestions) are stale too.
@@ -170,9 +184,15 @@ async function createSupply(
 
     return NextResponse.json(supply, { status: 201 })
   } catch (error) {
-    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/supplies', action: 'POST' })
-    console.error('Supplies POST error:', error)
-    return errorResponse(req, 'Gabim në server', 500)
+    const classified = classifyError(error)
+
+    if (classified.status >= 500) {
+      recordTransactionFailure('create-supply')
+      captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/supplies', action: 'POST' })
+    }
+
+    console.error('Supplies POST error:', classified.detail ?? classified.message)
+    return errorResponseFrom(req, classified)
   }
 }
 

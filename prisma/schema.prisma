@@ -272,3 +272,47 @@ model StaffSession {
   @@index([staffId])
   @@index([expiresAt])
 }
+
+/// Cross-instance duplicate-write protection.
+///
+/// One row per idempotent operation, owned by exactly one request. The unique
+/// constraint on (organizationId, userId, route, key) is what makes the claim
+/// atomic across Vercel instances: two concurrent duplicates both INSERT, the
+/// database admits one and rejects the other with a unique violation.
+///
+/// Deliberately carries no foreign key to Organization. The row is short-lived
+/// operational state, not tenant data: an FK would add a constraint check to
+/// the hottest write path in the system and couple key expiry to the
+/// organization lifecycle. Isolation is enforced instead by organizationId
+/// being part of the unique tuple and of every query's WHERE clause.
+/// BillingAuditLog already follows the same pattern.
+///
+/// Nothing sensitive is persisted. The request body is reduced to a
+/// non-reversible fingerprint, response headers are never stored (they can
+/// carry Set-Cookie), and responseBody holds only what was already sent to
+/// this same client.
+model IdempotencyRecord {
+  id             Int       @id @default(autoincrement())
+  organizationId Int
+  /// Supabase user id or `staff:<id>`.
+  userId         String
+  /// Route identifier, e.g. `POST /api/sales`.
+  route          String
+  /// Client-supplied Idempotency-Key header.
+  key            String
+  /// Non-reversible hash of the request body; never the body itself.
+  fingerprint    String
+  /// `in_progress` while a request owns the claim, `completed` once settled.
+  status         String    @default("in_progress")
+  responseStatus Int?
+  responseBody   Json?
+  claimedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  /// Claim lease while in progress, replay window once completed. A crashed
+  /// instance therefore releases its claim automatically instead of pinning
+  /// the key forever.
+  expiresAt      DateTime
+
+  @@unique([organizationId, userId, route, key])
+  @@index([expiresAt])
+}

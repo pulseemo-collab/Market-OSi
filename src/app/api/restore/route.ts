@@ -7,6 +7,9 @@ import * as Sentry from '@sentry/nextjs'
 import { createNotification, NOTIFICATION_TYPES, NOTIFICATION_SEVERITIES } from '@/lib/notifications'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
+import { LIMITS, withConcurrencyLimit } from '@/lib/overload'
+import { TIMEOUTS } from '@/lib/reliability'
+import { OverloadedError, classifyError, errorResponseFrom } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +36,28 @@ function validateBackup(data: unknown): data is Record<string, any> {
   }
 
   return true
+}
+
+/**
+ * Ceiling on rows a single restore may insert.
+ *
+ * The restore inserts row by row inside one transaction to rebuild foreign-key
+ * relationships through its id maps. That is correct but linear, so an
+ * oversized file would hold a connection and the tenant's locks until the
+ * transaction deadline, then roll all of it back — expensive work with a
+ * guaranteed useless outcome. Rejecting up front turns that into an immediate,
+ * explanatory 400.
+ */
+const MAX_RESTORE_ROWS = parseInt(process.env.MAX_RESTORE_ROWS ?? '50000')
+
+const RESTORED_COLLECTIONS = [
+  'suppliers', 'products', 'productBarcodes',
+  'supplies', 'supplyItems', 'sales', 'saleItems',
+] as const
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function countRestoreRows(b: Record<string, any>): number {
+  return RESTORED_COLLECTIONS.reduce((sum, key) => sum + (b[key]?.length ?? 0), 0)
 }
 
 async function handlePost(request: NextRequest) {
@@ -87,8 +112,23 @@ async function handlePost(request: NextRequest) {
     )
   }
 
+  const totalRows = countRestoreRows(b)
+  if (totalRows > MAX_RESTORE_ROWS) {
+    return errorResponse(
+      request,
+      `Backup-i është shumë i madh (${totalRows} rreshta, maksimumi ${MAX_RESTORE_ROWS})`,
+      400,
+    )
+  }
+
   try {
-    const counts = await prisma.$transaction(
+    // One restore at a time per organization. Two concurrent runs would each
+    // delete the tenant's data and re-insert their own, interleaving into a
+    // result belonging to neither backup. The limiter makes that unreachable
+    // rather than unlikely, and rejects the second caller immediately instead
+    // of holding it open behind the first.
+    const counts = await withConcurrencyLimit(LIMITS.restore, orgId, () =>
+      prisma.$transaction(
       async (tx) => {
         // Delete in reverse FK order (scoped to this org)
         await tx.auditLog.deleteMany({ where: { organizationId: orgId } })
@@ -243,7 +283,8 @@ async function handlePost(request: NextRequest) {
           saleItems: saleItemsRestored,
         }
       },
-      { timeout: 120_000 },
+        { timeout: TIMEOUTS.longRunning },
+      ),
     )
 
     await logAuditAction({
@@ -279,7 +320,17 @@ async function handlePost(request: NextRequest) {
 
     return NextResponse.json({ success: true, counts })
   } catch (err) {
-    console.error('[Restore] Error:', err)
+    const classified = classifyError(err)
+
+    // Rejected at the concurrency gate: nothing was deleted, nothing was
+    // written, and the tenant's data is exactly as it was. Reporting it as a
+    // failed restore would be false, so it returns 503 without the audit entry
+    // and alarming notification the real failure path raises.
+    if (classified instanceof OverloadedError) {
+      return errorResponseFrom(request, classified)
+    }
+
+    console.error('[Restore] Error:', classified.detail ?? classified.message)
 
     Sentry.captureException(err, {
       tags: { operation: 'backup_restore', organizationId: String(orgId) },
@@ -297,10 +348,13 @@ async function handlePost(request: NextRequest) {
       action: AUDIT_ACTIONS.BACKUP_RESTORE_FAILED,
       entityType: AUDIT_ENTITY_TYPES.BACKUP,
       description: `Dështoi rikuperimi i backup-it nga "${meta.organizationName}"`,
+      // The audit trail records the classified code, not the driver message:
+      // audit entries are readable in the UI, and a raw Prisma error can carry
+      // table names, constraint names and fragments of the failing statement.
       metadata: {
         backupOrgId: meta.organizationId,
         backupOrgName: meta.organizationName,
-        error: err instanceof Error ? err.message : 'E panjohur',
+        errorCode: classified.code,
       },
     })
 
@@ -308,15 +362,15 @@ async function handlePost(request: NextRequest) {
       organizationId: orgId,
       type: NOTIFICATION_TYPES.RESTORE_FAILED,
       title: 'Rikuperimi Dështoi',
-      message: `Dështoi rikuperimi nga "${meta.organizationName}": ${err instanceof Error ? err.message : 'Gabim i panjohur'}`,
+      message: `Dështoi rikuperimi nga "${meta.organizationName}": ${classified.clientMessage}`,
       severity: NOTIFICATION_SEVERITIES.CRITICAL,
       metadata: {
         backupOrgName: meta.organizationName,
-        error: err instanceof Error ? err.message : 'E panjohur',
+        errorCode: classified.code,
       },
     })
 
-    return errorResponse(request, 'Gabim gjatë rikuperimit të të dhënave', 500)
+    return errorResponseFrom(request, classified)
   }
 }
 

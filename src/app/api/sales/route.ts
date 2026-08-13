@@ -13,8 +13,22 @@ import { invalidateTags, orgTag } from '@/lib/cache'
 import { withIdempotency } from '@/lib/idempotency'
 import { paginationHeaders, parsePageRequest } from '@/lib/pagination'
 import { queueLowStockScan } from '@/lib/stock-alerts'
+import { StockConflictError, classifyError, errorResponseFrom } from '@/lib/errors'
+import { recordStockConflict, recordTransactionFailure } from '@/lib/metrics'
+import { applyStockDeltas, netDeltas, sumByProduct } from '@/lib/stock'
 
 const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
+
+/**
+ * Interactive-transaction bounds for a sale.
+ *
+ * `timeout` caps how long the transaction may hold its row locks — a stuck sale
+ * must not block every other cashier selling the same product. `maxWait` caps
+ * how long it waits for a pooled connection before failing, so a saturated pool
+ * surfaces as a fast error rather than a hung terminal.
+ */
+const SALE_TX_TIMEOUT_MS = parseInt(process.env.SALE_TX_TIMEOUT_MS ?? '10000')
+const SALE_TX_MAX_WAIT_MS = parseInt(process.env.SALE_TX_MAX_WAIT_MS ?? '5000')
 
 async function handleGet(req: NextRequest) {
   // Dual auth: Supabase session or staff cashier session
@@ -192,11 +206,22 @@ async function createSale(req: NextRequest, actor: SaleActor) {
       return errorResponse(req, 'Nuk ka produkte në shitje', 400)
     }
 
+    for (const item of items) {
+      if (!Number.isFinite(item.sasia) || item.sasia <= 0) {
+        return errorResponse(req, `Sasia duhet të jetë pozitive për: ${item.emriProduktit}`, 400)
+      }
+    }
+
+    // A basket can list the same product on more than one line. Validating each
+    // line against full stock would let two lines of one unit each pass against
+    // a stock of one, so demand is summed per product and checked once.
+    const requestedByProduct = sumByProduct(items)
+
     // One lookup for the whole basket. This previously ran a query per line
     // item for validation and another per line item inside the transaction —
     // three round trips per product on a POS request.
     const products = await prisma.product.findMany({
-      where: { id: { in: items.map((i) => i.productId) }, organizationId },
+      where: { id: { in: Array.from(requestedByProduct.keys()) }, organizationId },
     })
     const productById = new Map(products.map((p) => [p.id, p]))
 
@@ -210,50 +235,67 @@ async function createSale(req: NextRequest, actor: SaleActor) {
         return errorResponse(req, `Produkti nuk u gjet: ${item.emriProduktit}`, 404)
       }
 
-      if (product.sasia < item.sasia) {
-        return errorResponse(req, `Stoku i pamjaftueshëm për: ${product.emri}. Stoku: ${product.sasia}`, 400)
-      }
-
       totali += product.cmimiShitjes * item.sasia
       fitimi += (product.cmimiShitjes - product.cmimiBlerjes) * item.sasia
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
-      const newSale = await tx.sale.create({
-        data: {
-          totali,
-          fitimi,
-          shenime: shenime || null,
-          paymentMethod: validPaymentMethod,
-          organizationId,
-          staffId: saleStaffId ?? null,
-          staffName: saleStaffName ?? null,
-          items: {
-            create: items.map((item) => {
-              const product = productById.get(item.productId)!
-              return {
-                productId: item.productId,
-                emriProduktit: item.emriProduktit,
-                sasia: item.sasia,
-                cmimiBlerjes: product.cmimiBlerjes,
-                cmimiShitjes: product.cmimiShitjes,
-                fitimi: (product.cmimiShitjes - product.cmimiBlerjes) * item.sasia,
-              }
-            }),
-          },
-        },
-        include: { items: { include: { product: true } } },
-      })
-
-      for (const item of items) {
-        await tx.product.updateMany({
-          where: { id: item.productId, organizationId },
-          data: { sasia: { decrement: item.sasia } },
-        })
+    // Reject what is already impossible before opening a transaction, so the
+    // common "not enough stock" case stays a cheap 400 and never holds a row
+    // lock. The authoritative check is the guarded decrement below.
+    for (const [productId, requested] of Array.from(requestedByProduct)) {
+      const product = productById.get(productId)!
+      if (product.sasia < requested) {
+        return errorResponse(
+          req,
+          `Stoku i pamjaftueshëm për: ${product.emri}. Stoku: ${product.sasia}`,
+          400,
+        )
       }
+    }
 
-      return newSale
-    })
+    // A sale only consumes stock, so every delta is negative.
+    const stockDeltas = netDeltas(new Map(), requestedByProduct)
+
+    const sale = await prisma.$transaction(
+      async (tx) => {
+        const newSale = await tx.sale.create({
+          data: {
+            totali,
+            fitimi,
+            shenime: shenime || null,
+            paymentMethod: validPaymentMethod,
+            organizationId,
+            staffId: saleStaffId ?? null,
+            staffName: saleStaffName ?? null,
+            items: {
+              create: items.map((item) => {
+                const product = productById.get(item.productId)!
+                return {
+                  productId: item.productId,
+                  emriProduktit: item.emriProduktit,
+                  sasia: item.sasia,
+                  cmimiBlerjes: product.cmimiBlerjes,
+                  cmimiShitjes: product.cmimiShitjes,
+                  fitimi: (product.cmimiShitjes - product.cmimiBlerjes) * item.sasia,
+                }
+              }),
+            },
+          },
+          include: { items: { include: { product: true } } },
+        })
+
+        // The stock check that actually decides the sale — a guarded, ordered
+        // decrement that throws and rolls the sale back if another transaction
+        // took the units first. See src/lib/stock.ts.
+        await applyStockDeltas(tx, stockDeltas, {
+          organizationId,
+          nameOf: (id) => productById.get(id)?.emri,
+        })
+
+        return newSale
+      },
+      { timeout: SALE_TX_TIMEOUT_MS, maxWait: SALE_TX_MAX_WAIT_MS },
+    )
 
     // Sales change revenue totals; the stock decrement changes product figures.
     invalidateTags(orgTag(organizationId, 'sales'), orgTag(organizationId, 'products'))
@@ -292,9 +334,24 @@ async function createSale(req: NextRequest, actor: SaleActor) {
 
     return NextResponse.json(sale, { status: 201 })
   } catch (error) {
-    captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales', action: 'POST' })
-    console.error('Sales POST error:', error)
-    return errorResponse(req, 'Gabim në server', 500)
+    const classified = classifyError(error)
+
+    // A lost stock race is an expected outcome under concurrency, not a fault.
+    // It rolled the sale back cleanly, so it is reported as a 409 the terminal
+    // can act on and is never sent to Sentry as an exception.
+    if (classified instanceof StockConflictError) {
+      recordStockConflict()
+      recordTransactionFailure('create-sale')
+      return errorResponseFrom(req, classified)
+    }
+
+    if (classified.status >= 500) {
+      recordTransactionFailure('create-sale')
+      captureApiError(error, { userId, userEmail, role, organizationId, route: '/api/sales', action: 'POST' })
+    }
+
+    console.error('Sales POST error:', classified.detail ?? classified.message)
+    return errorResponseFrom(req, classified)
   }
 }
 

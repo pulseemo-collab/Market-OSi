@@ -92,8 +92,92 @@ export function recordIdempotencyStored(): void {
   bump(counters, 'idempotency.stored')
 }
 
+/** Same key replayed with a different payload — a client-side defect. */
+export function recordIdempotencyConflict(route: string): void {
+  bump(counters, 'idempotency.key_reuse_conflict')
+  bump(counters, `idempotency.key_reuse_conflict.${route}`)
+}
+
+/**
+ * A duplicate arrived while another instance still held the claim and did not
+ * finish within the bounded wait. Expected under load; a sustained rise means
+ * the wrapped handler has slowed down.
+ */
+export function recordIdempotencyInProgress(route: string): void {
+  bump(counters, 'idempotency.in_progress')
+  bump(counters, `idempotency.in_progress.${route}`)
+}
+
+/**
+ * The durable store was unreachable and the request fell back to same-instance
+ * protection only. Non-zero means cross-instance deduplication is not currently
+ * guaranteed — worth an alert.
+ */
+export function recordIdempotencyDegraded(): void {
+  bump(counters, 'idempotency.durable_unavailable')
+}
+
 export function recordQuery(model: string, action: string, durationMs: number): void {
   observe(`query.${model}.${action}`, durationMs, SLOW_QUERY_MS)
+}
+
+// ---------------------------------------------------------------------------
+// Reliability counters
+// ---------------------------------------------------------------------------
+//
+// Every label below is built from a compile-time constant — an operation name,
+// a dependency name, an error code. None is derived from a request path, an
+// organization id, a user id or a request id, so the label set cannot grow with
+// traffic. `MAX_LABELS` remains the backstop, not the plan.
+
+export function recordTimeout(operation: string): void {
+  bump(counters, `reliability.timeout.${operation}`)
+  bump(counters, 'reliability.timeout')
+}
+
+export function recordRetry(operation: string): void {
+  bump(counters, `reliability.retry.${operation}`)
+  bump(counters, 'reliability.retry')
+}
+
+export function recordRetryExhausted(operation: string): void {
+  bump(counters, `reliability.retry_exhausted.${operation}`)
+  bump(counters, 'reliability.retry_exhausted')
+}
+
+export function recordCircuitState(dependency: string, state: string): void {
+  bump(counters, `reliability.circuit.${dependency}.${state}`)
+  if (state === 'OPEN') bump(counters, 'reliability.circuit_open')
+}
+
+export function recordDependencyFailure(dependency: string): void {
+  bump(counters, `reliability.dependency_failure.${dependency}`)
+}
+
+export function recordOverloadRejection(operation: string): void {
+  bump(counters, `reliability.overload_rejected.${operation}`)
+  bump(counters, 'reliability.overload_rejected')
+}
+
+/** A write lost a race for stock and was rejected instead of overselling. */
+export function recordStockConflict(): void {
+  bump(counters, 'reliability.stock_conflict')
+}
+
+/** A multi-write business transaction rolled back. */
+export function recordTransactionFailure(operation: string): void {
+  bump(counters, `reliability.transaction_failure.${operation}`)
+  bump(counters, 'reliability.transaction_failure')
+}
+
+/** Classified failures by taxonomy code — bounded by the ErrorCode union. */
+export function recordErrorCode(code: string): void {
+  bump(counters, `error.${code}`)
+}
+
+export function recordJobOutcome(jobName: string, outcome: 'succeeded' | 'failed' | 'rejected'): void {
+  bump(counters, `job.${outcome}.${jobName}`)
+  bump(counters, `job.${outcome}`)
 }
 
 export function recordEndpoint(

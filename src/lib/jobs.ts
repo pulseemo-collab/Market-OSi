@@ -18,6 +18,9 @@
  */
 
 import { logJobFailure } from './logger'
+import { classifyError } from './errors'
+import { withTimeout } from './reliability'
+import { recordJobOutcome } from './metrics'
 
 export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed'
 
@@ -46,18 +49,41 @@ export interface EnqueueOptions {
   retryDelayMs?: number
   /** Tenant the work belongs to, recorded on failure logs. */
   organizationId?: number
+  /** Ceiling on one attempt. Defaults to JOB_ATTEMPT_TIMEOUT_MS. */
+  attemptTimeoutMs?: number
 }
 
 const MAX_HISTORY = 200
 const DEFAULT_MAX_ATTEMPTS = 3
 const DEFAULT_RETRY_DELAY_MS = 500
 
+/**
+ * Ceiling on jobs executing at once, and on jobs waiting to.
+ *
+ * Without the first, a burst of sales starts a burst of background scans that
+ * compete with the POS requests that created them for the same connection pool
+ * — the load spike amplifies itself. Without the second, the wait list is an
+ * unbounded in-memory queue; past the cap, work is refused and logged rather
+ * than silently accumulating.
+ */
+const MAX_CONCURRENT = parseInt(process.env.JOB_MAX_CONCURRENT ?? '4')
+const MAX_QUEUED = parseInt(process.env.JOB_MAX_QUEUED ?? '100')
+/** Ceiling on a single attempt, so a hung handler cannot occupy a slot forever. */
+const JOB_ATTEMPT_TIMEOUT_MS = parseInt(process.env.JOB_ATTEMPT_TIMEOUT_MS ?? '30000')
+
 const handlers = new Map<string, JobHandler<never>>()
 const history = new Map<string, JobRecord>()
+
+interface QueuedJob {
+  run: () => Promise<void>
+}
+
+const queue: QueuedJob[] = []
 
 let running = 0
 let totalSucceeded = 0
 let totalFailed = 0
+let totalRejected = 0
 
 function remember(record: JobRecord): void {
   while (history.size >= MAX_HISTORY) {
@@ -70,6 +96,26 @@ function remember(record: JobRecord): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Exponential backoff with full jitter.
+ *
+ * Jobs enqueued by the same traffic spike fail at the same moment for the same
+ * reason; retrying them all on an identical schedule reproduces the spike that
+ * caused the failure. Randomising the interval spreads the second wave.
+ */
+function backoff(attempt: number, baseDelayMs: number): number {
+  const ceiling = Math.min(30_000, baseDelayMs * 2 ** (attempt - 1))
+  return Math.floor(Math.random() * ceiling)
+}
+
+/** Starts queued work while a slot is free. */
+function pump(): void {
+  while (running < MAX_CONCURRENT && queue.length > 0) {
+    const next = queue.shift()!
+    void next.run()
+  }
 }
 
 /**
@@ -86,6 +132,7 @@ async function dispatch<P>(
   maxAttempts: number,
   retryDelayMs: number,
   organizationId: number | undefined,
+  attemptTimeoutMs: number,
 ): Promise<void> {
   running += 1
   record.status = 'running'
@@ -95,26 +142,46 @@ async function dispatch<P>(
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       record.attempts = attempt
       try {
-        await handler(payload, { jobId: record.id, attempt })
+        await withTimeout(() => handler(payload, { jobId: record.id, attempt }), {
+          operation: `job:${record.name}`,
+          timeoutMs: attemptTimeoutMs,
+        })
         record.status = 'succeeded'
         record.finishedAt = Date.now()
         totalSucceeded += 1
+        recordJobOutcome(record.name, 'succeeded')
         return
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        record.error = message
-        if (attempt === maxAttempts) {
+        const error = classifyError(err)
+        record.error = error.message
+
+        // A deterministic failure — a validation error, a missing row, a bug —
+        // will fail identically on every attempt. Burning the retry budget on
+        // it only delays the terminal state and adds load, so it ends here.
+        const lastAttempt = attempt === maxAttempts
+        if (lastAttempt || !error.retryable) {
+          // Record *why* it stopped, not just what failed: "stopped early
+          // because the error was deterministic" and "exhausted three attempts"
+          // call for different responses from whoever reads the job history.
+          record.error = error.retryable
+            ? error.message
+            : `${error.message} (non-retryable, ${error.code})`
           record.status = 'failed'
           record.finishedAt = Date.now()
           totalFailed += 1
-          logJobFailure(record.name, record.id, attempt, message, organizationId)
+          recordJobOutcome(record.name, 'failed')
+          logJobFailure(record.name, record.id, attempt, record.error, organizationId)
           return
         }
-        await sleep(retryDelayMs * attempt)
+
+        await sleep(backoff(attempt, retryDelayMs))
       }
     }
   } finally {
     running -= 1
+    // Hand the slot to whatever is waiting, on the next tick so a long queue
+    // cannot monopolise the current one.
+    setImmediate(pump)
   }
 }
 
@@ -150,16 +217,31 @@ export function enqueueJob<P>(name: string, payload: P, options: EnqueueOptions 
     return id
   }
 
-  setImmediate(() => {
-    void dispatch(
-      record,
-      payload,
-      handler,
-      options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
-      options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS,
-      options.organizationId,
-    )
+  if (queue.length >= MAX_QUEUED) {
+    record.status = 'failed'
+    record.finishedAt = Date.now()
+    record.error = 'Queue full'
+    totalRejected += 1
+    recordJobOutcome(name, 'rejected')
+    logJobFailure(name, id, 0, `queue full (${queue.length}/${MAX_QUEUED})`, options.organizationId)
+    return id
+  }
+
+  queue.push({
+    run: () =>
+      dispatch(
+        record,
+        payload,
+        handler,
+        options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+        options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS,
+        options.organizationId,
+        options.attemptTimeoutMs ?? JOB_ATTEMPT_TIMEOUT_MS,
+      ),
   })
+
+  // Start on the next tick so the HTTP response is already on its way out.
+  setImmediate(pump)
 
   return id
 }
@@ -172,8 +254,21 @@ export function getJob(id: string): JobRecord | undefined {
 export function jobStats(): {
   registered: number
   running: number
+  queued: number
+  maxConcurrent: number
+  maxQueued: number
   succeeded: number
   failed: number
+  rejected: number
 } {
-  return { registered: handlers.size, running, succeeded: totalSucceeded, failed: totalFailed }
+  return {
+    registered: handlers.size,
+    running,
+    queued: queue.length,
+    maxConcurrent: MAX_CONCURRENT,
+    maxQueued: MAX_QUEUED,
+    succeeded: totalSucceeded,
+    failed: totalFailed,
+    rejected: totalRejected,
+  }
 }
