@@ -21,6 +21,19 @@ export async function middleware(request: NextRequest) {
     return apiRes
   }
 
+  // Recovery links arrive carrying a one-time PKCE code whose verifier lives in
+  // an `sb-<ref>-auth-token-code-verifier` cookie. Building a Supabase client
+  // here would call getUser(), which clears that whole cookie family when there
+  // is no valid session yet — destroying the verifier before the exchange can
+  // read it. These paths do their own exchange, so let them through untouched.
+  const isRecoveryEntry =
+    pathname.startsWith('/auth/') ||
+    (pathname === '/reset-password' && request.nextUrl.searchParams.has('code'))
+
+  if (isRecoveryEntry) {
+    return withRequestId(NextResponse.next({ request }), requestId)
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -50,23 +63,22 @@ export async function middleware(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams
 
-  // Auth callback must be allowed through BEFORE the recovery-flow check so that
-  // a normal login ?code= param is not mistaken for a password-reset code.
-  if (pathname.startsWith('/auth/')) {
-    return withRequestId(supabaseResponse, requestId)
-  }
-
   // Recovery flow: any of these params on a non-/reset-password page means the
   // link was opened directly. Redirect to /reset-password, preserving the params.
+  //
+  // A bare `error` is deliberately not a trigger. /auth/callback reports failure
+  // as /login/manager?error=link_expired, which this rule would bounce back to
+  // /reset-password, which has no session and returns to the same URL — a
+  // redirect loop. Supabase reports its own recovery failures in the URL
+  // fragment, which never reaches the server, so nothing is lost by dropping it.
   const isRecoveryFlow =
     sp.get('type') === 'recovery' ||
     sp.has('access_token') ||
     sp.has('refresh_token') ||
     sp.has('code') ||
-    sp.has('error') ||
     sp.has('error_code')
 
-  if (isRecoveryFlow && pathname !== '/reset-password') {
+  if (isRecoveryFlow && pathname !== '/reset-password' && pathname !== '/login/manager') {
     const url = request.nextUrl.clone()
     url.pathname = '/reset-password'
     return withRequestId(NextResponse.redirect(url), requestId)

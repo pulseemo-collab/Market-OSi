@@ -24,75 +24,71 @@ export default function ResetPasswordPage() {
 
     const supabase = createClient()
 
-    // PKCE flow: ?code=... in query params
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(async ({ data, error }) => {
-        if (error) {
-          // Code already consumed (e.g. Strict Mode second run) — check for an existing session.
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session) {
-            console.log('[ResetPassword] Code exchange failed but session exists (re-used code OK):', session.user?.email)
-            readyRef.current = true
-            setReady(true)
-          } else {
-            console.log('[ResetPassword] Code exchange failed, no session:', error.message)
-            setExchangeError(true)
-          }
-        } else {
-          console.log('[ResetPassword] Code exchange success, session:', data.session?.user?.email)
-          readyRef.current = true
-          setReady(true)
-        }
-      })
-      return
+    const markReady = (source: string, email?: string | null) => {
+      if (readyRef.current) return
+      console.log(`[ResetPassword] ready via ${source}`, email ?? '')
+      readyRef.current = true
+      setReady(true)
     }
 
-    // Implicit flow: hash tokens — Supabase fires PASSWORD_RECOVERY or SIGNED_IN
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-        console.log('[ResetPassword] Auth state change:', event, session?.user?.email)
-        readyRef.current = true
-        setReady(true)
-      }
-    })
-
-    // Fallback: session already processed before the listener registered
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !readyRef.current) {
-        console.log('[ResetPassword] Existing session found (no code):', session.user?.email)
-        readyRef.current = true
-        setReady(true)
-      }
-    })
-
-    // Explicit hash token parsing as a last resort
-    const hash = window.location.hash
-    if (hash) {
-      const hashParams = new URLSearchParams(hash.substring(1))
-      const accessToken = hashParams.get('access_token')
-      const refreshToken = hashParams.get('refresh_token')
-      if (accessToken) {
-        supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken ?? '',
-        }).then(({ error }) => {
-          if (!error && !readyRef.current) {
-            readyRef.current = true
-            setReady(true)
-          }
-        })
-      }
-    }
-
+    // Registered before any branch below, so every way of failing to establish a
+    // session — including an exchange that rejects or never settles — still ends
+    // at a visible error instead of an endless spinner.
     const timeout = setTimeout(() => {
       if (!readyRef.current) {
-        console.log('[ResetPassword] Timeout — no session established after 5 s')
+        console.log('[ResetPassword] timeout — no session after 8 s')
         setExchangeError(true)
       }
-    }, 5000)
+    }, 8000)
+
+    // The common case: /auth/callback already exchanged the code server-side and
+    // set the session cookie, so the session is present before this page renders.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && ['PASSWORD_RECOVERY', 'SIGNED_IN', 'INITIAL_SESSION'].includes(event)) {
+        markReady(event, session.user?.email)
+      }
+    })
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (session) markReady('existing session', session.user?.email)
+      })
+      .catch((err) => console.log('[ResetPassword] getSession threw:', err))
+
+    // Older links still in inboxes point straight here with the code unexchanged.
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      supabase.auth
+        .exchangeCodeForSession(code)
+        .then(async ({ data, error }) => {
+          if (!error) {
+            markReady('code exchange', data.session?.user?.email)
+            return
+          }
+          // Code already consumed (e.g. Strict Mode double-invoke) — the session
+          // it produced may still be usable.
+          console.log('[ResetPassword] code exchange failed:', error.message)
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session) markReady('session after failed exchange', session.user?.email)
+        })
+        .catch((err) => console.log('[ResetPassword] code exchange threw:', err))
+    }
+
+    // Implicit flow: tokens in the URL fragment.
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const accessToken = hashParams.get('access_token')
+    if (accessToken) {
+      supabase.auth
+        .setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get('refresh_token') ?? '',
+        })
+        .then(({ data, error }) => {
+          if (!error) markReady('hash tokens', data.session?.user?.email)
+        })
+        .catch((err) => console.log('[ResetPassword] setSession threw:', err))
+    }
 
     return () => {
       subscription.unsubscribe()
@@ -143,6 +139,10 @@ export default function ResetPasswordPage() {
     }
 
     console.log('[ResetPassword] updateUser success')
+    // Release the recovery pin before signing out. The cookie is httpOnly, so it
+    // has to be cleared server-side; while it is set, middleware sends every
+    // authenticated request back here — including the login that follows.
+    await fetch('/api/auth/recovery-complete', { method: 'POST' }).catch(() => {})
     await supabase.auth.signOut()
     router.push('/login/manager?success=password_updated')
   }

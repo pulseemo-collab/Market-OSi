@@ -48,5 +48,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/login/manager?error=link_expired`)
+  // Failure: drop any stale recovery pin so the user is not held on
+  // /reset-password by a previous attempt they can no longer complete.
+  const failed = NextResponse.redirect(`${origin}/login/manager?error=link_expired`)
+  failed.cookies.set('recovery_in_progress', '', {
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+  })
+  return failed
 }

@@ -15,8 +15,13 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     const supabase = createClient()
+    // Land on /auth/callback rather than /reset-password directly: the code
+    // exchange happens server-side there, where the verifier cookie is readable
+    // and the resulting session is written as a normal cookie. The reset page
+    // then only has to render a form. The outcome is deliberately not surfaced
+    // to the user — a failure here must not reveal whether the email exists.
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     })
 
     setSubmitted(true)
