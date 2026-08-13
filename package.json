@@ -12,6 +12,7 @@
     "verify:idempotency": "node --require ts-node/register/transpile-only scripts/verify-idempotency.ts",
     "verify:sales-e2e": "node --require ts-node/register/transpile-only scripts/verify-sales-e2e.ts",
     "verify:release-qa": "node --require ts-node/register/transpile-only scripts/verify-release-qa.ts",
+    "verify:platform-admin": "node --require ts-node/register/transpile-only scripts/verify-platform-admin.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",

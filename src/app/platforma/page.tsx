@@ -8,7 +8,8 @@ import PageHeader from '@/components/ui/PageHeader'
 import Modal from '@/components/ui/Modal'
 import { formatDateTime } from '@/lib/utils'
 import { ROLE_LABELS } from '@/lib/roles'
-import { getPlanInfo, getStatusInfo, BILLING_STATUSES } from '@/lib/billing'
+import { getPlanInfo, getStatusInfo } from '@/lib/billing'
+import { resolveOrgState, formatOrgDate, type OrgStateKind } from '@/lib/org-state'
 import toast from 'react-hot-toast'
 import { useIdempotencyKey } from '@/hooks/useIdempotencyKey'
 import {
@@ -41,6 +42,8 @@ interface OrgSubscription {
   trialEndsAt: string | null
   currentPeriodEnd: string | null
   nextPlan: string | null
+  cancelAtPeriodEnd: boolean
+  cancelledAt: string | null
 }
 
 interface OrgRow {
@@ -174,8 +177,9 @@ export default function PlatformaPage() {
   const [newOrgName, setNewOrgName] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // Toggle active
+  // Suspend / reactivate
   const [togglingOrgId, setTogglingOrgId] = useState<number | null>(null)
+  const [pendingToggle, setPendingToggle] = useState<OrgRow | null>(null)
 
   // Users modal
   const [usersOrgId, setUsersOrgId] = useState<number | null>(null)
@@ -250,13 +254,24 @@ export default function PlatformaPage() {
   // ─── Toggle org active ────────────────────────────────────────────────────
 
   async function toggleOrg(org: OrgRow) {
+    const nextActive = !org.isActive
     setTogglingOrgId(org.id)
     try {
-      const res = await fetch(`/api/platform/organizations/${org.id}`, { method: 'PATCH' })
+      // The desired state is sent explicitly so a stale table or a double
+      // submit cannot flip the tenant back to where it started.
+      const res = await fetch(`/api/platform/organizations/${org.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: nextActive }),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gabim')
-      const label = data.organization.isActive ? 'aktivizuar' : 'çaktivizuar'
-      toast.success(`"${org.name}" u ${label}`)
+      toast.success(
+        data.organization.isActive
+          ? `"${org.name}" u riaktivizua`
+          : `"${org.name}" u pezullua — aksesi u bllokua`,
+      )
+      setPendingToggle(null)
       fetchStats()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Gabim gjatë ndryshimit')
@@ -389,17 +404,33 @@ export default function PlatformaPage() {
       ]
     : []
 
-  // Subscription summary counts
-  const subCounts = stats
-    ? stats.organizations.reduce(
-        (acc, org) => {
-          const s = org.subscription?.status ?? 'none'
-          acc[s] = (acc[s] ?? 0) + 1
-          return acc
-        },
-        {} as Record<string, number>
-      )
+  // Summary counts by real lifecycle state, so a scheduled cancellation and a
+  // platform suspension each get their own tally instead of both landing in
+  // whatever their raw subscription status happened to be.
+  const stateCounts = stats
+    ? stats.organizations.reduce((acc, org) => {
+        const kind = resolveOrgState(org).kind
+        acc[kind] = (acc[kind] ?? 0) + 1
+        return acc
+      }, {} as Partial<Record<OrgStateKind, number>>)
     : {}
+
+  const SUMMARY_ORDER: { kind: OrgStateKind; label: string; color: string }[] = [
+    { kind: 'active',          label: 'Aktiv',           color: 'bg-green-100 text-green-700'   },
+    { kind: 'trialing',        label: 'Provë',           color: 'bg-yellow-100 text-yellow-700' },
+    { kind: 'cancelling',      label: 'Anulim i planifikuar', color: 'bg-orange-100 text-orange-700' },
+    { kind: 'cancelled',       label: 'Anuluar',         color: 'bg-red-100 text-red-700'       },
+    { kind: 'trial_expired',   label: 'Provë e skaduar', color: 'bg-slate-100 text-slate-500'   },
+    { kind: 'expired',         label: 'Skaduar',         color: 'bg-slate-100 text-slate-500'   },
+    { kind: 'suspended',       label: 'Pezulluar',       color: 'bg-red-100 text-red-700'       },
+    { kind: 'no_subscription', label: 'Pa abonim',       color: 'bg-slate-100 text-slate-500'   },
+  ]
+
+  // The same resolution the table uses, so the modal cannot disagree with the row.
+  const billingState =
+    billingOrg && billingDetail
+      ? resolveOrgState({ isActive: billingOrg.isActive, subscription: billingDetail })
+      : null
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -459,25 +490,12 @@ export default function PlatformaPage() {
             </div>
             <div className="card p-4">
               <div className="flex flex-wrap gap-3">
-                {Object.entries(BILLING_STATUSES).map(([key, info]) => {
-                  const count = subCounts[key] ?? 0
-                  return (
-                    <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${info.color}`}>
-                        {info.label}
-                      </span>
-                      <span className="text-sm font-bold text-slate-700">{count}</span>
-                    </div>
-                  )
-                })}
-                {(subCounts['none'] ?? 0) > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
-                      Pa abonim
-                    </span>
-                    <span className="text-sm font-bold text-slate-700">{subCounts['none']}</span>
+                {SUMMARY_ORDER.filter(({ kind }) => (stateCounts[kind] ?? 0) > 0).map(({ kind, label, color }) => (
+                  <div key={kind} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${color}`}>{label}</span>
+                    <span className="text-sm font-bold text-slate-700">{stateCounts[kind]}</span>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           </motion.div>
@@ -516,6 +534,7 @@ export default function PlatformaPage() {
                     <tbody>
                       {stats.organizations.map((org, idx) => {
                         const isToggling = togglingOrgId === org.id
+                        const state = resolveOrgState(org)
                         return (
                           <motion.tr
                             key={org.id}
@@ -541,8 +560,8 @@ export default function PlatformaPage() {
                               </div>
                             </td>
                             <td className="table-td">
-                              {org.subscription ? (
-                                <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1">
+                                {org.subscription && (
                                   <div className="flex items-center gap-1 flex-wrap">
                                     <PlanBadge plan={org.subscription.plan} />
                                     {org.subscription.nextPlan && (
@@ -552,21 +571,12 @@ export default function PlatformaPage() {
                                       </>
                                     )}
                                   </div>
-                                  <StatusBadge status={org.subscription.status} />
-                                  {org.subscription.trialEndsAt && (
-                                    <span className="text-xs text-slate-400">
-                                      Provë: {new Date(org.subscription.trialEndsAt).toLocaleDateString('sq-AL')}
-                                    </span>
-                                  )}
-                                  {org.subscription.currentPeriodEnd && (
-                                    <span className="text-xs text-slate-400">
-                                      Deri: {new Date(org.subscription.currentPeriodEnd).toLocaleDateString('sq-AL')}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-slate-300 italic">—</span>
-                              )}
+                                )}
+                                <span className={`self-start px-2 py-0.5 rounded-full text-xs font-semibold ${state.color}`}>
+                                  {state.label}
+                                </span>
+                                <span className="text-xs text-slate-400">{state.detail}</span>
+                              </div>
                             </td>
                             <td className="table-td text-right">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
@@ -595,19 +605,15 @@ export default function PlatformaPage() {
                             </td>
                             <td className="table-td">
                               <div className="flex items-center justify-center gap-1">
+                                {/* One user action: the modal it opens both lists
+                                    and adds members, so a second icon pointing
+                                    at the same handler was pure duplication. */}
                                 <button
                                   onClick={() => openUsers(org)}
-                                  title="Shiko përdoruesit"
+                                  title="Përdoruesit e organizatës"
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
                                 >
                                   <RiUserLine className="text-base" />
-                                </button>
-                                <button
-                                  onClick={() => openUsers(org)}
-                                  title="Shto përdorues"
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                                >
-                                  <RiUserAddLine className="text-base" />
                                 </button>
                                 <button
                                   onClick={() => openBilling(org)}
@@ -617,9 +623,9 @@ export default function PlatformaPage() {
                                   <RiCoinLine className="text-base" />
                                 </button>
                                 <button
-                                  onClick={() => toggleOrg(org)}
+                                  onClick={() => setPendingToggle(org)}
                                   disabled={isToggling}
-                                  title={org.isActive ? 'Çaktivizo' : 'Aktivizo'}
+                                  title={org.isActive ? 'Pezullo organizatën' : 'Riaktivizo organizatën'}
                                   className={`p-1.5 rounded-lg transition-colors ${
                                     org.isActive
                                       ? 'text-slate-400 hover:text-red-500 hover:bg-red-50'
@@ -676,6 +682,66 @@ export default function PlatformaPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── Suspend / Reactivate Confirmation ────────────────────────────────── */}
+      <Modal
+        isOpen={pendingToggle !== null}
+        onClose={() => setPendingToggle(null)}
+        title={pendingToggle?.isActive ? 'Pezullo organizatën' : 'Riaktivizo organizatën'}
+        size="sm"
+      >
+        {pendingToggle && (
+          <div className="space-y-4">
+            <div
+              className={`rounded-xl p-4 border ${
+                pendingToggle.isActive
+                  ? 'border-red-200 bg-red-50'
+                  : 'border-green-200 bg-green-50'
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold mb-2 ${
+                  pendingToggle.isActive ? 'text-red-800' : 'text-green-800'
+                }`}
+              >
+                {pendingToggle.name}
+              </p>
+              {pendingToggle.isActive ? (
+                <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+                  <li>Të gjithë përdoruesit e këtij marketi humbasin aksesin menjëherë.</li>
+                  <li>Kjo <strong>nuk</strong> është anulim abonimi — abonimi mbetet i paprekur.</li>
+                  <li>Asnjë e dhënë nuk fshihet: produktet, shitjet dhe stafi ruhen.</li>
+                  <li>Mund ta riaktivizoni në çdo moment nga kjo faqe.</li>
+                </ul>
+              ) : (
+                <ul className="text-xs text-green-700 space-y-1 list-disc list-inside">
+                  <li>Aksesi rikthehet për të gjithë përdoruesit e marketit.</li>
+                  <li>Abonimi vazhdon në gjendjen ku ishte më parë.</li>
+                  <li>Nëse abonimi ka skaduar, aksesi mbetet i bllokuar nga abonimi.</li>
+                </ul>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => toggleOrg(pendingToggle)}
+                disabled={togglingOrgId === pendingToggle.id}
+                className={`flex-1 flex items-center justify-center gap-2 text-sm px-4 py-2.5 rounded-lg text-white font-medium transition-colors disabled:opacity-50 ${
+                  pendingToggle.isActive
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {togglingOrgId === pendingToggle.id && <RiLoader4Line className="animate-spin" />}
+                {pendingToggle.isActive ? 'Po, pezullo' : 'Po, riaktivizo'}
+              </button>
+              <button onClick={() => setPendingToggle(null)} className="btn-secondary flex-1">
+                Anulo
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* ── Users Modal ──────────────────────────────────────────────────────── */}
@@ -800,7 +866,20 @@ export default function PlatformaPage() {
                   </div>
                 }
               />
-              <InfoLine label="Statusi" value={<StatusBadge status={billingDetail.status} />} />
+              <InfoLine
+                label="Gjendja"
+                value={
+                  billingState && (
+                    <div className="flex flex-col gap-1">
+                      <span className={`self-start px-2 py-0.5 rounded-full text-xs font-semibold ${billingState.color}`}>
+                        {billingState.label}
+                      </span>
+                      <span className="text-xs text-slate-500">{billingState.detail}</span>
+                    </div>
+                  )
+                }
+              />
+              <InfoLine label="Status abonimi" value={<StatusBadge status={billingDetail.status} />} />
               {billingDetail.trialEndsAt && (
                 <InfoLine label="Provë deri" value={new Date(billingDetail.trialEndsAt).toLocaleDateString('sq-AL')} />
               )}
@@ -814,9 +893,15 @@ export default function PlatformaPage() {
                 <InfoLine
                   label="Anulim"
                   value={
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                      Planifikuar në {billingDetail.currentPeriodEnd ? new Date(billingDetail.currentPeriodEnd).toLocaleDateString('sq-AL') : '—'}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className="self-start px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                        Klienti anuloi rinovimin
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {billingDetail.cancelledAt && `Kërkuar më ${formatOrgDate(billingDetail.cancelledAt)}. `}
+                        Aksesi vazhdon deri më {formatOrgDate(billingDetail.currentPeriodEnd)}.
+                      </span>
+                    </div>
                   }
                 />
               )}
@@ -980,9 +1065,12 @@ export default function PlatformaPage() {
             ) : (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                 <p className="text-sm font-semibold text-red-700 mb-1">Konfirmo anulimin e abonimit</p>
-                <p className="text-xs text-red-500 mb-3">
-                  Kjo vendos statusin si &quot;Anuluar&quot;. Perioda aktuale ruhet për historik.
-                </p>
+                <ul className="text-xs text-red-600 mb-3 space-y-1 list-disc list-inside">
+                  <li>Abonimi anulohet <strong>menjëherë</strong> — aksesi ndërpritet tani, jo në fund të periudhës.</li>
+                  <li>Kjo ndryshon nga anulimi i klientit, i cili ruan aksesin deri në fund të periudhës së paguar.</li>
+                  <li>Për të bllokuar aksesin pa prekur abonimin, përdorni <strong>Pezullo organizatën</strong>.</li>
+                  <li>Perioda aktuale dhe historiku i faturimit ruhen.</li>
+                </ul>
                 <div className="flex gap-2">
                   <button
                     onClick={() => doBillingAction('cancel')}

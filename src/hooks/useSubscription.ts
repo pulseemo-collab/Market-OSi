@@ -23,6 +23,8 @@ export interface SubscriptionDetails {
   trialDaysLeft?: number | null
   periodEndsAt?: string | null
   plan?: string | null
+  /** Platform-level deactivation; not a billing outcome. */
+  orgSuspended?: boolean
 }
 
 export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
@@ -49,6 +51,7 @@ export function useSubscriptionDetails(enabled = true): SubscriptionDetails {
           trialDaysLeft: d.trialDaysLeft ?? null,
           periodEndsAt: d.periodEndsAt ?? null,
           plan: d.plan ?? null,
+          orgSuspended: d.orgSuspended ?? false,
         })
       )
       .catch(() => setDetails({ loading: false }))

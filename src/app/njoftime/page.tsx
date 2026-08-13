@@ -8,10 +8,12 @@ import SubscriptionExpired from '@/components/SubscriptionExpired'
 import { useSubscription } from '@/hooks/useSubscription'
 import PageHeader from '@/components/ui/PageHeader'
 import { formatDateTime, formatRelativeTime, cn } from '@/lib/utils'
+// Imported from the constants-only module: `@/lib/notifications` pulls in the
+// Prisma client, which cannot be bundled into a client component.
 import {
   NOTIFICATION_TYPE_LABELS,
   NOTIFICATION_SEVERITY_LABELS,
-} from '@/lib/notifications'
+} from '@/lib/notification-types'
 import toast from 'react-hot-toast'
 import {
   RiBellLine,
@@ -72,6 +74,7 @@ export default function NjoftimePage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterType>('all')
   const [markingAll, setMarkingAll] = useState(false)
   const [markingId, setMarkingId] = useState<number | null>(null)
@@ -79,18 +82,32 @@ export default function NjoftimePage() {
   const canAccess = role === 'Administrator' || role === 'Manager' || role === 'Cashier'
 
   const fetchNotifications = useCallback(async () => {
-    if (!canAccess) return
+    // Every exit path below settles `loading`, including this guard — leaving it
+    // true would strand the page on the skeleton with no way out.
+    if (!canAccess) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
+    setLoadError(null)
     try {
       const params = new URLSearchParams({ limit: '100' })
       if (filter === 'unread') params.set('unreadOnly', 'true')
       const res = await fetch(`/api/notifications?${params}`)
-      if (!res.ok) throw new Error('Gabim')
+      if (!res.ok) {
+        // 401/403 are answers, not outages: say which one it was rather than
+        // showing a generic failure the user cannot act on.
+        if (res.status === 401) throw new Error('Sesioni ka skaduar. Hyr sërish për të parë njoftimet.')
+        if (res.status === 403) throw new Error('Nuk ke akses te njoftimet e këtij marketi.')
+        throw new Error('Njoftimet nuk u ngarkuan dot. Provo sërish.')
+      }
       const data = await res.json()
       setNotifications(data.notifications ?? [])
       setUnreadCount(data.unreadCount ?? 0)
-    } catch {
-      toast.error('Gabim gjatë ngarkimit të njoftimeve')
+    } catch (err) {
+      setNotifications([])
+      setUnreadCount(0)
+      setLoadError(err instanceof Error ? err.message : 'Njoftimet nuk u ngarkuan dot. Provo sërish.')
     } finally {
       setLoading(false)
     }
@@ -151,7 +168,15 @@ export default function NjoftimePage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Njoftime"
-        subtitle={loading ? 'Duke ngarkuar...' : unreadCount > 0 ? `${unreadCount} njoftime pa lexuar` : 'Nuk ka njoftime të palexuara'}
+        subtitle={
+          loading
+            ? 'Duke ngarkuar...'
+            : loadError
+            ? 'Njoftimet nuk u ngarkuan'
+            : unreadCount > 0
+            ? `${unreadCount} njoftime pa lexuar`
+            : 'Nuk ka njoftime të palexuara'
+        }
       />
 
       {/* Toolbar */}
@@ -217,6 +242,25 @@ export default function NjoftimePage() {
             </div>
           ))}
         </div>
+      ) : loadError ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-12 text-center"
+        >
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <RiErrorWarningLine className="text-red-400 text-3xl" />
+          </div>
+          <p className="text-base font-semibold text-slate-700 mb-1">Njoftimet nuk u ngarkuan</p>
+          <p className="text-sm text-slate-400 mb-5">{loadError}</p>
+          <button
+            onClick={fetchNotifications}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            <RiRefreshLine className="text-base" />
+            Provo sërish
+          </button>
+        </motion.div>
       ) : displayed.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}

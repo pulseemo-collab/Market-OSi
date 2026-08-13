@@ -41,7 +41,13 @@ async function buildPlatformStats() {
         isActive: true,
         createdAt: true,
         subscription: {
-          select: { plan: true, status: true, trialEndsAt: true, currentPeriodEnd: true, nextPlan: true },
+          // cancelAtPeriodEnd and cancelledAt are what make a customer's
+          // cancellation visible here. Without them a tenant that had cancelled
+          // renewal was indistinguishable from an ordinary active one.
+          select: {
+            plan: true, status: true, trialEndsAt: true, currentPeriodEnd: true,
+            nextPlan: true, cancelAtPeriodEnd: true, cancelledAt: true,
+          },
         },
         _count: { select: { userRoles: true, products: true, sales: true } },
         sales: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
@@ -66,6 +72,8 @@ async function buildPlatformStats() {
           trialEndsAt: org.subscription.trialEndsAt,
           currentPeriodEnd: org.subscription.currentPeriodEnd,
           nextPlan: org.subscription.nextPlan,
+          cancelAtPeriodEnd: org.subscription.cancelAtPeriodEnd,
+          cancelledAt: org.subscription.cancelledAt,
         }
       : null,
   }))

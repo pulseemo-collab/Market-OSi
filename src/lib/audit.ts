@@ -34,9 +34,12 @@ export const AUDIT_ACTIONS = {
   STAFF_LOGIN: 'staff_login',
   STAFF_LOGIN_FAILED: 'staff_login_failed',
   STAFF_LOCKED: 'staff_locked',
+  ORG_SUSPENDED: 'org_suspended',
+  ORG_REACTIVATED: 'org_reactivated',
 } as const
 
 export const AUDIT_ENTITY_TYPES = {
+  ORGANIZATION: 'organization',
   PRODUCT: 'product',
   SUPPLIER: 'supplier',
   SUPPLY: 'supply',

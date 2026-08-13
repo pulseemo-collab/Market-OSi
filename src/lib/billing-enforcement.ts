@@ -12,6 +12,12 @@ export interface SubscriptionAccessResult {
   cancelAtPeriodEnd?: boolean
   closeAtPeriodEnd?: boolean
   cancelledAt?: string | null
+  /**
+   * True when the platform operator has deactivated the organization. Distinct
+   * from every billing outcome: the customer cannot clear it by paying, so the
+   * UI must not send them to the subscription page.
+   */
+  orgSuspended?: boolean
 }
 
 interface CachedSubscription {
@@ -25,8 +31,13 @@ interface CachedSubscription {
   cancelledAt: Date | null
 }
 
+interface CachedOrgAccess {
+  isActive: boolean
+  subscription: CachedSubscription | null
+}
+
 /**
- * Reads the organization's subscription row, cached briefly.
+ * Reads the organization's activation flag and subscription row, cached briefly.
  *
  * This lookup used to run on every products, sales, supplies, dashboard and
  * export request — one database round trip per API call, per user, forever.
@@ -35,9 +46,14 @@ interface CachedSubscription {
  *
  * Any write to a Subscription row evicts this entry from inside the Prisma
  * client, so plan changes, cancellations and top-ups take effect on the very
- * next request no matter which route performed them.
+ * next request no matter which route performed them. Suspension is a write to
+ * Organization rather than Subscription, so that route evicts the tenant's
+ * whole cache scope explicitly.
+ *
+ * The organization is the outer query so that a suspended tenant with no
+ * subscription row is still reported as suspended rather than unbilled.
  */
-function loadSubscription(organizationId: number): Promise<CachedSubscription | null> {
+function loadOrgAccess(organizationId: number): Promise<CachedOrgAccess | null> {
   return cached(
     {
       namespace: 'subscription',
@@ -46,17 +62,22 @@ function loadSubscription(organizationId: number): Promise<CachedSubscription | 
       tags: [orgTag(organizationId, 'subscription')],
     },
     () =>
-      prisma.subscription.findUnique({
-        where: { organizationId },
+      prisma.organization.findUnique({
+        where: { id: organizationId },
         select: {
-          plan: true,
-          status: true,
-          trialEndsAt: true,
-          currentPeriodEnd: true,
-          nextPlan: true,
-          cancelAtPeriodEnd: true,
-          closeAtPeriodEnd: true,
-          cancelledAt: true,
+          isActive: true,
+          subscription: {
+            select: {
+              plan: true,
+              status: true,
+              trialEndsAt: true,
+              currentPeriodEnd: true,
+              nextPlan: true,
+              cancelAtPeriodEnd: true,
+              closeAtPeriodEnd: true,
+              cancelledAt: true,
+            },
+          },
         },
       }),
   )
@@ -68,7 +89,23 @@ export async function checkSubscriptionAccess(
 ): Promise<SubscriptionAccessResult> {
   if (role === 'platform_owner') return { allowed: true }
 
-  const subscription = await loadSubscription(organizationId)
+  const org = await loadOrgAccess(organizationId)
+
+  if (!org) return { allowed: false, reason: 'Organizata nuk u gjet' }
+
+  // Administrative suspension outranks every billing consideration: a suspended
+  // tenant is blocked even with a fully paid, in-period subscription.
+  if (!org.isActive) {
+    return {
+      allowed: false,
+      reason: 'Organizata është pezulluar nga platforma',
+      orgSuspended: true,
+      subStatus: org.subscription?.status ?? null,
+      plan: org.subscription?.plan ?? null,
+    }
+  }
+
+  const subscription = org.subscription
 
   if (!subscription) return { allowed: false, reason: 'Abonimi nuk u gjet' }
 
