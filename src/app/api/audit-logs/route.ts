@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import { endOfBusinessDateExclusive, startOfBusinessDate } from '@/lib/business-time'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
@@ -29,11 +30,16 @@ async function handleGet(req: NextRequest) {
     const nga = searchParams.get('nga') || undefined
     const deri = searchParams.get('deri') || undefined
 
-    const dateFilter = nga || deri
+    // Business-day boundaries in the market's timezone. `deri` is inclusive to
+    // the operator, so it becomes an exclusive bound on the following day.
+    const ngaStart = nga ? startOfBusinessDate(nga) : null
+    const deriEnd = deri ? endOfBusinessDateExclusive(deri) : null
+
+    const dateFilter = ngaStart || deriEnd
       ? {
           createdAt: {
-            ...(nga ? { gte: new Date(nga) } : {}),
-            ...(deri ? { lte: new Date(new Date(deri).setHours(23, 59, 59, 999)) } : {}),
+            ...(ngaStart ? { gte: ngaStart } : {}),
+            ...(deriEnd ? { lt: deriEnd } : {}),
           },
         }
       : {}

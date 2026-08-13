@@ -16,6 +16,12 @@ import { queueLowStockScan } from '@/lib/stock-alerts'
 import { StockConflictError, classifyError, errorResponseFrom } from '@/lib/errors'
 import { recordStockConflict, recordTransactionFailure } from '@/lib/metrics'
 import { applyStockDeltas, netDeltas, sumByProduct } from '@/lib/stock'
+import {
+  startOfBusinessDate,
+  startOfBusinessDay,
+  startOfBusinessDayOffset,
+  startOfBusinessMonth,
+} from '@/lib/business-time'
 
 const LARGE_SALE_THRESHOLD = parseInt(process.env.LARGE_SALE_THRESHOLD || '5000')
 
@@ -63,40 +69,35 @@ async function handleGet(req: NextRequest) {
     // All three selections (exact date, "dje", rolling period) differ only in
     // the createdAt range, so the range is resolved first and the query is
     // issued once.
+    //
+    // Every boundary is a business-day boundary in the market's own timezone,
+    // not the server's. A sale rung up at 00:30 in Tirana belongs to that day's
+    // takings whether the runtime is UTC or not.
     let createdAt: { gte: Date; lt?: Date }
 
     if (dataParam) {
-      const d = new Date(dataParam)
-      createdAt = {
-        gte: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0),
-        lt: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0),
+      const dayStart = startOfBusinessDate(dataParam)
+      if (!dayStart) {
+        return errorResponse(req, 'Data është e pavlefshme', 400)
       }
+      createdAt = { gte: dayStart, lt: startOfBusinessDayOffset(dayStart, 1) }
     } else {
       const now = new Date()
-      const dateFrom = new Date(now)
 
       switch (periudha) {
         case 'dje': {
-          dateFrom.setDate(dateFrom.getDate() - 1)
-          dateFrom.setHours(0, 0, 0, 0)
-          const djeTomorrow = new Date(dateFrom)
-          djeTomorrow.setDate(djeTomorrow.getDate() + 1)
-          createdAt = { gte: dateFrom, lt: djeTomorrow }
+          const yesterday = startOfBusinessDayOffset(now, -1)
+          createdAt = { gte: yesterday, lt: startOfBusinessDayOffset(yesterday, 1) }
           break
         }
         case 'jave':
-          dateFrom.setDate(dateFrom.getDate() - 7)
-          dateFrom.setHours(0, 0, 0, 0)
-          createdAt = { gte: dateFrom }
+          createdAt = { gte: startOfBusinessDayOffset(now, -7) }
           break
         case 'muaj':
-          dateFrom.setDate(1)
-          dateFrom.setHours(0, 0, 0, 0)
-          createdAt = { gte: dateFrom }
+          createdAt = { gte: startOfBusinessMonth(now) }
           break
         default:
-          dateFrom.setHours(0, 0, 0, 0)
-          createdAt = { gte: dateFrom }
+          createdAt = { gte: startOfBusinessDay(now) }
       }
     }
 
@@ -202,11 +203,17 @@ async function createSale(req: NextRequest, actor: SaleActor) {
     }
     const validPaymentMethod = ['cash', 'bank'].includes(paymentMethod ?? '') ? paymentMethod! : 'cash'
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return errorResponse(req, 'Nuk ka produkte në shitje', 400)
     }
 
     for (const item of items) {
+      // productId reaches a Prisma `in` filter below, where a non-numeric value
+      // raises a driver validation error and would surface as a 500. A basket
+      // the client built wrong is a client error, so it is rejected as one.
+      if (!Number.isInteger(item?.productId) || item.productId <= 0) {
+        return errorResponse(req, `Produkti është i pavlefshëm: ${item?.emriProduktit ?? ''}`, 400)
+      }
       if (!Number.isFinite(item.sasia) || item.sasia <= 0) {
         return errorResponse(req, `Sasia duhet të jetë pozitive për: ${item.emriProduktit}`, 400)
       }
@@ -233,6 +240,15 @@ async function createSale(req: NextRequest, actor: SaleActor) {
 
       if (!product) {
         return errorResponse(req, `Produkti nuk u gjet: ${item.emriProduktit}`, 404)
+      }
+
+      // Archiving removes a product from the catalogue but keeps its sale
+      // history, so the row still exists and a stale terminal or a direct call
+      // could still reference it by id. The product list already filters these
+      // out; enforcing it here is what actually prevents the sale, rather than
+      // trusting the client to have refreshed.
+      if (product.isArchived) {
+        return errorResponse(req, `Produkti është arkivuar dhe nuk mund të shitet: ${product.emri}`, 400)
       }
 
       totali += product.cmimiShitjes * item.sasia

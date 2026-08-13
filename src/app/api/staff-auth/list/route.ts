@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { TERMINAL_ORG_COOKIE, MANAGER_ORG_COOKIE } from '@/lib/staff-auth'
+import { getOrgContext } from '@/lib/staff-auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
 
 async function handleGet(req: NextRequest) {
   const rl = rateLimit(req, 'staff-auth', null, null)
   if (rl.limited) return rl.response!
-  const orgIdParam = req.nextUrl.searchParams.get('orgId')
-  const terminalOrgCookie = req.cookies.get(TERMINAL_ORG_COOKIE)?.value
-  const managerOrgCookie = req.cookies.get(MANAGER_ORG_COOKIE)?.value
-
-  const orgIdStr = orgIdParam ?? terminalOrgCookie ?? managerOrgCookie
-  if (!orgIdStr) {
+  // The directory is bound to the organization this device was provisioned
+  // for. It previously honoured an `orgId` query parameter, which let anyone
+  // walk sequential ids and read any market's name and staff roster without
+  // credentials — the same disclosure that made cross-tenant login collisions
+  // exploitable rather than merely accidental.
+  const organizationId = getOrgContext(req)
+  if (organizationId === null) {
     return errorResponse(req, 'no_org_context', 400)
-  }
-
-  const organizationId = parseInt(orgIdStr)
-  if (isNaN(organizationId)) {
-    return errorResponse(req, 'organizationId i pavlefshëm', 400)
   }
 
   try {

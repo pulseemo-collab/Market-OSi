@@ -30,6 +30,32 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   }
 }
 
+/**
+ * The organization a PIN login is being attempted against.
+ *
+ * A till is bound to one market. A manager provisions the device once from
+ * /personal, which calls POST /api/staff/terminal and sets the terminal cookie;
+ * every PIN login on that device then resolves within that organization.
+ *
+ * The cookie is not a credential and is not treated as one. It selects which
+ * tenant to authenticate against, exactly as a subdomain would — a forged value
+ * only means the caller must supply a real name and PIN belonging to the
+ * organization they named, and the session that results takes its
+ * organizationId from the staff row in the database, never from the cookie.
+ */
+export function getOrgContext(req: NextRequest): number | null {
+  const raw =
+    req.cookies.get(TERMINAL_ORG_COOKIE)?.value ??
+    req.cookies.get(MANAGER_ORG_COOKIE)?.value
+
+  if (!raw) return null
+
+  const organizationId = Number(raw)
+  if (!Number.isInteger(organizationId) || organizationId <= 0) return null
+
+  return organizationId
+}
+
 export interface StaffSessionData {
   sessionId: number
   staffId: number

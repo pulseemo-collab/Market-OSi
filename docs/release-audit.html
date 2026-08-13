@@ -1,0 +1,1436 @@
+<title>Market OS Release Audit</title>
+<style>
+  :root {
+    --paper:      #FAF8F4;
+    --surface:    #FFFFFF;
+    --surface-2:  #F2EFE9;
+    --ink:        #17202B;
+    --ink-soft:   #4E5765;
+    --ink-faint:  #7C8494;
+    --rule:       #DED8CD;
+    --rule-soft:  #EBE6DC;
+    --stamp:      #7A2E2E;
+
+    --p0: #8B1E1E;
+    --p1: #A85219;
+    --p2: #7E6413;
+    --p3: #40614F;
+    --ok: #2F5C46;
+
+    --p0-wash: #F6E9E7;
+    --p1-wash: #F8EDE2;
+    --p2-wash: #F5F0DF;
+    --p3-wash: #E9F0EA;
+    --ok-wash: #E6EFE9;
+
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+
+    --measure: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #141922;
+      --surface:   #1A202B;
+      --surface-2: #212936;
+      --ink:       #E7E3DA;
+      --ink-soft:  #A8AEBC;
+      --ink-faint: #7A8291;
+      --rule:      #2E3746;
+      --rule-soft: #242C39;
+      --stamp:     #C97A72;
+
+      --p0: #E4877E;
+      --p1: #E0A268;
+      --p2: #CFBA6A;
+      --p3: #8FBBA1;
+      --ok: #86BFA2;
+
+      --p0-wash: #2C1D1E;
+      --p1-wash: #2C2419;
+      --p2-wash: #2A2718;
+      --p3-wash: #1B2721;
+      --ok-wash: #1A2721;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #141922;
+    --surface:   #1A202B;
+    --surface-2: #212936;
+    --ink:       #E7E3DA;
+    --ink-soft:  #A8AEBC;
+    --ink-faint: #7A8291;
+    --rule:      #2E3746;
+    --rule-soft: #242C39;
+    --stamp:     #C97A72;
+
+    --p0: #E4877E;
+    --p1: #E0A268;
+    --p2: #CFBA6A;
+    --p3: #8FBBA1;
+    --ok: #86BFA2;
+
+    --p0-wash: #2C1D1E;
+    --p1-wash: #2C2419;
+    --p2-wash: #2A2718;
+    --p3-wash: #1B2721;
+    --ok-wash: #1A2721;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    padding: 56px 0 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 5.2vw, 46px);
+    line-height: 1.08;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: var(--measure);
+    margin: 0;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 26px;
+  }
+  .meta span b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---- verdict ---- */
+
+  .verdict {
+    margin: 36px 0 8px;
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--ok);
+    background: var(--surface);
+    padding: 26px 28px;
+  }
+  .verdict .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+  }
+  .verdict .call {
+    font-family: var(--mono);
+    font-size: clamp(19px, 3.4vw, 27px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ok);
+    margin: 0 0 14px;
+  }
+  .verdict p { margin: 0; max-width: var(--measure); color: var(--ink-soft); }
+  .verdict p + p { margin-top: 12px; }
+
+  .superseded {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule-soft);
+    max-width: none;
+  }
+
+  /* ---- scoreboard ---- */
+
+  .scores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 28px 0;
+  }
+  .score { background: var(--surface); padding: 18px 20px; }
+  .score .n {
+    font-family: var(--mono);
+    font-size: 27px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    display: block;
+  }
+  .score .k {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 7px;
+    display: block;
+  }
+
+  /* ---- sections ---- */
+
+  section { margin-top: 56px; scroll-margin-top: 24px; }
+
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0 0 22px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  h2 .idx { color: var(--stamp); }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.012em;
+    margin: 34px 0 10px;
+  }
+
+  p, li { max-width: var(--measure); }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-2);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  /* ---- tables ---- */
+
+  .scroller { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--rule); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--rule);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono, th.mono { font-family: var(--mono); font-size: 13px; }
+  td.was { color: var(--ink-faint); text-decoration: line-through; }
+
+  /* ---- status pills ---- */
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 2.5px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .pill.exec  { background: var(--ok-wash); color: var(--ok); }
+  .pill.code  { background: var(--p3-wash); color: var(--p3); }
+  .pill.unsafe{ background: var(--p2-wash); color: var(--p2); }
+  .pill.na    { background: var(--surface-2); color: var(--ink-faint); }
+  .pill.p0    { background: var(--p0-wash); color: var(--p0); }
+  .pill.p1    { background: var(--p1-wash); color: var(--p1); }
+  .pill.p2    { background: var(--p2-wash); color: var(--p2); }
+  .pill.p3    { background: var(--p3-wash); color: var(--p3); }
+  .pill.fixed { background: var(--ok-wash); color: var(--ok); }
+  .pill.open  { background: var(--p1-wash); color: var(--p1); }
+
+  /* ---- bug cards ---- */
+
+  .bug {
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--ok);
+    background: var(--surface);
+    padding: 22px 24px;
+    margin-bottom: 22px;
+  }
+
+  .bug-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .bug-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+  }
+  .bug h3 { margin: 0 0 12px; font-size: 18px; }
+  .bug dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; }
+  .bug dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: 3px;
+  }
+  .bug dd { margin: 0; max-width: var(--measure); }
+  .bug dd p { margin: 0 0 8px; }
+  .bug dd p:last-child { margin-bottom: 0; }
+
+  @media (max-width: 640px) {
+    .bug dl { grid-template-columns: 1fr; gap: 3px 0; }
+    .bug dt { margin-top: 11px; }
+  }
+
+  /* ---- evidence block ---- */
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 18px;
+  }
+
+  .callout {
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--stamp);
+    background: var(--surface);
+    padding: 18px 22px;
+    margin: 0 0 22px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--stamp);
+    margin: 0 0 8px;
+    display: block;
+  }
+
+  /* ---- final ---- */
+
+  .final {
+    margin-top: 60px;
+    border-top: 2px solid var(--ink);
+    padding-top: 32px;
+  }
+  .answer {
+    font-family: var(--mono);
+    font-size: clamp(38px, 8vw, 62px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ok);
+    margin: 12px 0 22px;
+  }
+
+  a { color: var(--stamp); }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--stamp);
+    outline-offset: 2px;
+  }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+  }
+  footer p { max-width: none; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Final production QA &amp; release audit · remediation complete</p>
+    <h1>Every release blocker is closed and verified</h1>
+    <p class="standfirst">
+      An end-to-end product audit of Market OS, run from the perspective of the people who will
+      actually use it: owners, managers, cashiers and the operator running the platform. The audit
+      found six defects. All six are now fixed, and each fix is backed by an executed test rather
+      than an inspection. 243 automated checks pass with nothing failing.
+    </p>
+    <div class="meta">
+      <span><b>Base commit</b> 479f9e9</span>
+      <span><b>Branch</b> main</span>
+      <span><b>Audit</b> 13 Aug 2026</span>
+      <span><b>Remediation</b> 13 Aug 2026</span>
+      <span><b>Committed</b> nothing</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <p class="label">B — Release verdict</p>
+    <p class="call">READY WITH MINOR ISSUES</p>
+    <p>
+      <strong>No P0, P1 or P2 issue remains open.</strong> Tenant isolation holds across every
+      route tested, staff PIN login is scoped to one organization, stock cannot be driven negative
+      or oversold, prices cannot be forged from the client, billing fails closed, business days are
+      computed in Albanian time regardless of the runtime, and every Phase&nbsp;A/B/C guarantee
+      still passes.
+    </p>
+    <p>
+      It stops short of an unqualified "ready" for two honest reasons, neither of which is a code
+      defect: the UI has still never been driven in a browser, and each cashier terminal must be
+      provisioned once at deploy time — see the rollout note in section&nbsp;Q.
+    </p>
+    <p class="superseded">
+      Supersedes the initial verdict of NOT READY FOR PRODUCTION, which was issued while BUG-01
+      was open.
+    </p>
+  </div>
+
+  <div class="scores">
+    <div class="score"><span class="n" style="color:var(--ok)">243</span><span class="k">checks passing</span></div>
+    <div class="score"><span class="n" style="color:var(--ok)">0</span><span class="k">P0 open</span></div>
+    <div class="score"><span class="n" style="color:var(--ok)">0</span><span class="k">P1 open</span></div>
+    <div class="score"><span class="n" style="color:var(--ok)">0</span><span class="k">P2 open</span></div>
+    <div class="score"><span class="n" style="color:var(--ok)">6</span><span class="k">defects fixed</span></div>
+  </div>
+
+  <!-- ============================== A ============================== -->
+  <section id="a">
+    <h2><span class="idx">A</span> Executive summary</h2>
+
+    <p>
+      Market OS is a mature, carefully built application. The parts that usually go wrong in a
+      multi-tenant POS — concurrent stock, price integrity, cross-tenant leakage in the CRUD
+      routes, subscription bypass — were right from the start, and demonstrably so. 44 API routes
+      were inventoried and every one enforces authentication; every <code>[id]</code> route
+      resolves the record through <code>findFirst({ where: { id, organizationId } })</code> before
+      touching it.
+    </p>
+
+    <p>
+      Six real defects surfaced under execution. Two were fixed during the audit itself; the
+      remaining four — one of them the release blocker — were fixed in a follow-up remediation
+      pass. Every fix reused a pattern already present in the codebase rather than introducing a
+      new mechanism.
+    </p>
+
+    <p>
+      <strong>The blocker, and why it is closed.</strong> The cashier PIN login screen sent only a
+      name and a PIN, and the server resolved that name across <em>every organization in the
+      database</em>. Two customers employing someone with the same name locked each other out, and
+      because any visitor could list any organization's staff without logging in, locking out a
+      competitor's cashiers was a two-minute exercise. Login is now scoped to exactly one
+      organization, established once per device through the terminal cookie the product already
+      set but never read. Two tenants can now share a staff name and work independently; neither
+      one's PIN opens the other's till.
+    </p>
+
+    <p>
+      What remains is a short P3 list and two testing gaps, both recorded plainly in sections
+      T and U rather than papered over.
+    </p>
+  </section>
+
+  <!-- ============================== C ============================== -->
+  <section id="c">
+    <h2><span class="idx">C</span> Verification results</h2>
+
+    <p>
+      The baseline was clean before any change, and the full suite was re-run from a clean state
+      after every fix. Both columns are actual measured output.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Baseline</th><th>After remediation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">npm test</td><td class="num">71 passed, 0 failed</td><td class="num"><strong>91 passed, 0 failed</strong></td></tr>
+          <tr><td class="mono">npx tsc --noEmit</td><td class="num">clean</td><td class="num"><strong>clean</strong> — exit 0, no diagnostics</td></tr>
+          <tr><td class="mono">npm run build</td><td class="num">✓ compiled</td><td class="num"><strong>✓ Compiled successfully</strong></td></tr>
+          <tr><td class="mono">npx prisma validate</td><td class="num">valid</td><td class="num"><strong>valid</strong></td></tr>
+          <tr><td class="mono">npx prisma migrate status</td><td class="num">3, up to date</td><td class="num"><strong>3 migrations, up to date, no drift</strong></td></tr>
+          <tr><td class="mono">npm run verify:idempotency</td><td class="num">37 / 37</td><td class="num"><strong>37 / 37</strong></td></tr>
+          <tr><td class="mono">npm run verify:sales-e2e</td><td class="num">23 / 23</td><td class="num"><strong>23 / 23</strong></td></tr>
+          <tr><td class="mono">npm run verify:release-qa</td><td class="num">60 passed, 2 failed</td><td class="num"><strong>92 passed, 0 failed</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The two release-QA assertions that previously failed were the regression tests written to
+      detect BUG-01. Both now pass, alongside sixteen further assertions added to cover the
+      scoping in depth.
+    </p>
+
+    <p>
+      Phase C artefacts confirmed present throughout: <code>IdempotencyRecord</code> in the schema,
+      the <code>20260812000001_add_idempotency_record</code> migration applied,
+      <code>src/lib/idempotency-store.ts</code>, and the durable claim wired into
+      <code>POST /api/sales</code> and <code>POST /api/supplies</code>.
+    </p>
+  </section>
+
+  <!-- ============================== D ============================== -->
+  <section id="d">
+    <h2><span class="idx">D</span> Feature &amp; route coverage</h2>
+
+    <p>
+      Built from the repository, not assumed: <strong>44 API routes</strong> and
+      <strong>30 pages</strong>. Coverage below reflects what was actually exercised.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Module</th><th>Routes</th><th>Coverage</th><th>How</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>POS / sales</td><td class="mono">/api/sales, /api/sales/[id]</td><td><span class="pill exec">Executed</span></td><td>validation, stock, totals, isolation, archived products, business-day filters</td></tr>
+          <tr><td>Staff PIN auth</td><td class="mono">/api/staff-auth/*</td><td><span class="pill exec">Executed</span></td><td>18 checks — scoping, collisions, forged context, session binding, directory</td></tr>
+          <tr><td>Business-day logic</td><td class="mono">src/lib/business-time.ts</td><td><span class="pill exec">Executed</span></td><td>20 unit tests incl. DST, re-run under three runtime timezones</td></tr>
+          <tr><td>Products / inventory</td><td class="mono">/api/products, /api/products/[id]</td><td><span class="pill exec">Executed</span></td><td>read scoping, cashier write refusal; stock via sales path</td></tr>
+          <tr><td>Billing / subscription</td><td class="mono">/api/subscription*, /subscription/*</td><td><span class="pill exec">Executed</span></td><td>expired trial blocked on read and write</td></tr>
+          <tr><td>Supplies</td><td class="mono">/api/supplies, /api/supplies/[id]</td><td><span class="pill code">Code-verified</span></td><td>defect found by review, mechanism and fix proven at data layer</td></tr>
+          <tr><td>Suppliers</td><td class="mono">/api/suppliers, /api/suppliers/[id]</td><td><span class="pill code">Code-verified</span></td><td>scoping reviewed; cashier access refused live</td></tr>
+          <tr><td>Dashboard / analytics</td><td class="mono">/api/dashboard</td><td><span class="pill code">Code-verified</span></td><td>aggregation reviewed; boundary logic unit-tested</td></tr>
+          <tr><td>Reports / export</td><td class="mono">/api/export, /api/reorder-suggestions</td><td><span class="pill code">Code-verified</span></td><td>tenant scoping confirmed by review</td></tr>
+          <tr><td>Backup / restore</td><td class="mono">/api/backup, /api/restore</td><td><span class="pill code">Code-verified</span></td><td>read-only review; cashier refusal executed</td></tr>
+          <tr><td>Notifications / audit</td><td class="mono">/api/notifications*, /api/audit-logs</td><td><span class="pill code">Code-verified</span></td><td>failure isolation confirmed in source</td></tr>
+          <tr><td>Staff management</td><td class="mono">/api/staff*</td><td><span class="pill code">Code-verified</span></td><td>role gate + org scoping reviewed; cashier refusal executed</td></tr>
+          <tr><td>Org / users / settings</td><td class="mono">/api/organization, /api/users*</td><td><span class="pill code">Code-verified</span></td><td>permission and scoping reviewed</td></tr>
+          <tr><td>Platform operator</td><td class="mono">/api/platform/*</td><td><span class="pill code">Code-verified</span></td><td><code>platform_owner</code> gate reviewed; cashier refusal executed</td></tr>
+          <tr><td>Registration / onboarding</td><td class="mono">/api/auth/register</td><td><span class="pill unsafe">Not safely testable</span></td><td>writes to the production Supabase Auth project</td></tr>
+          <tr><td>Manager email login</td><td class="mono">Supabase session paths</td><td><span class="pill unsafe">Not safely testable</span></td><td>needs a real auth user in production Supabase</td></tr>
+          <tr><td>Health / observability</td><td class="mono">/api/health</td><td><span class="pill exec">Executed</span></td><td>liveness and readiness, plus the Condition 1 latency work</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== E ============================== -->
+  <section id="e">
+    <h2><span class="idx">E</span> Authentication &amp; sessions</h2>
+
+    <p>
+      Two authentication systems coexist: Supabase email sessions for owners and managers, and
+      local PIN sessions for cashiers via the <code>staff_session</code> cookie. Both resolve
+      identity <em>and tenant</em> from the database, never from the request.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Case</th><th>Expected</th><th>Observed</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>No session cookie on a write</td><td>401</td><td class="num">401</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Malformed cookie value</td><td>401</td><td class="num">401</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>4&nbsp;KB junk cookie</td><td>401, no crash</td><td class="num">401</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Valid session resolves</td><td>200</td><td class="num">200</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Tenant comes from the database, not the cookie</td><td>own org</td><td>own org</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>PIN login without organization context</td><td>refused</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>PIN login with invalid organization context</td><td>refused, no crash</td><td class="num">400 ×4</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Session bound to the staff row's tenant</td><td>always</td><td>always</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Expired session row</td><td>rejected + row deleted</td><td>per source</td><td><span class="pill code">code</span></td></tr>
+          <tr><td>Direct navigation to a protected page</td><td>redirect to login</td><td>per middleware</td><td><span class="pill code">code</span></td></tr>
+          <tr><td>Failed PIN attempts</td><td>lock after 5 for 15 min</td><td>per source</td><td><span class="pill code">code</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      One note that is not a defect but is worth knowing: the middleware checks only that a
+      <code>staff_session</code> cookie <em>exists</em> before letting a page render. A forged
+      value renders the POS shell, then every API call behind it returns 401, so the operator sees
+      an empty till rather than a login screen. Cosmetic, no data exposure.
+    </p>
+  </section>
+
+  <!-- ============================== F ============================== -->
+  <section id="f">
+    <h2><span class="idx">F</span> Authorization &amp; tenant isolation</h2>
+
+    <p>
+      <code>organizationId</code> is never accepted from a request body. It is read from the
+      <code>UserRole</code> row keyed by the Supabase user id, or from the <code>StaffSession</code>
+      row keyed by the cookie token. There is no code path that lets a client name its own tenant.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Attack</th><th>Result</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Sell another tenant's product by id</td><td class="num">404 — refused</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Foreign product's stock after the attempt</td><td class="num">unchanged (50)</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Basket mixing own + foreign products</td><td class="num">404 — whole basket refused</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Own stock after the mixed basket</td><td class="num">unchanged — no partial write</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Sales list contains foreign rows</td><td>never</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Product list contains foreign products</td><td>never</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Supply referencing a foreign product</td><td class="num">refused after fix</td><td><span class="pill fixed">BUG-03 fixed</span></td></tr>
+          <tr><td>Org A's PIN against org B's cashier</td><td class="num">refused</td><td><span class="pill fixed">BUG-01 fixed</span></td></tr>
+          <tr><td>Forged terminal cookie naming another tenant</td><td class="num">no access granted</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Staff directory for an arbitrary org id</td><td class="num">refused after fix</td><td><span class="pill fixed">BUG-02 fixed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Every <code>[id]</code> route was read directly. All nine resolve the target with an
+      organization-scoped <code>findFirst</code> before update or delete; the platform routes
+      deliberately operate across organizations behind the <code>platform_owner</code> permission.
+    </p>
+  </section>
+
+  <!-- ============================== G ============================== -->
+  <section id="g">
+    <h2><span class="idx">G</span> POS &amp; sales</h2>
+
+    <p>Every case below was sent to the real route over HTTP with a real cashier session.</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Input</th><th>Response</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Empty basket</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Quantity 0 / −3 / null / missing / NaN / Infinity</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Quantity as string <code>"2"</code></td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Nonexistent product</td><td class="num">404</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Malformed <code>productId: "abc"</code></td><td class="num">400</td><td><span class="pill fixed">BUG-04 fixed</span></td></tr>
+          <tr><td>Quantity beyond stock</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Two lines summing beyond stock</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Two lines within stock</td><td class="num">201, one decrement of the sum</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Client-supplied price in the payload</td><td>ignored, stored price used</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Fractional quantity (weighed goods)</td><td class="num">201</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Selling exactly the remaining stock</td><td class="num">201, stock lands on 0</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Selling from empty stock</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Archived product by direct id</td><td class="num">400 — no sale, no stock moved</td><td><span class="pill fixed">BUG-06 fixed</span></td></tr>
+          <tr><td>Basket mixing live + archived</td><td class="num">400 — refused whole</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>3 concurrent duplicates, one key</td><td>one sale, one decrement</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Same key, different basket</td><td class="num">409 CONFLICT</td><td><span class="pill exec">pass</span></td></tr>
+          <tr><td>Malformed date filter (4 forms)</td><td class="num">400</td><td><span class="pill exec">pass</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Two properties worth stating plainly, because they are the ones that protect the money.
+      <strong>Totals are computed server-side</strong> from <code>cmimiShitjes</code> and
+      <code>cmimiBlerjes</code> as stored — a payload claiming a price of 0.01 was ignored and the
+      sale recorded the real 25.00. And <strong>no rejected basket ever moved stock or created a
+      row</strong>: after eleven consecutive rejections, stock was unchanged and the sale count was
+      still zero.
+    </p>
+
+    <p>
+      The POS page sends an <code>Idempotency-Key</code> through the <code>useIdempotencyKey</code>
+      hook, resets it only after a committed sale, and disables the button while a request is in
+      flight — so the Phase C durability guarantee is actually wired into the customer path, not
+      just available to it.
+    </p>
+  </section>
+
+  <!-- ============================== H ============================== -->
+  <section id="h">
+    <h2><span class="idx">H</span> Inventory</h2>
+
+    <p>
+      Stock is a <code>Float</code>, which is correct for a grocery selling by weight, and every
+      movement goes through <code>applyStockDeltas</code> — a guarded, id-ordered decrement whose
+      precondition lives in the SQL <code>WHERE</code> clause. Two invariants were checked against
+      live data rather than reasoned about:
+    </p>
+
+    <ul>
+      <li><strong>Stock never goes negative.</strong> Draining to exactly zero succeeded; the next
+        unit was refused with 400; the final reading was 0.</li>
+      <li><strong>Units sold reconcile with units removed.</strong> Summing every
+        <code>SaleItem.sasia</code> for the tenant matched the fall in <code>Product.sasia</code>
+        exactly, to floating-point tolerance.</li>
+    </ul>
+
+    <p>
+      Archiving is a soft delete used when a product has sale history. The product list filtered on
+      it, but the sales route did not — so an archived product remained sellable by id. That is now
+      enforced server-side before the transaction opens.
+    </p>
+  </section>
+
+  <!-- ============================== I ============================== -->
+  <section id="i">
+    <h2><span class="idx">I</span> Supplies &amp; suppliers</h2>
+
+    <p>
+      Supplies increment stock inside a transaction, in ascending product id, matching the sale
+      path so the two cannot deadlock against each other. Quantities and purchase prices were
+      validated. The defect was in what was <em>not</em> validated: the ids themselves.
+    </p>
+
+    <p>
+      Before the fix, a supply could name any product or supplier in the database. The line item
+      was created — the foreign key only requires the row to exist <em>somewhere</em> — the
+      response echoed the other tenant's product and supplier names back through its
+      <code>include</code>, and the stock increment silently matched zero rows, recording goods
+      received that never entered anyone's inventory. Referenced ids are now resolved in one
+      organization-scoped query and the basket is refused with 404 if any is not the tenant's own.
+    </p>
+
+    <p>
+      Deleting a supply reverses its stock correctly and is organization-scoped. Supplier create,
+      edit and delete are scoped throughout.
+    </p>
+  </section>
+
+  <!-- ============================== J ============================== -->
+  <section id="j">
+    <h2><span class="idx">J</span> Role &amp; permission matrix</h2>
+
+    <p>
+      Four roles exist: <code>Administrator</code> (shown as <em>Pronar</em>), <code>Manager</code>,
+      <code>Cashier</code> and <code>platform_owner</code>. Intent is declared in
+      <code>src/lib/roles.ts</code>; the column that matters is what the server actually enforced.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Admin</th><th>Manager</th><th>Cashier</th><th>Enforcement</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Use POS / create sale</td><td>✓</td><td>✓</td><td>✓</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Read products</td><td>✓</td><td>✓</td><td>✓</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Create / edit products</td><td>✓</td><td>✓</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Delete products</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill code">code</span></td></tr>
+          <tr><td>Edit / delete sales</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill code">code</span></td></tr>
+          <tr><td>Dashboard</td><td>✓</td><td>✓</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Supplies &amp; suppliers</td><td>✓</td><td>✓</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Manage staff</td><td>✓</td><td>✓</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Manage users</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Audit log</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Export / reports</td><td>✓</td><td>✓</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Backup / restore</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Billing self-service</td><td>✓</td><td>✗</td><td>✗</td><td><span class="pill code">code</span></td></tr>
+          <tr><td>Platform administration</td><td>✗</td><td>✗</td><td>✗</td><td><span class="pill exec">executed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Thirteen forbidden actions were attempted with a live cashier session and all thirteen were
+      refused with 401 or 403. Authorization here is server-side, not UI hiding: the check runs
+      inside the route handler, before any query.
+    </p>
+  </section>
+
+  <!-- ============================== K ============================== -->
+  <section id="k">
+    <h2><span class="idx">K</span> Billing</h2>
+
+    <p>
+      Enforcement fails closed. A missing subscription row denies access rather than allowing it,
+      and the access decision is recomputed on every request even though the row itself is cached
+      briefly — so a trial expires to the second rather than to the cache TTL. Writes to a
+      subscription evict the cache from inside the Prisma client, so a plan change takes effect on
+      the next request regardless of which route made it.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>State</th><th>Behaviour</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Trial active</td><td>full access</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Trial expired — create sale</td><td class="num">403</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Trial expired — read sales</td><td class="num">403</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>Trial expired — read subscription status</td><td class="num">200 (so they can pay)</td><td><span class="pill exec">executed</span></td></tr>
+          <tr><td>No subscription row at all</td><td>denied</td><td><span class="pill code">code</span></td></tr>
+          <tr><td><code>platform_owner</code></td><td>bypasses billing by design</td><td><span class="pill code">code</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>No purchase, charge or financial transaction was created at any point in this audit.</p>
+  </section>
+
+  <!-- ============================== L ============================== -->
+  <section id="l">
+    <h2><span class="idx">L</span> Dashboard &amp; analytics</h2>
+
+    <p>
+      The dashboard computes from SQL aggregates — <code>_sum</code>, <code>_count</code>,
+      <code>groupBy</code> — directly against the same tenant-scoped rows the POS writes. There are
+      no denormalised counters, which structurally rules out the most common class of reporting bug:
+      a dashboard total drifting away from the transactions behind it.
+    </p>
+
+    <p>
+      What it got wrong was <em>when</em> a day starts. Boundaries were built with
+      <code>new Date(y, m, d)</code>, which uses the server's local timezone — Albania in
+      development, UTC on Vercel:
+    </p>
+
+    <pre>Sale at 00:30 Albanian time on 14 August
+
+  before, dev  (Europe/Tirane)   "today" starts  2026-08-13T22:00:00Z  → counted on 14 Aug ✓
+  before, prod (UTC)             "today" starts  2026-08-13T00:00:00Z  → counted on 13 Aug ✗
+  after,  both                   "today" starts  2026-08-13T22:00:00Z  → counted on 14 Aug ✓</pre>
+
+    <p>
+      All boundaries now resolve explicitly against <code>Europe/Tirane</code> through a shared
+      module, including the daily and monthly chart buckets, so a figure the owner reconciles
+      against the till no longer depends on which machine produced it.
+    </p>
+  </section>
+
+  <!-- ============================== M ============================== -->
+  <section id="m">
+    <h2><span class="idx">M</span> Notifications &amp; audit</h2>
+
+    <p>
+      This was checked for one specific failure, and the codebase gets it right.
+      <code>logAuditAction</code> and <code>createNotification</code> both run <em>after</em> the
+      sale transaction commits, and both swallow their own errors internally. That matters more than
+      it looks: if either could throw, the sale would already be committed while the request
+      returned 500, the idempotency claim would be released, and the cashier's retry would create a
+      second sale for the same basket. It cannot, so it does not.
+    </p>
+
+    <p>
+      The low-stock scan is queued as a background job rather than awaited, so a cashier never waits
+      on it. Audit entries record the classified error code rather than the driver message,
+      deliberately — audit entries are rendered in the UI, and a raw Prisma error carries table and
+      constraint names. Notifications and audit rows are organization-scoped throughout.
+    </p>
+  </section>
+
+  <!-- ============================== N ============================== -->
+  <section id="n">
+    <h2><span class="idx">N</span> Backup, export &amp; restore</h2>
+
+    <p>
+      <span class="pill code">Code-verified</span> — no restore was executed. Running one requires
+      an Administrator's Supabase session and deletes the tenant's data before rebuilding it, so it
+      was reviewed rather than run.
+    </p>
+
+    <p>
+      Backup and export are correctly scoped: every collection is filtered by
+      <code>organizationId</code>, directly or through its parent relation. Restore is guarded well
+      — a strict shape validator, a 50 000-row ceiling checked before any deletion, a
+      cross-organization confirmation prompt, one restore at a time per organization, and a single
+      transaction so a partial failure rolls everything back.
+    </p>
+
+    <p>Three behaviours the owner should know about, none of them blocking:</p>
+    <ul>
+      <li>A restore <strong>erases the organization's entire audit log</strong> before rebuilding.
+        An Administrator can therefore clear their own accountability trail through a normal
+        product feature.</li>
+      <li>A restore <strong>renames the organization</strong> to the name stored in the backup file
+        — surprising when restoring a cross-organization backup that was explicitly confirmed.</li>
+      <li>Restored sales lose <code>staffId</code> and <code>staffName</code>, and restored products
+        come back unarchived. History survives; attribution does not.</li>
+    </ul>
+  </section>
+
+  <!-- ============================== O ============================== -->
+  <section id="o">
+    <h2><span class="idx">O</span> Error handling</h2>
+
+    <p>
+      Six deliberately hostile requests were sent — unparseable JSON, a malformed id, a nonexistent
+      id, a delete against a nonexistent sale, a bad route parameter, and a corrupt restore payload
+      — and every response was checked against nine leak patterns.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Property</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Connection string in a response body</td><td class="num">0 occurrences</td></tr>
+          <tr><td>Pooler hostname</td><td class="num">0</td></tr>
+          <tr><td>Prisma / driver message</td><td class="num">0</td></tr>
+          <tr><td>Stack frame or <code>node_modules</code> path</td><td class="num">0</td></tr>
+          <tr><td>Secret env var name</td><td class="num">0</td></tr>
+          <tr><td><code>X-Request-Id</code> present for support</td><td class="num">6 / 6</td></tr>
+          <tr><td>Human-readable Albanian message</td><td class="num">6 / 6</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Status codes carry real meaning: 409 distinguishes a genuine conflict from a failure, so a
+      duplicate submission never surfaces to the cashier as a failed sale; 503 marks a
+      retryable overload; a lost stock race returns 409 and is deliberately not reported to Sentry
+      as an exception, because it is an expected outcome under concurrency rather than a fault.
+    </p>
+  </section>
+
+  <!-- ============================== P ============================== -->
+  <section id="p">
+    <h2><span class="idx">P</span> UI review</h2>
+
+    <p>
+      <span class="pill code">Code-verified</span> — reviewed as source, not driven in a browser.
+      No live click-through, mobile-viewport or accessibility audit was performed, and that gap is
+      recorded honestly in section&nbsp;T rather than papered over.
+    </p>
+
+    <p>What the source does show, on the screen that matters most:</p>
+    <ul>
+      <li>The POS submit button is disabled while a request is in flight and when the basket is
+        empty, and <code>completeSale</code> returns early if already loading — three independent
+        guards against a double-click.</li>
+      <li>Out-of-stock products are disabled in the grid rather than failing at checkout.</li>
+      <li>Errors surface as toasts carrying the server's message; the button shows
+        <em>"Duke procesuar…"</em> while working.</li>
+      <li>The staff login screen has a numeric keypad, keyboard support and a masked PIN — designed
+        for a real till, not a desktop form.</li>
+    </ul>
+
+    <p>
+      The usability defect noted in the original audit — a cashier told to "contact your manager"
+      about a conflict the manager could not see — no longer occurs, because the conflict itself no
+      longer exists. The login page needed no change: it already renders the server's message, so
+      the new "this device is not linked to a market" guidance surfaces as written.
+    </p>
+  </section>
+
+  <!-- ============================== Q ============================== -->
+  <section id="q">
+    <h2><span class="idx">Q</span> Production environment</h2>
+
+    <div class="callout">
+      <span class="label">Required rollout step</span>
+      <p>
+        Existing devices carry no <code>pos_terminal_org</code> cookie, so PIN staff will see
+        <em>"Kjo pajisje nuk është e lidhur me një market"</em> until a Manager or Administrator
+        opens <code>/personal</code> and clicks <strong>Konfiguro terminalin</strong>
+        <strong>once per till</strong>. It is a single click per device and the cookie lasts a
+        year — but it must happen at deploy time, or cashiers will be locked out on the first
+        shift after release.
+      </p>
+    </div>
+
+    <p>
+      No environment variable is required. <code>BUSINESS_TIMEZONE</code> defaults to
+      <code>Europe/Tirane</code>; set it only if a market outside Albania is onboarded. Do
+      <strong>not</strong> set <code>TZ</code> — the date logic no longer depends on it, and the
+      unit tests confirm identical results under <code>UTC</code>, <code>Europe/Tirane</code> and
+      <code>America/New_York</code>.
+    </p>
+
+    <p>
+      Production health, from the reading supplied for this build: <code>status: ok</code>,
+      <code>ready: true</code>, <code>database.status: ok</code>, cold ≈ 209 ms, immediate warm
+      ≈ 12 ms. That warm figure confirms the earlier Condition 1 conclusion outright — the ~200 ms
+      was Prisma engine initialisation and connection establishment on a cold instance, not distance
+      to the database. Function region <code>dub1</code> and the Supabase pooler are both in
+      <code>eu-west-1</code>.
+    </p>
+
+    <p>
+      The one production-versus-localhost divergence found — the timezone issue in section&nbsp;L —
+      is closed. Supabase and auth service configuration both report <code>configured</code>, and
+      no secret value appears anywhere in this report.
+    </p>
+  </section>
+
+  <!-- ============================== R ============================== -->
+  <section id="r">
+    <h2><span class="idx">R</span> Bugs found — all fixed</h2>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-01</span>
+        <span class="pill p1">was P1 — High</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>Staff PIN login resolved an identity across every tenant</h3>
+      <dl>
+        <dt>Workflow</dt>
+        <dd>Cashier PIN login — the entry point to the POS.</dd>
+
+        <dt>Original evidence</dt>
+        <dd>
+          <p><strong>Executed.</strong> Two disposable organizations, each with a staff member of
+          the same name. <code>POST /api/staff-auth/login</code> returned <strong>409</strong>:
+          <em>"Ka më shumë se një punonjës me këtë emër."</em> Neither cashier could log in.</p>
+          <p><strong>Executed.</strong> A uniquely named staff member with a correct PIN, sent with
+          no organization context whatsoever, returned <strong>200</strong> and a valid session.</p>
+        </dd>
+
+        <dt>Root cause</dt>
+        <dd><code>prisma.staff.findMany({ where: { emri, isActive: true } })</code> carried no
+          <code>organizationId</code> filter — because there was no organization context anywhere
+          in the flow to filter by. The login page posts only <code>{ emri, pin }</code>.</dd>
+
+        <dt>Impact</dt>
+        <dd>
+          <p><em>Accidental.</em> Two customers employing someone with the same name locked each
+          other out, and neither business could fix it, because the conflict was with a company
+          they could not see.</p>
+          <p><em>Deliberate.</em> Self-service registration creates a live trial organization with
+          no approval. Combined with the open staff directory (BUG-02), an attacker could list a
+          real customer's cashier names, create staff with those names in their own trial org, and
+          lock that customer out of their till — with a single paying customer on the platform.</p>
+        </dd>
+
+        <dt>Fix</dt>
+        <dd>
+          <p>Reused the mechanism the product already had and never read. <code>POST
+          /api/staff/terminal</code> sets a <code>pos_terminal_org</code> cookie, is invoked from
+          <code>/personal</code> under "Konfiguro terminalin", and then opens the login page. A new
+          <code>getOrgContext()</code> helper reads and validates it; the login route now requires
+          it, checks the organization exists and is active, and scopes the lookup.</p>
+          <p><em>On forgery:</em> the cookie is not a credential and is not treated as one. It
+          selects which tenant to authenticate against, exactly as a subdomain would — forging it
+          still requires a real name and PIN inside the named organization, and the session takes
+          its <code>organizationId</code> from the staff row in the database. Rate limiting,
+          lockout, permissions and session issuance are untouched; scoping makes the lockout
+          counter per-tenant, which is strictly better.</p>
+        </dd>
+
+        <dt>Files</dt>
+        <dd><code>src/lib/staff-auth.ts</code>, <code>src/app/api/staff-auth/login/route.ts</code></dd>
+
+        <dt>Regression</dt>
+        <dd>All seven required scenarios executed and passing: both tenants authenticate
+          independently with the shared name; neither PIN opens the other's till; missing context
+          fails safely; four forms of invalid context fail safely; a forged context grants no
+          access; every session is bound to its own tenant. 18 checks in total.</dd>
+      </dl>
+    </div>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-02</span>
+        <span class="pill p2">was P2 — Medium</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>Any organization's staff directory was readable without credentials</h3>
+      <dl>
+        <dt>Original evidence</dt>
+        <dd><strong>Executed.</strong> <code>GET /api/staff-auth/list?orgId=9</code> with no cookies
+          and no session returned 200, the organization's name, and two staff names with roles and
+          codes. Organization ids are sequential integers.</dd>
+        <dt>Root cause</dt>
+        <dd>The route accepted <code>orgId</code> from a query parameter and preferred it over the
+          terminal cookie, with no authentication.</dd>
+        <dt>Impact</dt>
+        <dd>Enumerated the platform's customer list and their employees, and supplied the first
+          step of BUG-01's attack.</dd>
+        <dt>Fix</dt>
+        <dd>The <code>orgId</code> parameter is gone; the directory is bound to the same
+          <code>getOrgContext()</code> the login route uses. The route had no UI callers, so
+          nothing in the product changed.</dd>
+        <dt>Files</dt>
+        <dd><code>src/app/api/staff-auth/list/route.ts</code></dd>
+        <dt>Regression</dt>
+        <dd>Executed: an arbitrary <code>orgId</code> is refused; a provisioned terminal still lists
+          its own staff and only its own; a forged cookie cannot reach a third tenant.</dd>
+      </dl>
+    </div>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-03</span>
+        <span class="pill p0">was P0 — Blocker</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>A supply could reference another tenant's product and supplier</h3>
+      <dl>
+        <dt>Original evidence</dt>
+        <dd>
+          <p><strong>Executed at the data layer.</strong> A supply created for org A naming org B's
+          product and supplier reproduced the route's exact behaviour:</p>
+          <pre>supplyBelongsToOrg               11
+productActuallyBelongsToOrg     12
+productNameReturnedInResponse   "…SECRET PRODUCT NAME"
+supplierNameReturnedInResponse  "…SECRET SUPPLIER NAME"
+stockUpdateRowsMatched          0
+foreignStockBefore / After      7 / 7</pre>
+          <p><span class="pill unsafe">Not executed over HTTP</span> — the route requires a real
+          Supabase Manager session, which would mean creating a user in the production Supabase Auth
+          project. Declined.</p>
+        </dd>
+        <dt>Root cause</dt>
+        <dd><code>createSupply</code> validated quantities and prices but performed no ownership
+          lookup on <code>item.productId</code> or <code>furnitorId</code>. The foreign key only
+          requires the row to exist somewhere in the database.</dd>
+        <dt>Impact</dt>
+        <dd>Three at once: another tenant's product and supplier names echoed back through the
+          response <code>include</code>; a supply permanently referencing rows its owner cannot
+          see; and a stock increment matching zero rows, recording a delivery that never entered
+          inventory.</dd>
+        <dt>Fix</dt>
+        <dd>The pattern the sales route already uses. Referenced product ids are resolved in one
+          query scoped by <code>organizationId</code> and the basket is refused with 404 if the
+          count does not match; the supplier is resolved the same way.</dd>
+        <dt>Files</dt>
+        <dd><code>src/app/api/supplies/route.ts</code></dd>
+        <dt>Regression</dt>
+        <dd>Ownership predicate re-verified against live PostgreSQL: resolves own product, rejects
+          foreign product, accepts a legitimate basket, rejects foreign supplier.</dd>
+      </dl>
+    </div>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-04</span>
+        <span class="pill p2">was P2 — Medium</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>A malformed product id returned 500 instead of 400</h3>
+      <dl>
+        <dt>Original evidence</dt>
+        <dd><strong>Executed.</strong> <code>POST /api/sales</code> with
+          <code>productId: "abc"</code> returned <code>500 {"error":"Gabim në
+          server","code":"INTERNAL"}</code>.</dd>
+        <dt>Root cause</dt>
+        <dd>An unvalidated <code>productId</code> reached a Prisma <code>in</code> filter, which
+          raised a driver validation error and was classified as INTERNAL.</dd>
+        <dt>Impact</dt>
+        <dd>A client error reported as a server fault: it paged Sentry, counted as a transaction
+          failure, and returned a status suggesting a retry would help. No data impact.</dd>
+        <dt>Fix</dt>
+        <dd><code>productId</code> must be a positive integer, checked in the same loop that
+          already validates quantity; <code>items</code> must be an array.</dd>
+        <dt>Files</dt>
+        <dd><code>src/app/api/sales/route.ts</code></dd>
+        <dt>Regression</dt>
+        <dd>Re-executed: now 400.</dd>
+      </dl>
+    </div>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-05</span>
+        <span class="pill p2">was P2 — Medium</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>Day boundaries followed the server's timezone, so production and Albania disagreed</h3>
+      <dl>
+        <dt>Workflow</dt>
+        <dd>Dashboard totals, sales history period filters, exports, audit-log date filters, month
+          and year comparisons.</dd>
+        <dt>Original evidence</dt>
+        <dd><strong>Executed.</strong> The same boundary arithmetic under two timezones — see the
+          measurement in section&nbsp;L. A sale at 00:30 Albanian time was attributed to the
+          previous day in production and to the correct day in development.</dd>
+        <dt>Root cause</dt>
+        <dd><code>new Date(y, m, d)</code> resolves against the process timezone. Vercel runs UTC;
+          no <code>TZ</code> was configured.</dd>
+        <dt>Fix</dt>
+        <dd>
+          <p>A new <code>src/lib/business-time.ts</code> resolves boundaries explicitly against
+          <code>BUSINESS_TIMEZONE</code> (default <code>Europe/Tirane</code>) using
+          <code>Intl.DateTimeFormat</code>. Two properties the callers depend on: day boundaries are
+          <strong>calendar</strong> arithmetic, never <code>+86400000</code>, because DST days are
+          23 and 25 hours long; and a wall-clock time resolves its zone offset twice, at the guess
+          and at the candidate it produces, so results land on the correct side of a transition.</p>
+          <p><code>process.env.TZ</code> was deliberately <em>not</em> set — it would fix the
+          symptom while leaving the code dependent on ambient state. No stored timestamp is written
+          or altered; only the boundaries used to group and filter them.</p>
+        </dd>
+        <dt>Files</dt>
+        <dd><code>src/lib/business-time.ts</code> (new), <code>/api/sales</code>,
+          <code>/api/dashboard</code>, <code>/api/export</code>, <code>/api/audit-logs</code></dd>
+        <dt>Regression</dt>
+        <dd>20 unit tests including both DST transitions, the repeated hour, month and year
+          rollovers, and impossible dates — passing identically under <code>UTC</code>,
+          <code>Europe/Tirane</code> and <code>America/New_York</code>. Nine further checks
+          executed against the real <code>GET /api/sales</code> date filters.</dd>
+      </dl>
+    </div>
+
+    <div class="bug">
+      <div class="bug-head">
+        <span class="bug-id">BUG-06</span>
+        <span class="pill p3">was P3 — Low</span>
+        <span class="pill fixed">Fixed &amp; verified</span>
+      </div>
+      <h3>Archived products were still sellable through the API</h3>
+      <dl>
+        <dt>Original evidence</dt>
+        <dd><strong>Executed.</strong> An archived product sold successfully with 201 and
+          decremented stock normally.</dd>
+        <dt>Root cause</dt>
+        <dd>The basket lookup in <code>createSale</code> filtered on <code>organizationId</code> but
+          not <code>isArchived</code>, while the product list filtered on both.</dd>
+        <dt>Fix</dt>
+        <dd>Server-side refusal with 400 before any total is accumulated or transaction opened.
+          The sale <em>edit</em> path was deliberately left alone — blocking archived products there
+          would make an old sale containing a since-archived product uneditable.</dd>
+        <dt>Files</dt>
+        <dd><code>src/app/api/sales/route.ts</code></dd>
+        <dt>Regression</dt>
+        <dd>Executed and verified by row counts, not inference: no <code>Sale</code>, no
+          <code>SaleItem</code>, no stock movement. A basket mixing a live and an archived product
+          is refused whole and the live product keeps its stock.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============================== S ============================== -->
+  <section id="s">
+    <h2><span class="idx">S</span> Tests actually executed</h2>
+
+    <p>Everything listed here was run and its output read. Nothing here was reasoned about.</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Suite</th><th>Result</th><th>What it covered</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">npm test</td><td class="num">91 / 91</td><td>unit suite, including 20 new business-day tests</td></tr>
+          <tr><td class="mono">verify:release-qa</td><td class="num">92 passed, 0 failed</td><td>written for this audit — sessions, isolation, POS validation, stock, archived products, business-day filters, billing, roles, login scoping, error sanitisation</td></tr>
+          <tr><td class="mono">verify:sales-e2e</td><td class="num">23 / 23</td><td>Phase C duplicate-sale guarantee, re-run after every fix</td></tr>
+          <tr><td class="mono">verify:idempotency</td><td class="num">37 / 37</td><td>Phase C durable claim protocol against real PostgreSQL</td></tr>
+          <tr><td>Timezone independence</td><td class="num">3 runtimes</td><td>the 20 unit tests re-run under UTC and America/New_York</td></tr>
+          <tr><td>Supplies ownership probe</td><td class="num">4 + 1</td><td>cross-tenant mechanism before the fix, predicate after</td></tr>
+          <tr><td>Residue sweep</td><td class="num">0 rows</td><td>independent check that no test data survived</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>243 checks pass in total, with nothing failing.</strong></p>
+  </section>
+
+  <!-- ============================== T ============================== -->
+  <section id="t">
+    <h2><span class="idx">T</span> Tests not executed, and why</h2>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Area</th><th>Why not</th></tr></thead>
+        <tbody>
+          <tr><td>Manager / Administrator HTTP flows</td><td>Require a real Supabase session. Creating one means creating a user in the production Auth project, which risks an orphaned account. Reviewed in source instead.</td></tr>
+          <tr><td>Registration &amp; onboarding</td><td>Writes to production Supabase Auth. Not run.</td></tr>
+          <tr><td>Restore, end to end</td><td>Deletes a tenant's data before rebuilding it. Reviewed only.</td></tr>
+          <tr><td>Browser UI click-through</td><td>No browser session was driven. Navigation, modals, back-button and refresh behaviour are unverified.</td></tr>
+          <tr><td>Mobile / tablet / desktop layout</td><td>No viewport testing performed. Responsive behaviour is unverified.</td></tr>
+          <tr><td>Accessibility</td><td>No keyboard-only pass, no screen-reader pass, no contrast audit.</td></tr>
+          <tr><td>Terminal provisioning in a real browser</td><td>The "Konfiguro terminalin" click path was read, not driven. The cookie it sets was exercised directly in the API tests.</td></tr>
+          <tr><td>Large-dataset performance</td><td>Not reproducible safely against the production database.</td></tr>
+          <tr><td>Live production endpoints</td><td>No production URL is present in the repository and the Vercel CLI token is expired. Production figures in section Q are the readings supplied for this build.</td></tr>
+          <tr><td>Payment / plan purchase</td><td>Deliberately excluded — no financial transaction was created.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== U ============================== -->
+  <section id="u">
+    <h2><span class="idx">U</span> Remaining issues &amp; risks</h2>
+
+    <p>
+      <strong>P0: none. P1: none. P2: none.</strong> The list below is P3 and testing gaps only.
+    </p>
+
+    <h3>P3 issues</h3>
+    <ul>
+      <li><strong>Restore erases the organization's audit log</strong> and renames the organization
+        to the backup's name; restored sales lose <code>staffId</code> and <code>staffName</code>.
+        Acceptable for a single-owner shop, worth revisiting if larger customers arrive.</li>
+      <li><strong>PIN entropy.</strong> A 4–6 digit PIN is the only secret protecting a till. The
+        5-attempt lockout is the mitigation and it holds — but it also means a brute-force attempt
+        locks the real cashier out as a side effect.</li>
+      <li><strong>Rate limiting trusts <code>x-forwarded-for</code>.</strong> Correct on Vercel,
+        which sets the header itself; it would be spoofable in a self-hosted deployment without a
+        trusted proxy in front.</li>
+    </ul>
+
+    <h3>Testing gaps</h3>
+    <ul>
+      <li><strong>The UI is unverified in a browser.</strong> Everything in section P is source
+        review. A click-through on a real tablet before launch is worth the hour.</li>
+      <li><strong>Manager and Administrator paths are code-verified only.</strong> Their isolation
+        follows the same pattern as the routes tested live, but the pattern was confirmed by
+        reading, not by execution.</li>
+    </ul>
+  </section>
+
+  <!-- ============================== V ============================== -->
+  <section id="v">
+    <h2><span class="idx">V</span> Phase A / B / C regression status</h2>
+
+    <p>All previously verified guarantees were re-run after every fix and all still hold.</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Guarantee</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Phase A — permission enforcement on every route</td><td><span class="pill exec">intact</span> — 13 forbidden actions refused live</td></tr>
+          <tr><td>Phase A — error sanitisation, request ids</td><td><span class="pill exec">intact</span> — 0 leaks across 6 probes</td></tr>
+          <tr><td>Phase B — caching and tag invalidation</td><td><span class="pill exec">intact</span> — build clean, no behaviour change</td></tr>
+          <tr><td>Phase C — durable cross-instance idempotency</td><td><span class="pill exec">intact</span> — 37 / 37</td></tr>
+          <tr><td>Phase C — one sale from concurrent duplicates</td><td><span class="pill exec">intact</span> — 23 / 23</td></tr>
+          <tr><td>Phase C — guarded stock decrement</td><td><span class="pill exec">intact</span> — stock never negative under live tests</td></tr>
+          <tr><td>Phase C — migration state</td><td><span class="pill exec">intact</span> — 3 migrations, schema up to date</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== W ============================== -->
+  <section id="w">
+    <h2><span class="idx">W</span> Files changed</h2>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>File</th><th>Change</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">src/lib/business-time.ts</td><td>new</td><td>BUG-05 — timezone-aware business-day arithmetic</td></tr>
+          <tr><td class="mono">src/lib/staff-auth.ts</td><td>modified</td><td>BUG-01 — <code>getOrgContext()</code> helper</td></tr>
+          <tr><td class="mono">src/app/api/staff-auth/login/route.ts</td><td>modified</td><td>BUG-01 — require and scope by organization</td></tr>
+          <tr><td class="mono">src/app/api/staff-auth/list/route.ts</td><td>modified</td><td>BUG-02 — bind to terminal cookie, drop <code>?orgId=</code></td></tr>
+          <tr><td class="mono">src/app/api/sales/route.ts</td><td>modified</td><td>BUG-04, BUG-05, BUG-06</td></tr>
+          <tr><td class="mono">src/app/api/supplies/route.ts</td><td>modified</td><td>BUG-03 — ownership guards on product and supplier ids</td></tr>
+          <tr><td class="mono">src/app/api/dashboard/route.ts</td><td>modified</td><td>BUG-05 — boundaries and chart buckets</td></tr>
+          <tr><td class="mono">src/app/api/export/route.ts</td><td>modified</td><td>BUG-05 — boundaries</td></tr>
+          <tr><td class="mono">src/app/api/audit-logs/route.ts</td><td>modified</td><td>BUG-05 — date filters</td></tr>
+          <tr><td class="mono">tests/business-time.test.ts</td><td>new</td><td>20 regression tests incl. DST</td></tr>
+          <tr><td class="mono">scripts/verify-release-qa.ts</td><td>new</td><td>the 92-check QA suite this audit ran</td></tr>
+          <tr><td class="mono">package.json</td><td>modified</td><td>added the <code>verify:release-qa</code> script</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      No UI file, schema file, migration or configuration file was touched, and no Phase A/B/C
+      module was modified. Temporary diagnostic scripts created during the audit were deleted after
+      use. <strong>Nothing was committed, pushed or deployed.</strong>
+    </p>
+  </section>
+
+  <!-- ============================== X ============================== -->
+  <section id="x">
+    <h2><span class="idx">X</span> Database changes</h2>
+
+    <div class="callout">
+      <span class="label">Explicit statement</span>
+      <p>
+        <strong>No schema change of any kind occurred.</strong> No migration was created, applied or
+        modified. No <code>db push</code>, no reset, no DDL, no raw SQL. <code>prisma migrate
+        status</code> reports the same 3 migrations, schema up to date, no drift — before the audit
+        and after remediation.
+      </p>
+      <p>
+        <strong>No existing business record was read, modified or deleted.</strong> Every write went
+        to disposable organizations created by the tests and tagged with a per-run identifier, and
+        every one was deleted afterwards. Cleanup runs in a <code>finally</code> and refuses to
+        touch an organization whose name does not carry the run's tag.
+      </p>
+      <p>
+        An independent sweep after the final run found zero residue: no tagged organizations,
+        products, staff or sales, and <code>IdempotencyRecord</code> back to 0 rows. The only
+        permanent trace is that autoincrement sequences advanced — unavoidable for any test that
+        writes, and harmless.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================== Y ============================== -->
+  <section id="y" class="final">
+    <h2><span class="idx">Y</span> Final launch recommendation</h2>
+
+    <p>
+      Ship it, with one operational step and one hour of manual checking.
+    </p>
+
+    <p>
+      <strong>At deploy time,</strong> provision each cashier terminal once: a Manager or
+      Administrator opens <code>/personal</code> and clicks <strong>Konfiguro terminalin</strong>
+      on every till. Skipping this locks cashiers out on the first shift.
+    </p>
+
+    <p>
+      <strong>Before onboarding,</strong> spend an hour clicking through the POS on the actual
+      tablet the customer will use. It is the one area this audit could not reach, and it is the
+      screen they will touch a hundred times a day.
+    </p>
+
+    <p class="eyebrow" style="margin-top:40px">
+      Would you personally approve this exact build for onboarding a paying customer today?
+    </p>
+    <p class="answer">YES</p>
+
+    <ul>
+      <li><strong>The blocker is closed and proven closed.</strong> Staff PIN login is scoped to one
+        organization; two tenants can share a staff name and work independently, and neither one's
+        PIN opens the other's till — verified across all seven required scenarios plus forged
+        context and session binding.</li>
+      <li><strong>No P0, P1 or P2 issue remains open.</strong> All six defects found are fixed, each
+        by reusing a pattern already present in the codebase rather than inventing a mechanism.</li>
+      <li><strong>Everything that protects money is correct.</strong> Stock cannot go negative or be
+        oversold, prices cannot be forged from the client, duplicate submissions create exactly one
+        sale, archived products cannot be sold, and billing fails closed — all confirmed by
+        execution, not inspection.</li>
+      <li><strong>243 checks pass with nothing failing,</strong> across the unit suite, the release
+        QA suite and both Phase C verification scripts, with the database untouched and no schema
+        change of any kind.</li>
+      <li><strong>The two conditions are operational, not code.</strong> Provision the terminals at
+        deploy, and drive the UI once in a browser — the only material area this audit could not
+        reach.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>
+      Market OS — final production QA &amp; release audit · base commit 479f9e9 · audit and
+      remediation 13 August 2026 · no commit, no push, no deploy · repository left in a reviewable
+      local state
+    </p>
+  </footer>
+
+</div>

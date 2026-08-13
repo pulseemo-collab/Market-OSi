@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth-helpers'
+import {
+  businessDayLabel,
+  businessMonthKey,
+  endOfBusinessDateExclusive,
+  startOfBusinessDate,
+  startOfBusinessDay,
+  startOfBusinessDayOffset,
+  startOfBusinessMonth,
+} from '@/lib/business-time'
 import { captureApiError } from '@/lib/sentry'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
@@ -17,30 +26,33 @@ async function buildDashboard(
   ngaParam: string | null,
   deriParam: string | null,
 ) {
+  // Every boundary below is a business-day boundary in the market's timezone,
+  // not the server's, so the figures an owner reconciles against the till do
+  // not shift when the runtime is UTC.
   const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-  const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0)
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
-  const last30Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0)
-  const last12Start = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0)
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
-  const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0)
+  const todayStart = startOfBusinessDay(now)
+  const tomorrowStart = startOfBusinessDayOffset(now, 1)
+  const monthStart = startOfBusinessMonth(now)
+  const last30Start = startOfBusinessDayOffset(now, -29)
+  const last12Start = startOfBusinessMonth(now, 11)
+  const prevMonthStart = startOfBusinessMonth(now, 1)
+  const yesterdayStart = startOfBusinessDayOffset(now, -1)
 
   let periodStart: Date
   let periodEnd: Date = tomorrowStart
   switch (periudha) {
     case 'jave':
-      periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0)
+      periodStart = startOfBusinessDayOffset(now, -6)
       break
     case 'muaj':
       periodStart = monthStart
       break
     case 'custom':
-      periodStart = ngaParam ? new Date(ngaParam) : monthStart
+      periodStart = (ngaParam ? startOfBusinessDate(ngaParam) : null) ?? monthStart
       if (deriParam) {
-        const d = new Date(deriParam)
-        d.setHours(23, 59, 59, 999)
-        periodEnd = d
+        // Half-open: the day after the one requested, so the whole final day is
+        // included without depending on a 23:59:59.999 sentinel.
+        periodEnd = endOfBusinessDateExclusive(deriParam) ?? tomorrowStart
       }
       break
     default:
@@ -154,13 +166,12 @@ async function buildDashboard(
 
   const dailyMap = new Map<string, { shitjet: number; fitimi: number }>()
   for (let i = 29; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
-    const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-    dailyMap.set(key, { shitjet: 0, fitimi: 0 })
+    dailyMap.set(businessDayLabel(startOfBusinessDayOffset(now, -i)), { shitjet: 0, fitimi: 0 })
   }
   for (const sale of chartDailyRaw) {
-    const d = new Date(sale.createdAt)
-    const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+    // The bucket a sale falls in is decided by the market's clock, matching the
+    // boundaries the totals above were computed with.
+    const key = businessDayLabel(sale.createdAt)
     const entry = dailyMap.get(key)
     if (entry) {
       entry.shitjet += sale.totali
@@ -175,14 +186,11 @@ async function buildDashboard(
 
   const monthlyMap = new Map<string, { muaj: string; shitjet: number; fitimi: number }>()
   for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthlyMap.set(key, { muaj: MONTH_NAMES[d.getMonth()], shitjet: 0, fitimi: 0 })
+    const { key, monthIndex } = businessMonthKey(startOfBusinessMonth(now, i))
+    monthlyMap.set(key, { muaj: MONTH_NAMES[monthIndex], shitjet: 0, fitimi: 0 })
   }
   for (const sale of chartMonthlyRaw) {
-    const d = new Date(sale.createdAt)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    const entry = monthlyMap.get(key)
+    const entry = monthlyMap.get(businessMonthKey(sale.createdAt).key)
     if (entry) {
       entry.shitjet += sale.totali
       entry.fitimi += sale.fitimi

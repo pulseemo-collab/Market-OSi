@@ -90,12 +90,12 @@ async function createSupply(
     const body = await req.json()
     const { furnitorId, data, shenime, items } = body
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return errorResponse(req, 'Nuk ka produkte në furnizim', 400)
     }
 
     for (const item of items) {
-      if (!item.productId) {
+      if (!Number.isInteger(item?.productId) || item.productId <= 0) {
         return errorResponse(req, 'Produkti është i pavlefshëm', 400)
       }
       if (typeof item.sasia !== 'number' || item.sasia <= 0) {
@@ -103,6 +103,46 @@ async function createSupply(
       }
       if (typeof item.cmimiBlerjes !== 'number' || item.cmimiBlerjes < 0) {
         return errorResponse(req, `Çmimi i blerjes i pavlefshëm për: ${item.emriProduktit}`, 400)
+      }
+    }
+
+    // Every referenced product must belong to the caller's organization.
+    //
+    // Without this the line item is still created — the foreign key only
+    // requires the product to exist somewhere — and three things follow: the
+    // response echoes another tenant's product name back through its `product`
+    // include, the supply permanently references a row the tenant cannot see,
+    // and the stock increment below silently matches no rows, recording goods
+    // received that never entered anyone's inventory. The sale path already
+    // resolves its basket against `organizationId` for exactly this reason.
+    const referencedProductIds = Array.from(
+      new Set(items.map((item: { productId: number }) => item.productId)),
+    )
+    const ownedProducts = await prisma.product.findMany({
+      where: { id: { in: referencedProductIds }, organizationId },
+      select: { id: true },
+    })
+    if (ownedProducts.length !== referencedProductIds.length) {
+      const owned = new Set(ownedProducts.map((p) => p.id))
+      const missing = items.find(
+        (item: { productId: number }) => !owned.has(item.productId),
+      ) as { emriProduktit?: string } | undefined
+      return errorResponse(req, `Produkti nuk u gjet: ${missing?.emriProduktit ?? ''}`, 404)
+    }
+
+    // Same reasoning for the supplier, whose name is echoed back through the
+    // `furnitor` include.
+    const supplierId = furnitorId ? Number(furnitorId) : null
+    if (supplierId !== null) {
+      if (!Number.isInteger(supplierId) || supplierId <= 0) {
+        return errorResponse(req, 'Furnitori është i pavlefshëm', 400)
+      }
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, organizationId },
+        select: { id: true },
+      })
+      if (!supplier) {
+        return errorResponse(req, 'Furnitori nuk u gjet', 404)
       }
     }
 
@@ -115,7 +155,7 @@ async function createSupply(
     const supply = await prisma.$transaction(async (tx) => {
       const newSupply = await tx.supply.create({
         data: {
-          furnitorId: furnitorId ? Number(furnitorId) : null,
+          furnitorId: supplierId,
           data: data ? new Date(data) : new Date(),
           shenime: shenime || null,
           totali,

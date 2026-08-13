@@ -4,6 +4,7 @@ import {
   verifyPin,
   createStaffSession,
   setStaffSessionCookie,
+  getOrgContext,
   MAX_FAILED_ATTEMPTS,
   LOCKOUT_MINUTES,
 } from '@/lib/staff-auth'
@@ -29,13 +30,42 @@ async function handlePost(req: NextRequest) {
       return errorResponse(req, 'PIN duhet të jetë 4-20 karaktere', 400)
     }
 
+    // A PIN login is always resolved inside exactly one organization. Without
+    // this scope the lookup ran across every tenant in the database, so two
+    // customers employing someone with the same name locked each other out, and
+    // a name alone identified a person platform-wide.
+    const organizationId = getOrgContext(req)
+    if (organizationId === null) {
+      return errorResponse(
+        req,
+        'Kjo pajisje nuk është e lidhur me një market. Kërkoji menaxherit të konfigurojë terminalin.',
+        400,
+      )
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { isActive: true },
+    })
+    if (!organization || !organization.isActive) {
+      return errorResponse(
+        req,
+        'Kjo pajisje nuk është e lidhur me një market. Kërkoji menaxherit të konfigurojë terminalin.',
+        400,
+      )
+    }
+
     const staffMatches = await prisma.staff.findMany({
       where: {
+        organizationId,
         emri: { equals: String(emri).trim(), mode: 'insensitive' },
         isActive: true,
       },
     })
 
+    // Two people with the same name inside one market is a real situation the
+    // manager can see and resolve, unlike the cross-tenant collision this
+    // scoping removes.
     if (staffMatches.length > 1) {
       return errorResponse(req, 'Ka më shumë se një punonjës me këtë emër. Kontaktoni menaxherin.', 409)
     }

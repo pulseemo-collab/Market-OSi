@@ -5,6 +5,13 @@ import { logAuditAction, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@/lib/audit'
 import { rateLimit } from '@/lib/rate-limit'
 import { checkSubscriptionAccess } from '@/lib/billing-enforcement'
 import { errorResponse, instrumentRoute } from '@/lib/logger'
+import {
+  endOfBusinessDateExclusive,
+  startOfBusinessDate,
+  startOfBusinessDay,
+  startOfBusinessDayOffset,
+  startOfBusinessMonth,
+} from '@/lib/business-time'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +31,12 @@ async function handleGet(request: NextRequest) {
     const ngaParam = searchParams.get('nga')
     const deriParam = searchParams.get('deri')
 
+    // Business-day boundaries in the market's timezone, so an exported report
+    // covers the same rows the dashboard counted for that period.
     const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const todayStart = startOfBusinessDay(now)
+    const tomorrowStart = startOfBusinessDayOffset(now, 1)
+    const monthStart = startOfBusinessMonth(now)
 
     let periodStart: Date
     let periodEnd: Date = tomorrowStart
@@ -35,14 +44,13 @@ async function handleGet(request: NextRequest) {
 
     switch (periudha) {
       case 'dje': {
-        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-        periodStart = yesterday
+        periodStart = startOfBusinessDayOffset(now, -1)
         periodEnd = todayStart
         periudhaLabel = 'Dje'
         break
       }
       case 'jave':
-        periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
+        periodStart = startOfBusinessDayOffset(now, -6)
         periudhaLabel = 'Kjo Jave'
         break
       case 'muaj':
@@ -50,11 +58,9 @@ async function handleGet(request: NextRequest) {
         periudhaLabel = 'Ky Muaj'
         break
       case 'custom':
-        periodStart = ngaParam ? new Date(ngaParam) : monthStart
+        periodStart = (ngaParam ? startOfBusinessDate(ngaParam) : null) ?? monthStart
         if (deriParam) {
-          const d = new Date(deriParam)
-          d.setHours(23, 59, 59, 999)
-          periodEnd = d
+          periodEnd = endOfBusinessDateExclusive(deriParam) ?? tomorrowStart
         }
         periudhaLabel = 'Periudhe e Zgjedhur'
         break
